@@ -1,7 +1,7 @@
 <script lang="ts">
 	// The app shell: a left rail (icons, expands over the content on hover or
 	// keyboard focus), a slim top bar, and the page. Signed-out pages (sign in)
-	// get no shell, only the portfolio note.
+	// get no shell, only the demo note.
 	import '@fontsource-variable/geist';
 	import '@fontsource-variable/geist-mono';
 	import '../app.css';
@@ -9,7 +9,9 @@
 	import Building2 from '@lucide/svelte/icons/building-2';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Inbox from '@lucide/svelte/icons/inbox';
+	import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
 	import ListChecks from '@lucide/svelte/icons/list-checks';
+	import Mails from '@lucide/svelte/icons/mails';
 	import Package from '@lucide/svelte/icons/package';
 	import LogOut from '@lucide/svelte/icons/log-out';
 	import Truck from '@lucide/svelte/icons/truck';
@@ -34,6 +36,8 @@
 
 	const NAV = [
 		{ href: '/ask', label: 'Ask', icon: Sparkles },
+		{ href: '/workspace', label: 'Workspace', icon: ClipboardCheck },
+		{ href: '/desk', label: 'Desk', icon: Mails },
 		{ href: '/commitments', label: 'Commitments', icon: ListChecks },
 		{ href: '/accounts', label: 'Accounts', icon: Building2 },
 		{ href: '/rfq', label: 'RFQ intake', icon: Inbox },
@@ -80,6 +84,20 @@
 			return [
 				{ label: 'RFQ intake', href: '/rfq' },
 				{ label: `R-${page.params.id}`, href: null }
+			];
+		}
+		if (route === '/workspace') return [{ label: 'Workspace', href: null }];
+		if (route === '/desk') return [{ label: 'Desk', href: null }];
+		if (route === '/desk/[id=id]') {
+			return [
+				{ label: 'Desk', href: '/desk' },
+				{ label: 'Message', href: null }
+			];
+		}
+		if (route === '/settings/mcp') {
+			return [
+				{ label: 'Settings', href: null },
+				{ label: 'Coding agents', href: null }
 			];
 		}
 		if (route === '/ask') return [{ label: 'Ask', href: null }];
@@ -157,6 +175,9 @@
 {/if}
 
 {#if data.user}
+	<!-- The first thing keyboard and screen-reader users reach: a way past the
+	     rail straight to the page. Visible only while it has focus. -->
+	<a class="skip" href="#content">Skip to the page</a>
 	<div class="shell">
 		<nav class="rail" bind:this={rail} aria-label="Main">
 			<a class="brand item pressable" href="/commitments">
@@ -222,15 +243,17 @@
 						</div>
 					{/if}
 					<ThemeToggle />
-					<span class="portfolio-note" role="note">Portfolio app · all data is invented</span>
+					<span class="demo-note" role="note">Demo app · synthetic data</span>
 				</div>
 			</header>
 
-			{@render children()}
+			<main id="content" tabindex="-1">
+				{@render children()}
+			</main>
 		</div>
 	</div>
 {:else}
-	<div class="portfolio-note standalone" role="note">Portfolio app · all data is invented</div>
+	<div class="demo-note standalone" role="note">Demo app · synthetic data</div>
 	{@render children()}
 {/if}
 
@@ -452,25 +475,46 @@
 		flex: none;
 	}
 
-	.portfolio-note {
+	.demo-note {
 		font-size: 0.82rem;
 		color: var(--text-faint);
 		white-space: nowrap;
 	}
 
-	.tools .portfolio-note {
+	.tools .demo-note {
 		margin-left: var(--space-1);
 		padding-left: var(--space-3);
 		border-left: 1px solid var(--hairline);
 	}
 
-	.portfolio-note.standalone {
+	.demo-note.standalone {
 		padding: 6px var(--space-4);
 		text-align: center;
 		border-bottom: 1px solid var(--hairline);
 	}
 
 	/* ------------------------------------------------------ loading bar */
+
+.skip {
+		position: fixed;
+		top: 8px;
+		left: 8px;
+		z-index: 100;
+		padding: 8px 12px;
+		border-radius: var(--radius);
+		background: var(--surface);
+		color: var(--text);
+		box-shadow: var(--overlay-shadow);
+		transform: translateY(-200%);
+	}
+
+	.skip:focus-visible {
+		transform: none;
+	}
+
+	main:focus-visible {
+		outline: none;
+	}
 
 	.loading-bar {
 		position: fixed;
@@ -498,7 +542,7 @@
 
 	/*
 	  On a phone the rail becomes a bottom bar: icons only, no hover
-	  expansion. The portfolio note drops under the top bar's tools.
+	  expansion. The demo note drops under the top bar's tools.
 	*/
 	@media (max-width: 720px) {
 		.shell {
@@ -594,7 +638,7 @@
 			width: 100%;
 		}
 
-		.tools .portfolio-note {
+		.tools .demo-note {
 			flex-basis: 100%;
 			margin: 0;
 			padding: 0;

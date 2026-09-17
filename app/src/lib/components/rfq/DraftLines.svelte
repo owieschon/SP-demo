@@ -10,12 +10,19 @@
 
 	let {
 		lines,
+		sources,
 		draftId,
 		updatedAt,
 		requestId,
 		editable
 	}: {
 		lines: ValidatedLine[];
+		/**
+		 * Where each line was read from ("attachment 2, sheet Quote, row 14"),
+		 * by position in the draft. Empty for a draft made before attachments
+		 * existed, or for a line read straight out of a pasted email.
+		 */
+		sources: (string | null)[];
 		draftId: number;
 		updatedAt: string;
 		requestId: string;
@@ -52,6 +59,10 @@
 						<div class="stack">
 							<span class="mono">{line.item_as_written ?? 'no part number'}</span>
 							<span class="faint raw" title={line.raw_text}>{line.raw_text}</span>
+							{#if sources[line.index]}
+								<!-- Where to look in the file this came out of. -->
+								<span class="faint source">{sources[line.index]}</span>
+							{/if}
 						</div>
 					</td>
 
@@ -169,6 +180,11 @@
 						<td data-label="Price check" class="price">
 							<div class="stack">
 								<CheckBadge check={line.price_check} />
+								<!-- What the late-order forecast says about shipping it in time.
+								     Information only: it never blocks approval. -->
+								{#if line.supply}
+									<span class="faint small supply">{line.supply}</span>
+								{/if}
 								{#if editable}
 									<div class="line-actions">
 										{#if line.price_check.status === 'needs_review'}
@@ -236,7 +252,18 @@
 		text-overflow: ellipsis;
 	}
 
+	.source {
+		font-size: 0.78rem;
+		font-variant-numeric: tabular-nums;
+	}
+
 	.desc,
+	/* The supply note can be a sentence; let it wrap in its cell. */
+	.supply {
+		max-width: 32ch;
+		white-space: normal;
+	}
+
 	.small {
 		font-size: 0.85rem;
 	}

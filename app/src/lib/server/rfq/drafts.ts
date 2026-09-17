@@ -11,6 +11,8 @@
 // from the stored draft.
 import { z } from 'zod';
 import type { Db, Tx } from '../db/types.ts';
+import type { StoredFile } from '../documents/read.ts';
+import { listAttachmentsIn, saveAttachments, type AttachmentSummary } from '../documents/store.ts';
 import { guarded } from '../errors.ts';
 import {
 	overridesSchema,
@@ -35,6 +37,8 @@ export interface DraftSummary {
 	extractor: 'rules' | 'claude';
 	createdAt: string;
 	commitmentId: number | null;
+	/** How many files were read into it. */
+	attachments: number;
 }
 
 export interface DraftView {
@@ -56,6 +60,8 @@ export interface DraftView {
 	decidedAt: string | null;
 	rejectReason: string;
 	createdAt: string;
+	/** The files this request arrived as, in upload order (migration 0020). */
+	attachments: AttachmentSummary[];
 	/** The row version, sent back with every change. */
 	updatedAt: string;
 }
@@ -102,21 +108,33 @@ export interface CreateDraftInput {
 	source: string;
 	sourceName: string;
 	extraction: Extraction;
+	/** The files the request arrived as, stored with the draft (migration 0020). */
+	attachments?: StoredFile[];
 	requestId: string;
 }
 
-/** Validate an extraction as the user and store it. */
+/**
+ * Validate an extraction as the user and store it, with its files.
+ *
+ * The draft and its attachments are written in one transaction, so a draft
+ * never exists without the files it was read from, and the files never
+ * exist without the draft.
+ */
 export async function createDraft(db: Db, userId: number, input: CreateDraftInput): Promise<DraftWriteResult> {
 	const { extraction } = input;
 	const [row] = await guarded(() =>
 		db.asUser(userId, async (tx) => {
 			const validation = await validateDraft(tx, { draft: extraction.draft, overrides: {}, source: input.source });
-			return tx.sql<WriteRow>`
+			const saved = await tx.sql<WriteRow>`
 				select nl.save_rfq_draft(
 					${input.source}, ${input.sourceName}, ${extraction.extractor}, ${extraction.model},
 					${JSON.stringify(extraction.draft)}::jsonb, ${JSON.stringify(validation)}::jsonb,
 					${extraction.usage ? JSON.stringify(extraction.usage) : null}::jsonb,
 					${input.requestId}) as result`;
+			if (input.attachments && input.attachments.length > 0) {
+				await saveAttachments(tx, saved[0].result.draft_id, input.attachments, input.requestId);
+			}
+			return saved;
 		})
 	);
 	return toResult(row);
@@ -139,10 +157,12 @@ export async function listDrafts(db: Db, userId: number, limit = 20): Promise<Dr
 			extractor: 'rules' | 'claude';
 			created_at: Date;
 			commitment_id: number | null;
+			attachments: number;
 		}>`
 			select d.id, d.status, d.source_name, c.name as customer_name,
 			       jsonb_array_length(d.draft -> 'lines')::int as lines,
-			       d.needs_review, d.extractor, d.created_at, d.commitment_id
+			       d.needs_review, d.extractor, d.created_at, d.commitment_id,
+			       (select count(*) from nl.rfq_attachment_index a where a.draft_id = d.id)::int as attachments
 			from nl.rfq_drafts d
 			left join nl.customers c on c.customer_no = d.customer_no
 			where d.created_by = ${userId}
@@ -158,7 +178,8 @@ export async function listDrafts(db: Db, userId: number, limit = 20): Promise<Dr
 		needsReview: r.needs_review,
 		extractor: r.extractor,
 		createdAt: r.created_at.toISOString(),
-		commitmentId: r.commitment_id
+		commitmentId: r.commitment_id,
+		attachments: r.attachments
 	}));
 }
 
@@ -198,9 +219,15 @@ async function readDraft(tx: Tx, id: number): Promise<DraftRow | null> {
 
 /** One draft, or null when it does not exist or belongs to someone else. */
 export async function getDraft(db: Db, userId: number, id: number): Promise<DraftView | null> {
-	const row = await db.asUser(userId, (tx) => readDraft(tx, id));
+	// The draft and its attachments come from one transaction, so the panel
+	// cannot show files from a moment the draft was not in.
+	const { row, attachments } = await db.asUser(userId, async (tx) => ({
+		row: await readDraft(tx, id),
+		attachments: await listAttachmentsIn(tx, id)
+	}));
 	if (!row) return null;
 	return {
+		attachments,
 		id: row.id,
 		status: row.status,
 		createdBy: row.created_by,

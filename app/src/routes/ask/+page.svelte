@@ -48,7 +48,7 @@
 	<section class="panel" aria-labelledby="starters-title">
 		<header class="panel-head">
 			<h2 id="starters-title">Try one of these</h2>
-			<span class="faint small">All four work in scripted demo mode</span>
+			<span class="faint small">All four work with or without a model key</span>
 		</header>
 		<ul class="starters">
 			{#each STARTERS as starter (starter.question)}
@@ -81,7 +81,7 @@
 									<span class="title">{item.title}</span>
 									<span class="faint small">
 										{item.messageCount} {item.messageCount === 1 ? 'message' : 'messages'} ·
-										{item.mode === 'mock' ? 'scripted demo mode' : 'live'}
+										{item.mode === 'mock' ? 'scripted' : item.mode === 'mcp' ? 'via MCP' : 'live'}
 									</span>
 								</span>
 								{#if item.openProposals > 0}

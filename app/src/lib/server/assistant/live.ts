@@ -1,14 +1,18 @@
 // Live mode for Ask Northline: may this person use the real model right now?
 //
-// Two things must both be true:
-//   1. the server has ANTHROPIC_API_KEY and LIVE_AI_PASSPHRASE set, and
-//   2. this person typed the passphrase, which put a short-lived signed cookie
-//      in their browser.
-// The passphrase is compared on the server in constant time and never sent
-// back to the page. The cookie holds only the user id and an expiry, signed
-// with the session secret, so it cannot be copied to another user or
-// stretched. Anyone without it gets scripted demo mode, so a public visitor
-// can never spend the owner's API credit.
+// The key alone turns it on. With ANTHROPIC_API_KEY set, every signed-in
+// person gets the real model, bounded by the daily caps in the database
+// (nl.claim_assistant_call).
+//
+// LIVE_AI_PASSPHRASE is optional, for when the site is public and the caps
+// alone are not comfort enough: set it and a person must type it once, which
+// puts a short-lived signed cookie in their browser. The passphrase is
+// compared on the server in constant time and never sent back to the page.
+// The cookie holds only the user id and an expiry, signed with the session
+// secret, so it cannot be copied to another user or stretched.
+//
+// With no key at all the scripted model answers, which is what the tests and
+// a deployment without a key use.
 //
 // This is the same shape as the RFQ workflow's live gate, with its own cookie
 // name, its own path and its own signature prefix, so unlocking one does not
@@ -25,8 +29,13 @@ export interface LiveEnv {
 	model: string | undefined;
 }
 
-/** Is live mode possible on this server at all? */
+/** Is live mode possible on this server at all? The key is the only must. */
 export function liveConfigured(env: LiveEnv): boolean {
+	return Boolean(env.apiKey);
+}
+
+/** Does this server also ask for a passphrase before using the key? */
+export function passphraseRequired(env: LiveEnv): boolean {
 	return Boolean(env.apiKey && env.passphrase);
 }
 

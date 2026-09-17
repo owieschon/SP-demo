@@ -72,7 +72,7 @@
 				<tbody>
 					{#each deals.quotes as q (q.id)}
 						<tr>
-							<td class="mono">SQ-{q.id}</td>
+							<td class="mono"><a class="link" href="/quotes/{q.id}">SQ-{q.id}</a></td>
 							<td class="nowrap">{day(q.quotedOn, year)}</td>
 							<td class="nowrap">{q.validUntil ? day(q.validUntil, year) : '·'}</td>
 							<td>

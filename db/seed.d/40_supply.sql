@@ -16,17 +16,23 @@
 -- uploading yesterday's sample on a fresh world says "this data was already
 -- loaded" instead of quietly loading it twice.
 --
--- The open purchase lines add up to nl.stock.on_purchase_order per part and
--- the production orders to nl.stock.on_production_order, because the sample
--- generators split exactly those quantities (migration 0016).
+-- The supply the generators produce is planned against demand (migration
+-- 0022), so the item master is the derived side here: once the exports are
+-- applied, nl.stock.on_purchase_order and on_production_order are set to the
+-- quantities today's files hold, part by part. That is the invariant the
+-- forecast tests check, and it is the direction a real ERP works in: the
+-- flowfields on an item card are a sum of its open orders.
 
 -- ---------------------------------------------------------------------------
 -- The fingerprint a staged file carries
 -- ---------------------------------------------------------------------------
 
 /*
- * One day's sample export, summed up before it is stored: its fingerprint,
- * how many rows it has, and what they add up to.
+ * A stored snapshot, summed up: its fingerprint, how many rows it holds, and
+ * what they add up to. It reads the rows that were just written rather than
+ * asking the generator again, which halves the work the seed does (a supply
+ * generator has to net demand against stock before it can answer, migration
+ * 0022) and makes the fingerprint describe exactly what was stored.
  *
  * The fingerprint is the same SHA-256 that app/src/lib/server/exports/reader.ts
  * computes over a file: the rows in canonical form, sorted by the report's key
@@ -39,7 +45,7 @@
  * the one the reader computes for the same day's sample file
  * (app/src/lib/server/supply/seed.test.ts), which is what keeps them honest.
  */
-create or replace function nl_seed.sample_export_summary(p_kind text, p_day date) returns jsonb
+create or replace function nl_seed.sample_export_summary(p_snapshot_id bigint, p_kind text) returns jsonb
 language plpgsql
 set search_path = ''
 as $$
@@ -57,19 +63,20 @@ begin
            count(*)::int, coalesce(sum(r.quantity), 0)::bigint, coalesce(sum(r.value), 0)
       into v_rows, v_count, v_quantity, v_value
     from (
-      select s.document_no, s.line_no, s.quantity, round(s.quantity * s.unit_price, 2) as value,
+      select l.document_no, l.line_no, l.quantity, round(l.quantity * l.unit_price, 2) as value,
              '[' || array_to_string(array[
-               to_json(s.document_no)::text,
-               to_json(s.line_no::text)::text,
-               to_json(s.customer_no)::text,
-               to_json(s.item_no)::text,
-               to_json(s.description)::text,
-               to_json(to_char(s.ship_date, 'YYYY-MM-DD'))::text,
-               to_json(s.quantity::text)::text,
-               to_json(round(s.unit_price, 2)::text)::text,
-               to_json(round(s.quantity * s.unit_price, 2)::text)::text,
-               to_json(s.location_code)::text], ',') || ']' as row_json
-      from nl.sample_open_sales_lines(p_day) s
+               to_json(l.document_no)::text,
+               to_json(l.line_no::text)::text,
+               to_json(l.customer_no)::text,
+               to_json(l.item_no)::text,
+               to_json(l.description)::text,
+               to_json(to_char(l.ship_date, 'YYYY-MM-DD'))::text,
+               to_json(l.quantity::text)::text,
+               to_json(round(l.unit_price, 2)::text)::text,
+               to_json(round(l.quantity * l.unit_price, 2)::text)::text,
+               to_json(l.location_code)::text], ',') || ']' as row_json
+      from nl.export_snapshot_lines l
+      where l.snapshot_id = p_snapshot_id
     ) r;
   elsif p_kind = 'open_purchase_lines' then
     v_fields := array['documentNo', 'lineNo', 'vendorNo', 'itemNo', 'description',
@@ -79,19 +86,20 @@ begin
       into v_rows, v_count, v_quantity, v_value
     from (
       -- A supply order is worth what the parts on it cost us.
-      select s.document_no, s.line_no, s.quantity, round(s.quantity * i.unit_cost, 2) as value,
+      select l.document_no, l.line_no, l.quantity, round(l.quantity * i.unit_cost, 2) as value,
              '[' || array_to_string(array[
-               to_json(s.document_no)::text,
-               to_json(s.line_no::text)::text,
-               to_json(s.vendor_no)::text,
-               to_json(s.item_no)::text,
-               to_json(s.description)::text,
-               to_json(to_char(s.due_date, 'YYYY-MM-DD'))::text,
-               to_json(to_char(s.promised_date, 'YYYY-MM-DD'))::text,
-               to_json(s.quantity::text)::text,
-               to_json(s.location_code)::text], ',') || ']' as row_json
-      from nl.sample_open_purchase_lines(p_day) s
-      join nl.items i on i.item_no = s.item_no
+               to_json(l.document_no)::text,
+               to_json(l.line_no::text)::text,
+               to_json(l.vendor_no)::text,
+               to_json(l.item_no)::text,
+               to_json(l.description)::text,
+               to_json(to_char(l.due_date, 'YYYY-MM-DD'))::text,
+               to_json(to_char(l.promised_date, 'YYYY-MM-DD'))::text,
+               to_json(l.quantity::text)::text,
+               to_json(l.location_code)::text], ',') || ']' as row_json
+      from nl.export_snapshot_purchase_lines l
+      join nl.items i on i.item_no = l.item_no
+      where l.snapshot_id = p_snapshot_id
     ) r;
   else
     v_fields := array['orderNo', 'itemNo', 'workCenter', 'status', 'dueDate', 'quantity'];
@@ -99,16 +107,17 @@ begin
            count(*)::int, coalesce(sum(r.quantity), 0)::bigint, coalesce(sum(r.value), 0)
       into v_rows, v_count, v_quantity, v_value
     from (
-      select s.order_no, s.quantity, round(s.quantity * i.unit_cost, 2) as value,
+      select o.order_no, o.quantity, round(o.quantity * i.unit_cost, 2) as value,
              '[' || array_to_string(array[
-               to_json(s.order_no)::text,
-               to_json(s.item_no)::text,
-               to_json(s.work_center)::text,
-               to_json(s.status)::text,
-               to_json(to_char(s.due_date, 'YYYY-MM-DD'))::text,
-               to_json(s.quantity::text)::text], ',') || ']' as row_json
-      from nl.sample_open_production_orders(p_day) s
-      join nl.items i on i.item_no = s.item_no
+               to_json(o.order_no)::text,
+               to_json(o.item_no)::text,
+               to_json(o.work_center)::text,
+               to_json(o.status)::text,
+               to_json(to_char(o.due_date, 'YYYY-MM-DD'))::text,
+               to_json(o.quantity::text)::text], ',') || ']' as row_json
+      from nl.export_snapshot_production_orders o
+      join nl.items i on i.item_no = o.item_no
+      where o.snapshot_id = p_snapshot_id
     ) r;
   end if;
 
@@ -143,13 +152,15 @@ begin
               else 'open-production-orders-'
             end || to_char(p_day, 'YYYY-MM-DD') || '.csv';
 
-  v_sum := nl_seed.sample_export_summary(p_kind, p_day);
-
+  -- The row goes in first so its lines have something to point at, then the
+  -- fingerprint and the totals are read back off those lines. The table
+  -- insists on a positive row count and a SHA-256 shaped fingerprint from the
+  -- first moment, so both start as a stand-in: a hash of the file name, which
+  -- is unique per report and day, and is replaced below.
   insert into nl.export_snapshots (kind, file_name, content_hash, status, row_count, line_count, error_count,
                                    total_quantity, total_value, staged_by, staged_at)
-  values (p_kind, v_name, v_sum ->> 'hash', 'staged',
-          (v_sum ->> 'rows')::int, (v_sum ->> 'rows')::int, 0,
-          (v_sum ->> 'quantity')::bigint, (v_sum ->> 'value')::numeric, p_user, v_staged)
+  values (p_kind, v_name, encode(sha256(convert_to(v_name, 'UTF8')), 'hex'), 'staged',
+          1, 1, 0, 0, 0, p_user, v_staged)
   returning id into v_id;
 
   if p_kind = 'open_sales_lines' then
@@ -170,6 +181,15 @@ begin
     select v_id, s.order_no, s.row_no, s.item_no, s.work_center, s.status, s.due_date, s.quantity
     from nl.sample_open_production_orders(p_day) s;
   end if;
+
+  v_sum := nl_seed.sample_export_summary(v_id, p_kind);
+  update nl.export_snapshots
+     set content_hash = v_sum ->> 'hash',
+         row_count = (v_sum ->> 'rows')::int,
+         line_count = (v_sum ->> 'rows')::int,
+         total_quantity = (v_sum ->> 'quantity')::bigint,
+         total_value = (v_sum ->> 'value')::numeric
+   where id = v_id;
 
   insert into nl.audit_log (at, actor_id, via, action, entity, entity_id, detail)
   select v_staged, p_user, 'seed', 'stage_export', 'export_snapshot', v_id::text,
@@ -320,4 +340,18 @@ begin
       perform nl_seed.apply_sample_export(nl_seed.stage_sample_export(v_kind, v_day, v_ops));
     end loop;
   end loop;
+
+  -- The item card's "on purchase order" and "on production order" are a sum
+  -- of a part's open supply orders, so they are set from today's files, not
+  -- drawn on their own (they were drawn in nl_seed.build_catalog, before
+  -- there was any supply to agree with). The generators read on_hand and
+  -- demand, never these two columns, so writing them cannot change what they
+  -- produce.
+  update nl.stock s
+     set on_purchase_order = coalesce((select sum(p.quantity)::int
+                                       from nl.sample_open_purchase_lines(v_today) p
+                                       where p.item_no = s.item_no), 0),
+         on_production_order = coalesce((select sum(m.quantity)::int
+                                         from nl.sample_open_production_orders(v_today) m
+                                         where m.item_no = s.item_no), 0);
 end $$;

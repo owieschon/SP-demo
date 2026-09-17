@@ -24,14 +24,14 @@
 		{#if mode.unlocked}
 			<Sparkles size={12} aria-hidden="true" />Live: {mode.model}
 		{:else}
-			<Cpu size={12} aria-hidden="true" />Scripted demo mode
+			<Cpu size={12} aria-hidden="true" />Scripted answers
 		{/if}
 	</span>
 
 	{#if !mode.configured}
 		<span class="faint small">
-			No API key is set on this server, so a scripted model answers. It runs the same tools, the same gate and the
-			same approval as the real one.
+			This server has no model key, so a scripted model answers. It runs the same tools, the same gate and the
+			same approval as the real one. Add a key in Settings to use the real model.
 		</span>
 	{:else if mode.unlocked}
 		<form method="POST" action="?/lock" use:enhance class="inline">

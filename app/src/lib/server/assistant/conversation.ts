@@ -9,8 +9,7 @@ import type {
 	ConversationView,
 	LookupView,
 	MessageView,
-	ProposalView
-} from '$lib/assistant/types';
+	ProposalView, AskMode } from '$lib/assistant/types';
 import { MAX_CONVERSATION_MESSAGES } from './caps.ts';
 import { askGuarded } from './errors.ts';
 import type { ProposedAction } from './gate.ts';
@@ -32,7 +31,7 @@ export interface StartResult {
 export async function startConversation(
 	db: Db,
 	userId: number,
-	input: { title: string; mode: 'mock' | 'live'; requestId: string }
+	input: { title: string; mode: AskMode; requestId: string }
 ): Promise<StartResult> {
 	const [row] = await askGuarded(() =>
 		db.asUser(userId, (tx) =>
@@ -52,7 +51,7 @@ export async function listConversations(db: Db, userId: number, limit = 12): Pro
 		tx.sql<{
 			id: number;
 			title: string;
-			mode: 'mock' | 'live';
+			mode: AskMode;
 			message_count: number;
 			updated_at: Date;
 			open_proposals: number;
@@ -110,7 +109,7 @@ export async function getConversation(db: Db, userId: number, id: number): Promi
 		const [head] = await tx.sql<{
 			id: number;
 			title: string;
-			mode: 'mock' | 'live';
+			mode: AskMode;
 			message_count: number;
 			created_at: Date;
 			updated_at: Date;
