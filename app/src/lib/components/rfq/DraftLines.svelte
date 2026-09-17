@@ -169,6 +169,11 @@
 						<td data-label="Price check" class="price">
 							<div class="stack">
 								<CheckBadge check={line.price_check} />
+								<!-- What the late-order forecast says about shipping it in time.
+								     Information only: it never blocks approval. -->
+								{#if line.supply}
+									<span class="faint small supply">{line.supply}</span>
+								{/if}
 								{#if editable}
 									<div class="line-actions">
 										{#if line.price_check.status === 'needs_review'}
@@ -237,6 +242,12 @@
 	}
 
 	.desc,
+	/* The supply note can be a sentence; let it wrap in its cell. */
+	.supply {
+		max-width: 32ch;
+		white-space: normal;
+	}
+
 	.small {
 		font-size: 0.85rem;
 	}

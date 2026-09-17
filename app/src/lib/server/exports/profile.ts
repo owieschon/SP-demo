@@ -138,6 +138,143 @@ export const OPEN_SALES_LINES_PROFILE = {
 	]
 } satisfies SourceProfile;
 
+/**
+ * The ERP's "open purchase lines" export: every part still outstanding on a
+ * purchase order. Expected Receipt Date is what the vendor says now; Promised
+ * Receipt Date is what they said when the order was placed, so a date that
+ * moved can be seen without any history.
+ */
+export const OPEN_PURCHASE_LINES_PROFILE = {
+	id: 'open_purchase_lines',
+	name: 'open purchase lines export',
+	fields: {
+		documentNo: {
+			label: 'Document No.',
+			aliases: ['documentno', 'documentnumber', 'purchaseorderno', 'orderno'],
+			required: true,
+			kind: 'code',
+			maxLength: 40
+		},
+		lineNo: {
+			label: 'Line No.',
+			aliases: ['lineno', 'linenumber'],
+			required: true,
+			kind: 'whole',
+			above: 0,
+			atMost: 2_000_000_000
+		},
+		vendorNo: {
+			label: 'Buy-from Vendor No.',
+			aliases: ['buyfromvendorno', 'buyfromvendor', 'vendorno', 'paytovendorno'],
+			required: true,
+			kind: 'code',
+			maxLength: 40
+		},
+		itemNo: { label: 'No.', aliases: ['no', 'itemno', 'itemnumber'], required: true, kind: 'code', maxLength: 40 },
+		description: { label: 'Description', aliases: ['description'], required: false, kind: 'text', maxLength: 200 },
+		dueDate: {
+			label: 'Expected Receipt Date',
+			aliases: ['expectedreceiptdate', 'expectedreceipt', 'duedate'],
+			required: true,
+			kind: 'date'
+		},
+		promisedDate: {
+			label: 'Promised Receipt Date',
+			aliases: ['promisedreceiptdate', 'promisedreceipt', 'orderdate'],
+			required: false,
+			kind: 'date',
+			blankAllowed: true
+		},
+		quantity: {
+			label: 'Outstanding Quantity',
+			aliases: ['outstandingquantity', 'outstandingqty', 'qtyoutstanding'],
+			required: true,
+			kind: 'whole',
+			above: 0,
+			atMost: 1_000_000
+		},
+		locationCode: {
+			label: 'Location Code',
+			aliases: ['locationcode', 'location'],
+			required: false,
+			kind: 'code',
+			maxLength: 20
+		}
+	},
+	key: ['documentNo', 'lineNo'],
+	dates: ['us', 'iso', 'excel_serial'],
+	numbers: US_NUMBERS,
+	otherReports: [
+		{ name: 'a posted purchase receipt lines export', keys: ['postingdate', 'documentno', 'quantity'] },
+		{ name: 'a vendor list', keys: ['no', 'name', 'city'] }
+	]
+} satisfies SourceProfile;
+
+/**
+ * The ERP's "open production orders" export: what the shop floor still owes.
+ * One row per order, with the work center it runs on and the quantity left.
+ */
+export const OPEN_PRODUCTION_ORDERS_PROFILE = {
+	id: 'open_production_orders',
+	name: 'open production orders export',
+	fields: {
+		orderNo: {
+			label: 'Prod. Order No.',
+			aliases: ['prodorderno', 'productionorderno', 'prodordernumber', 'orderno'],
+			required: true,
+			kind: 'code',
+			maxLength: 40
+		},
+		itemNo: {
+			label: 'Source No.',
+			aliases: ['sourceno', 'itemno', 'no', 'itemnumber'],
+			required: true,
+			kind: 'code',
+			maxLength: 40
+		},
+		workCenter: {
+			label: 'Work Center No.',
+			aliases: ['workcenterno', 'workcenter', 'workcentergroupcode', 'routingno'],
+			required: true,
+			kind: 'code',
+			maxLength: 20
+		},
+		status: { label: 'Status', aliases: ['status'], required: false, kind: 'text', maxLength: 20 },
+		dueDate: {
+			label: 'Due Date',
+			aliases: ['duedate', 'endingdate'],
+			required: true,
+			kind: 'date'
+		},
+		quantity: {
+			label: 'Remaining Quantity',
+			aliases: ['remainingquantity', 'remainingqty', 'quantityremaining'],
+			required: true,
+			kind: 'whole',
+			above: 0,
+			atMost: 1_000_000
+		}
+	},
+	key: ['orderNo'],
+	dates: ['us', 'iso', 'excel_serial'],
+	numbers: US_NUMBERS,
+	otherReports: [
+		{ name: 'a production order line list', keys: ['prodorderno', 'linenoo', 'quantity'] },
+		{ name: 'a work center list', keys: ['no', 'name', 'capacity'] }
+	]
+} satisfies SourceProfile;
+
+/**
+ * The three reports the workflow knows, in the order a file is compared with
+ * them. The reader works out which one an uploaded file is (reader.ts,
+ * detectReport) and refuses a file that is none of them.
+ */
+export const PROFILES: SourceProfile[] = [
+	OPEN_SALES_LINES_PROFILE,
+	OPEN_PURCHASE_LINES_PROFILE,
+	OPEN_PRODUCTION_ORDERS_PROFILE
+];
+
 /** The header row of a correct file, in the profile's order. */
 export function headersOf(profile: SourceProfile): string[] {
 	return Object.values(profile.fields).map((f) => f.label);

@@ -1,0 +1,7 @@
+Item No | Description | Quantity | Unit price | Need by
+S6-96BC | 6" x 96" bull hauler stack chrome | 4 | 183.41 | 2026-10-09
+CL6SZ | 6" saddle clamp zinc | 12 | 19.66 | 2026-10-09
+FL6-36SS | 6" x 36" flex pipe stainless | 2 | 146.96 | 2026-10-16
+L660-1018SC | 6" 60 deg elbow 10" x 18" chrome slip | 6 | 79.94 | 2026-10-16
+HS6-30S | heat shield 6" x 30" solid stainless | 3 | 51.64 | 2026-10-16
+Total | | | | 1898.04

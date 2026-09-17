@@ -401,6 +401,7 @@ export async function validateDraft(tx: Tx, input: ValidateInput): Promise<Valid
 			stated_line_total: line.line_total.value,
 			line_total: null,
 			price_check: ok(''),
+			supply: null,
 			removed: override.removed === true
 		};
 
@@ -561,6 +562,12 @@ export async function validateDraft(tx: Tx, input: ValidateInput): Promise<Valid
 		}
 	}
 
+	// Can we ship it? The same netting the late-order forecast does
+	// (nl.available_to_promise, migration 0016), asked per line against the
+	// needed-by date. It is information, not a check: nothing here can make a
+	// draft need review, because a person may well quote a longer lead time.
+	await addSupplyNotes(tx, lines, neededDate ?? today);
+
 	const warnings: string[] = [];
 	if (PROMPT_INJECTION.test(source)) {
 		warnings.push(
@@ -579,4 +586,60 @@ export async function validateDraft(tx: Tx, input: ValidateInput): Promise<Valid
 	};
 	validation.needs_review = reviewFlags(validation).length;
 	return validation;
+}
+
+// ---------------------------------------------------------------------------
+// What the supply side says about each line
+// ---------------------------------------------------------------------------
+
+/** The part of nl.available_to_promise's answer this note needs. */
+interface AtpNote {
+	can_meet: boolean;
+	on_hand: number;
+	promised_earlier: number;
+	earliest_date: string;
+	earliest_basis: 'stock' | 'supply' | 'lead_time';
+	lead_days: number;
+	covering: { source: string; document_no: string | null; party: string | null; due_date: string | null; quantity: number } | null;
+}
+
+/**
+ * Add a plain-English supply note to every line that resolved to a part and a
+ * quantity. One round trip: the function is called once per line inside one
+ * statement.
+ */
+async function addSupplyNotes(tx: Tx, lines: ValidatedLine[], neededBy: string): Promise<void> {
+	const asking = lines
+		.filter((l) => !l.removed && l.item_no !== null && l.quantity !== null && l.quantity > 0)
+		.map((l) => ({ index: l.index, item_no: l.item_no, quantity: l.quantity }));
+	if (asking.length === 0) return;
+
+	const rows = await tx.sql<{ index: number; answer: AtpNote | null }>`
+		select (ask ->> 'index')::int as index,
+		       nl.available_to_promise(ask ->> 'item_no', (ask ->> 'quantity')::int, ${neededBy}::date) as answer
+		from jsonb_array_elements(${JSON.stringify(asking)}::jsonb) as ask`;
+
+	for (const row of rows) {
+		const line = lines.find((l) => l.index === row.index);
+		if (!line || !row.answer) continue;
+		line.supply = supplyNote(row.answer, line.quantity!, neededBy);
+	}
+}
+
+/** "8 on hand, 4 due Sep 28 on PO-104471: can ship by Oct 3". */
+function supplyNote(a: AtpNote, quantity: number, neededBy: string): string {
+	const free = Math.max(a.on_hand - a.promised_earlier, 0);
+	const have = `${free} of ${quantity} free on the shelf`;
+	const from =
+		a.covering && a.covering.source !== 'stock'
+			? `, ${a.covering.quantity} on ${a.covering.document_no}${a.covering.party ? ` (${a.covering.party})` : ''}${
+					a.covering.due_date ? ` due ${day(a.covering.due_date)}` : ''
+				}`
+			: '';
+	if (a.can_meet) return `${have}${from}: can ship by ${day(neededBy)}.`;
+	const because =
+		a.earliest_basis === 'lead_time'
+			? `nothing on order, so ${a.lead_days} days to buy or make it`
+			: 'the supply that covers it lands later';
+	return `${have}${from}: cannot ship ${quantity} by ${day(neededBy)}; earliest ${day(a.earliest_date)} (${because}).`;
 }
