@@ -102,6 +102,36 @@ async function sold(itemNo: string, postedOn: string, quantity: number, unitPric
 	});
 }
 
+/**
+ * Which neighbouring migrations are applied. The tests that turn on this are
+ * the ones about where supply comes from, and they have to give the same
+ * answer on a branch with the supply forecast and on one without.
+ */
+async function sources() {
+	const [row] = await db.asUser(
+		OPS,
+		(tx) => tx.sql<{ s: Record<string, boolean> }>`select nl.procurement_sources() as s`
+	);
+	return row.s;
+}
+
+/**
+ * A purchase order this desk raised, promising a quantity by a date. Unlike
+ * the item master's on-order figure, this is counted as incoming supply
+ * whatever else is applied.
+ */
+async function onDeskOrder(itemNo: string, quantity: number, promisedOn: string) {
+	await db.asSystem(async (tx) => {
+		const [order] = await tx.sql<{ id: number }>`
+			insert into nl.procurement_orders (vendor_no, created_by, ordered_on)
+			select i.vendor_no, ${OPS}, ${TODAY} from nl.items i where i.item_no = ${itemNo}
+			returning id`;
+		await tx.sql`insert into nl.procurement_order_lines (order_id, line_no, item_no, quantity,
+		                                                     unit_cost, original_promised_on, promised_on)
+		             values (${order.id}, 1, ${itemNo}, ${quantity}, 10, ${promisedOn}, ${promisedOn})`;
+	});
+}
+
 /** An open sales line: we have promised this quantity by this date. */
 async function promised(itemNo: string, shipDate: string, quantity: number) {
 	await db.asSystem(
@@ -277,13 +307,26 @@ describe('the projection', () => {
 	});
 
 	it('counts what is already on order, with no date, as arriving inside the horizon', async () => {
+		// The item master carries an on-order quantity with no date on it. That
+		// is the only dateless supply there is, and it is only the live source
+		// until the supply forecast (0016) lands with dated purchase and
+		// production orders; after that the item master's figure is the same
+		// fact in a rougher form and is deliberately ignored. This test
+		// therefore has to know which of the two worlds it is in, and asserts
+		// the contract for both (see nl.incoming_supply).
 		const itemNo = await part({ onHand: 4, onPurchaseOrder: 50, onProductionOrder: 10 });
 		const r = await look(itemNo);
-		// Before migration 0016 the item master has no dates, so all 60 count.
-		expect(r.on_order_total).toBe(60);
-		expect(r.incoming_before_horizon).toBe(60);
-		expect(r.on_order_later).toBe(0);
-		expect(r.projected_available).toBe(64);
+
+		if (!(await sources()).open_purchase_lines) {
+			expect(r.on_order_total).toBe(60);
+			expect(r.incoming_before_horizon).toBe(60);
+			expect(r.on_order_later).toBe(0);
+			expect(r.projected_available).toBe(64);
+		} else {
+			// 0016 is the source now, and it has nothing for this part.
+			expect(r.on_order_total).toBe(0);
+			expect(r.projected_available).toBe(4);
+		}
 	});
 
 	it('says how many days of cover are left and when the shelf empties', async () => {
@@ -323,18 +366,19 @@ describe('the suggestion', () => {
 
 	it('never counts what is already on order twice', async () => {
 		// Two parts with the same demand, the same policy and the same stock.
-		// One has 30 already on order; its suggestion is exactly 30 smaller
-		// (before rounding), never 60 smaller, and never unchanged.
+		// One has 30 already on order, arriving inside the horizon; its
+		// suggestion is exactly 30 smaller (before rounding), never 60
+		// smaller, and never unchanged.
+		//
+		// The 30 sits on a purchase order this desk raised, rather than on the
+		// item master's on-order figure, because that one is counted whatever
+		// other migrations are applied (see nl.incoming_supply).
 		const clean = await part({ family: 'kit', onHand: 10, leadTime: '3W', safetyStock: 5 });
-		const onOrder = await part({
-			family: 'kit',
-			onHand: 10,
-			leadTime: '3W',
-			safetyStock: 5,
-			onPurchaseOrder: 30
-		});
+		const onOrder = await part({ family: 'kit', onHand: 10, leadTime: '3W', safetyStock: 5 });
 		await sold(clean, '2026-08-01', 91);
 		await sold(onOrder, '2026-08-01', 91);
+		// The horizon is 2026-10-08, so this lands inside it.
+		await onDeskOrder(onOrder, 30, '2026-09-30');
 
 		const a = await look(clean);
 		const b = await look(onOrder);
@@ -352,15 +396,8 @@ describe('the suggestion', () => {
 		await sold(itemNo, '2026-08-01', 91);
 		const before = await look(itemNo);
 
-		await db.asSystem(async (tx) => {
-			const [order] = await tx.sql<{ id: number }>`
-				insert into nl.procurement_orders (vendor_no, created_by, ordered_on)
-				select i.vendor_no, ${OPS}, ${TODAY} from nl.items i where i.item_no = ${itemNo}
-				returning id`;
-			await tx.sql`insert into nl.procurement_order_lines (order_id, line_no, item_no, quantity,
-			                                                     unit_cost, original_promised_on, promised_on)
-			             values (${order.id}, 1, ${itemNo}, 30, 10, '2026-12-01', '2026-12-01')`;
-		});
+		// Well past the 2026-10-08 horizon.
+		await onDeskOrder(itemNo, 30, '2026-12-01');
 
 		const after = await look(itemNo);
 		// It is on order, but it does not arrive in time to cover the horizon.
@@ -528,20 +565,31 @@ describe('the free-freight threshold on a vendor card', () => {
 
 describe('which neighbouring migrations the desk found', () => {
 	it('names them, so a page can say which numbers it is working from', async () => {
-		const [row] = await db.asUser(
-			ADMIN,
-			(tx) => tx.sql<{ s: Record<string, boolean> }>`select nl.procurement_sources() as s`
-		);
-		// 0016 and 0021 are not applied on this branch, so the desk is working
-		// from what 0010 and 0015 give it. The point of the test is that the
-		// detection answers at all, and answers for every object it looks for.
-		expect(Object.keys(row.s).sort()).toEqual([
+		const found = await sources();
+		expect(Object.keys(found).sort()).toEqual([
 			'available_to_promise',
 			'mail_drafts',
 			'open_purchase_lines',
 			'production_orders'
 		]);
-		expect(row.s.open_purchase_lines).toBe(false);
-		expect(row.s.mail_drafts).toBe(false);
+		for (const [name, value] of Object.entries(found)) {
+			expect(typeof value, name).toBe('boolean');
+		}
+
+		// And each answer matches whether the object is really there, so this
+		// test says the same thing on a branch with the supply forecast and on
+		// one without.
+		const [live] = await db.asUser(
+			ADMIN,
+			(tx) => tx.sql<{ purchase: boolean; production: boolean; mail: boolean; atp: boolean }>`
+				select to_regclass('nl.open_purchase_lines') is not null as purchase,
+				       to_regclass('nl.open_production_orders') is not null as production,
+				       to_regclass('nl.mail_drafts') is not null as mail,
+				       to_regprocedure('nl.available_to_promise(text,int,date)') is not null as atp`
+		);
+		expect(found.open_purchase_lines).toBe(live.purchase);
+		expect(found.production_orders).toBe(live.production);
+		expect(found.mail_drafts).toBe(live.mail);
+		expect(found.available_to_promise).toBe(live.atp);
 	});
 });
