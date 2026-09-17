@@ -3,9 +3,11 @@
 // have landed it.
 //
 // The small world, "today" pinned to 2026-09-17, plus the RFQ eval customers
-// and parts. This branch has migrations 0011 and 0017 but not 0021 or 0022, so
-// the queue here has two sources, which is also what the degradation tests
-// check.
+// and parts. This file covers the two sources a person owns their own records
+// in: quote requests (migration 0011) and assistant proposals (0017). The
+// order desk's mail drafts are in queue-sources.test.ts, and the procurement
+// desk's purchase requests (0022) are not in this database, which is what the
+// degradation tests at the bottom check.
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { SessionUser } from '$lib/types';
