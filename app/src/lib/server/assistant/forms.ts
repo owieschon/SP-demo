@@ -17,19 +17,35 @@ import { readCaps, readLimits } from './caps.ts';
 import { AskModelError, DEFAULT_MODEL, liveModel, messagesApi } from './claude.ts';
 import { toAskError } from './errors.ts';
 import type { AskModel } from './loop.ts';
-import { LIVE_COOKIE, LIVE_COOKIE_PATH, LIVE_MINUTES, liveConfigured, passphraseMatches, signLiveCookie, verifyLiveCookie } from './live.ts';
+import { LIVE_COOKIE, LIVE_COOKIE_PATH, LIVE_MINUTES, passphraseMatches, signLiveCookie, verifyLiveCookie } from './live.ts';
 import { MOCK_LABEL, mockModel } from './mock.ts';
 import { decideProposal } from './proposals.ts';
+import { primeSettings, settingOrEnvSync, settingsOverEnv } from '../settings/read.ts';
 
 type Event = Pick<RequestEvent, 'cookies' | 'locals' | 'request'>;
 
-/** Live mode needs the server's key and passphrase, and this person's cookie. */
+/**
+ * Live mode needs the server's key and this person's cookie.
+ *
+ * The key, the model and the passphrase can now come from Settings as well as
+ * from the environment (lib/server/settings/read.ts). settingOrEnvSync reads a
+ * short-lived cache that primeSettings() fills wherever this file already
+ * talks to the database; with nothing stored it returns the environment
+ * variable, which is what this did before.
+ *
+ * The passphrase is optional now. When one is set it still has to be typed.
+ * When Settings leaves it blank, a key alone puts everyone signed in on the
+ * real model, bounded by the daily caps, which is what the Settings page says
+ * out loud.
+ */
 export function liveState({ cookies, locals }: Pick<Event, 'cookies' | 'locals'>) {
-	const values = { apiKey: env.ANTHROPIC_API_KEY, passphrase: env.LIVE_AI_PASSPHRASE, model: env.ANTHROPIC_MODEL };
-	const configured = liveConfigured(values) && env.ASSISTANT_MOCK !== '1';
+	const apiKey = settingOrEnvSync('anthropic_api_key');
+	const passphrase = settingOrEnvSync('live_ai_passphrase');
+	const configured = Boolean(apiKey) && env.ASSISTANT_MOCK !== '1';
 	const secret = sessionSecret(env.SESSION_SECRET, Boolean(env.VERCEL));
-	const unlocked = configured && verifyLiveCookie(cookies.get(LIVE_COOKIE), locals.user!.id, secret);
-	return { configured, unlocked, model: env.ANTHROPIC_MODEL || DEFAULT_MODEL, secret };
+	const unlocked =
+		configured && (!passphrase || verifyLiveCookie(cookies.get(LIVE_COOKIE), locals.user!.id, secret));
+	return { configured, unlocked, model: settingOrEnvSync('anthropic_model') || DEFAULT_MODEL, secret };
 }
 
 /**
@@ -47,15 +63,22 @@ export function modeView(event: Pick<Event, 'cookies' | 'locals'>): ModeView {
 	};
 }
 
-// One API client per server, made the first time live mode is used.
+// One API client per server, made the first time live mode is used. The key it
+// was made with is kept beside it, so a key changed in Settings makes a new
+// client instead of being ignored until the next deploy.
 let anthropic: Anthropic | null = null;
+let anthropicKey: string | undefined;
 
 /** The model that will answer: the real one only when live mode is unlocked. */
 function modelFor(event: Pick<Event, 'cookies' | 'locals'>, today: string): AskModel {
 	const user = event.locals.user!;
 	const live = liveState(event);
 	if (!live.unlocked) return mockModel({ userId: user.id });
-	anthropic ??= new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+	const key = settingOrEnvSync('anthropic_api_key');
+	if (!anthropic || anthropicKey !== key) {
+		anthropic = new Anthropic({ apiKey: key });
+		anthropicKey = key;
+	}
 	return liveModel({
 		api: messagesApi(anthropic),
 		model: live.model,
@@ -73,9 +96,11 @@ export interface AskPageData {
 /** The parts of the page that both routes need. */
 export async function askPageData(event: Pick<Event, 'cookies' | 'locals'>): Promise<AskPageData> {
 	const db = await getDb();
+	// Load what Settings holds before anything reads it synchronously below.
+	await primeSettings(db);
 	return {
 		mode: modeView(event),
-		caps: await readCaps(db, event.locals.user!.id, readLimits(env)),
+		caps: await readCaps(db, event.locals.user!.id, readLimits(settingsOverEnv())),
 		// Fresh on each load: sending the same form twice answers once.
 		requestId: randomUUID()
 	};
@@ -105,10 +130,11 @@ export async function askAction(event: Event): Promise<AskAnswer | ActionFailure
 	const form = await event.request.formData();
 	const db = await getDb();
 	const now = await today(db, user.id);
+	await primeSettings(db);
 
 	try {
 		const result = await askQuestion(
-			{ db, userId: user.id, model: modelFor(event, now), limits: readLimits(env), today: now },
+			{ db, userId: user.id, model: modelFor(event, now), limits: readLimits(settingsOverEnv()), today: now },
 			{
 				question: String(form.get('question') ?? ''),
 				conversationId: form.get('conversationId') ? String(form.get('conversationId')) : null,
@@ -163,12 +189,14 @@ export async function decideAction(event: Event): Promise<DecideAnswer | ActionF
 
 /** Unlock live mode for an hour. The passphrase never comes back to the page. */
 export async function unlockAction(event: Event) {
+	// Settings may hold the passphrase, so load it before reading it.
+	await primeSettings(await getDb());
 	const live = liveState(event);
 	if (!live.configured) {
 		return fail(400, { liveMessage: 'Live mode is not set up on this server.', liveOk: false } satisfies AskFailure);
 	}
 	const given = String((await event.request.formData()).get('passphrase') ?? '');
-	if (!passphraseMatches(given, env.LIVE_AI_PASSPHRASE)) {
+	if (!passphraseMatches(given, settingOrEnvSync('live_ai_passphrase'))) {
 		// A short pause makes guessing slow.
 		await new Promise((resolve) => setTimeout(resolve, 600));
 		return fail(403, { liveMessage: 'That passphrase is not right.', liveOk: false } satisfies AskFailure);
