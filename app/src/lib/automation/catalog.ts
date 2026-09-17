@@ -31,7 +31,8 @@ export const TRIGGER_KEYS = [
 	'window_closed_short',
 	'commitment_behind_pace',
 	'account_gone_quiet',
-	'order_line_at_risk'
+	'order_line_at_risk',
+	'order_line_projected_late'
 ] as const;
 export type TriggerKey = (typeof TRIGGER_KEYS)[number];
 
@@ -79,6 +80,23 @@ export const TRIGGERS: Record<TriggerKey, TriggerDef> = {
 			{ key: 'longest_gap_days', label: 'Longest gap in two years', type: 'days' },
 			{ key: 'revenue_12m', label: 'Revenue, last 12 months', type: 'money' },
 			{ key: 'orders_2y', label: 'Orders, last two years', type: 'number' },
+			OWNER
+		]
+	},
+	// Migration 0016's projection: not "is there stock today" but "when will
+	// this line ship". A rule fires again when the projected date moves, so a
+	// new slip is a new reminder.
+	order_line_projected_late: {
+		key: 'order_line_projected_late',
+		label: 'A line is projected to ship late',
+		description:
+			'The late-order forecast says this line will miss its promised date, because of what is on hand, the supply order that covers it, or nothing being on order at all.',
+		subject: 'order line (once per projected date)',
+		fields: [
+			{ key: 'days_late', label: 'Days late (projected date minus promised date)', type: 'days' },
+			{ key: 'line_value', label: 'Line value', type: 'money' },
+			{ key: 'no_supply', label: 'Nothing on hand or on order (1 yes, 0 no)', type: 'number' },
+			{ key: 'supply_overdue', label: 'The supply order is itself past due (1 yes, 0 no)', type: 'number' },
 			OWNER
 		]
 	},

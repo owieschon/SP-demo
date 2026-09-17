@@ -7,7 +7,8 @@ const STATUS_BY_CODE: Record<string, number> = {
 	NL403: 403, // not allowed (owner or admin only)
 	NL404: 404, // no such row
 	NL409: 409, // changed since it was loaded, or a request id reused
-	NL422: 422 // the request does not make sense right now
+	NL422: 422, // the request does not make sense right now
+	NL429: 429 // a daily cap has been reached (the assistant)
 };
 
 export class AppError extends Error {
