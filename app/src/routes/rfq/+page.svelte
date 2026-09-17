@@ -1,6 +1,7 @@
 <script lang="ts">
-	// RFQ intake: paste or upload a customer's email, and the server reads it
-	// into a draft, checks it against the book and opens it for review.
+	// RFQ intake: paste a customer's email and attach whatever came with it.
+	// The server reads every file with the reader for its format, builds one
+	// draft out of them, checks it against the book and opens it for review.
 	import { enhance } from '$app/forms';
 	import Lock from '@lucide/svelte/icons/lock';
 	import Sparkles from '@lucide/svelte/icons/sparkles';
@@ -14,6 +15,8 @@
 	let sampleName = $state('');
 	let reading = $state(false);
 	let unlocking = $state(false);
+	/** The names of the files chosen, so the person can see what is going up. */
+	let attached = $state<string[]>([]);
 
 	const liveMessage = $derived(form && 'liveMessage' in form ? form.liveMessage : null);
 	const extractMessage = $derived(form && 'message' in form ? form.message : null);
@@ -35,8 +38,9 @@
 	<header class="head">
 		<h1>RFQ intake</h1>
 		<p class="faint">
-			Paste a customer's email asking for parts. It is read into a draft, every field is checked against the
-			catalog and the customer's account, and nothing is created until you approve it.
+			Paste a customer's email asking for parts, and attach whatever came with it: a spreadsheet, a printed
+			purchase order, a CSV parts list. It is read into a draft, every field is checked against the catalog and
+			the customer's account, and nothing is created until you approve it.
 		</p>
 	</header>
 
@@ -77,10 +81,20 @@
 					</select>
 				</label>
 				<label class="file">
-					<span>Or upload a .txt or .eml file</span>
-					<input type="file" name="file" accept=".txt,.eml,text/plain,message/rfc822" />
+					<span>Attach what they sent <span class="faint">(up to four files)</span></span>
+					<input
+						type="file"
+						name="files"
+						multiple
+						accept={data.accept}
+						onchange={(e) => (attached = [...(e.currentTarget.files ?? [])].map((f) => f.name))}
+					/>
 				</label>
 			</div>
+
+			{#if attached.length > 0}
+				<p class="faint small">Attached: {attached.join(', ')}</p>
+			{/if}
 
 			<label>
 				<span>Email, with its From, Subject and Date lines if you have them</span>
@@ -95,7 +109,11 @@
 				></textarea>
 			</label>
 
-			<p class="faint small">PDF attachments are out of scope for now: paste the text of the request instead.</p>
+			<p class="faint small">
+				Spreadsheets (.xlsx, .xls), PDFs, CSV parts lists and .txt or .eml files are all read. A table wins
+				over prose: where a file has columns, those are the lines, and every line says which file, sheet and
+				row it came from. A PDF that is only a scan has no text to read and is refused.
+			</p>
 
 			{#if extractMessage}
 				<p class="notice error" role="alert">{extractMessage}</p>
@@ -170,7 +188,11 @@
 								<span class="mono id">R-{d.id}</span>
 								<span class="what">
 									<span class="name">{d.customerName ?? 'Customer not settled'}</span>
-									<span class="faint small">{d.sourceName} · {d.lines} {d.lines === 1 ? 'line' : 'lines'} · {d.extractor}</span>
+									<span class="faint small">
+										{d.sourceName} · {d.lines} {d.lines === 1 ? 'line' : 'lines'}
+										{#if d.attachments > 0}· {d.attachments} {d.attachments === 1 ? 'file' : 'files'}{/if}
+										· {d.extractor}
+									</span>
 								</span>
 								{#if d.status === 'draft' && d.needsReview > 0}
 									<span class="chip warn">{d.needsReview} to review</span>
