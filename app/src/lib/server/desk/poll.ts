@@ -26,6 +26,13 @@ import { runMessage, type LiveClassifier, type RunResult } from './run.ts';
 import { recordMessage } from './writes.ts';
 
 export interface DeskEnv {
+	/**
+	 * An index signature, because every other member is optional: without it
+	 * TypeScript's weak-type check refuses `$env/dynamic/private` on a machine
+	 * whose .env happens to share no key with this shape, which is exactly what
+	 * CI looks like.
+	 */
+	[key: string]: string | undefined;
 	AGENTMAIL_API_KEY?: string;
 	MAIL_INBOX_ORDERS?: string;
 	MAIL_INBOX_PROCUREMENT?: string;
