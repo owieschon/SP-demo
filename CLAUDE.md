@@ -18,10 +18,14 @@ describe other projects and do not apply here.
   agencies or vendors goes into code, comments, docs, commit messages, UI text
   or data. Invented names only, `.example` email domains.
 - **Name scan before every commit.** `node tools/scan.mjs . <word list>` must
-  print `0 hit(s)`, and so must the same scan over your commit messages
+  print `0 hit(s)` (check its exit code, not a piped tail: a pipeline hides it), and so must the same scan over your commit messages
   (write `git log --format=%an%n%ae%n%B origin/main..HEAD` to a file in a temp
   folder outside the repo and scan that folder). The word list lives outside
-  the repo; ask Owen for its path. Never copy it in.
+  the repo; ask Owen for its path. Never copy it in. Some ordinary English
+  words collide with a name on the list, so the scan flags innocent code: when
+  that happens, rename the word rather than argue with it. Two have come up
+  already, an urgency word and a word for a period of leniency; the
+  replacements in this repo are "expedite" and "slip".
 - **Accounts.** The `gh`, `vercel` and `supabase` command-line tools on this
   machine are signed in to other accounts: never use them for this project.
   Supabase goes through the Supabase MCP connector, project `northline` only.
@@ -41,6 +45,10 @@ describe other projects and do not apply here.
   Files named `NNNN_name.supabase.sql` use Supabase-only features (pg_cron) and
   are skipped by PGlite and the tests.
 - `db/seed.sql`: the world generator (`nl.reset()`, `nl.build()`).
+- `db/seed.d/NN_name.sql`: later additions to the world, one file each,
+  defining `nl_seed.extra_NN_name()`, which `nl_seed.finish_build()` calls in
+  name order. Add to the world here rather than editing `seed.sql`.
+- `db/bench/scale.sql`: the load test (copies of the world at several sizes).
 - `db/fingerprint.sql`: one query that hashes schema and world, to prove two
   databases match.
 - `demo/`, `tools/`: older demo tooling. Leave `demo/` alone.
@@ -58,9 +66,15 @@ describe other projects and do not apply here.
 - Every write function: claim the request id, require an active user, check
   field rules, lock optimistically on `updated_at`, write an audit row.
 - Status of a commitment is derived in `nl.commitment_progress`, never stored.
-- Apply migrations to Supabase with the MCP `apply_migration` tool, in order,
-  with the file's exact text. Then run the security and performance advisors,
-  and compare `db/fingerprint.sql` on Supabase with `node scripts/fingerprint.ts`.
+- Apply migrations to Supabase with `node --env-file=.env scripts/db-remote.ts
+  migrate` (from `app/`), which records them in Supabase's own migration
+  history, or with the MCP `apply_migration` tool for a small one. Then run the
+  security and performance advisors, and compare `db/fingerprint.sql` on
+  Supabase with `node scripts/fingerprint.ts`.
+- A migration file that changed after it was applied cannot be applied again:
+  use `scripts/db-remote.ts fresh` to drop and rebuild from 0001.
+- JSON parameters go in as text the app already encoded (`$1::jsonb`); the
+  `postgres` driver would otherwise encode them twice (see `postgres.ts`).
 - Never ship a view without looking at `explain (analyze, buffers)` on the
   full world.
 
