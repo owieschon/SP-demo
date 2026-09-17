@@ -18,7 +18,7 @@ const DANA = 2;
 let db: Db;
 
 beforeAll(async () => {
-	db = await createTestDb({ world: 'small', today: TODAY });
+	db = await createTestDb({ size: 'small', today: TODAY });
 }, 180_000);
 
 afterAll(async () => {

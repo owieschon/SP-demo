@@ -3,3 +3,4 @@ node_modules
 
 # Worktrees that agents run in.
 .claude/worktrees/
+app/dev.log

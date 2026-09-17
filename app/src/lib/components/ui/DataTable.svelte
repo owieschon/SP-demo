@@ -41,21 +41,7 @@
 	import type { Snippet } from 'svelte';
 	import { page } from '$app/state';
 	import EmptyState from './EmptyState.svelte';
-	import { ariaSortValue, nextSortValue, rowCountLine, type ColumnSort } from './table';
-
-	export interface Column {
-		/** Unique within the table; only used as the key for the header cells. */
-		key: string;
-		header: string;
-		/** Figures go right. Anything a person reads goes left. */
-		align?: 'left' | 'right';
-		/** A CSS width for the column, when one column should take the room. */
-		width?: string;
-		/** Makes the header a link that sorts, through the URL. */
-		sort?: ColumnSort;
-		/** Hide the header text but keep it for a screen reader (action columns). */
-		hideHeader?: boolean;
-	}
+	import { ariaSortValue, nextSortValue, rowCountLine, type Column, type ColumnSort } from './table';
 
 	let {
 		columns,
@@ -129,11 +115,12 @@
 	<EmptyState line={emptyLine} action={emptyAction} href={emptyHref} />
 {:else}
 	<!--
-		tabindex makes the scroller itself reachable, which an overflow
-		container is not by default: without it a keyboard user cannot scroll
-		a wide table sideways at all.
+		A scrolling region needs to be focusable or a keyboard user cannot
+		scroll a wide table sideways at all, which is why the tabindex is here
+		on purpose and not an oversight.
 	-->
-	<div class="table-wrap" tabindex="0" role="group" aria-label={caption}>
+	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+	<div class="table-wrap" tabindex="0" role="region" aria-label={caption}>
 		<table class:sticky>
 			<caption class:sr-only={!captionVisible}>{caption}</caption>
 			<thead>

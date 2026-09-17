@@ -9,7 +9,7 @@
   (accounts, parts, vendors) are fetched from /api/palette as the person
   types, because there are thousands of them.
 */
-import { NAV_ITEMS } from '$lib/nav';
+import { NAV_ITEMS, UNRAILED } from '$lib/nav';
 import { routes } from '$lib/routes';
 
 export type PaletteKind = 'action' | 'screen' | 'account' | 'part' | 'vendor';
@@ -97,7 +97,7 @@ export const ACTIONS: PaletteEntry[] = [
 		kind: 'action',
 		label: 'Write a new automation rule',
 		hint: 'A trigger, some conditions and one action',
-		href: routes.automationNew(),
+		href: routes.newRule(),
 		keywords: 'automation rule trigger nightly'
 	},
 	{
@@ -134,8 +134,14 @@ export const ACTIONS: PaletteEntry[] = [
 	}
 ];
 
-/** The screens, taken straight from the rail so the two cannot drift apart. */
-export const SCREENS: PaletteEntry[] = NAV_ITEMS.map((item) => ({
+/*
+  The screens. The rail's own entries come straight from nav.ts so the two
+  cannot drift apart, and then the screens the rail deliberately does NOT
+  carry (accounts, parts, vendors, quote requests, ask, search) are added
+  here. That is the trade the rail makes: those pages left the sidebar on the
+  understanding that this box reaches them in three keystrokes.
+*/
+export const SCREENS: PaletteEntry[] = [...NAV_ITEMS, ...UNRAILED].map((item) => ({
 	id: `screen-${item.href}`,
 	kind: 'screen' as const,
 	label: item.label,

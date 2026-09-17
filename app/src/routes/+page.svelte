@@ -41,15 +41,19 @@
 		count: 'Count'
 	};
 
-	/** 'waited 44 days' for the oldest thing in a group. */
-	function waited(oldest: string | null, today: string): string | null {
-		if (!oldest) return null;
+	/*
+	  How long the oldest thing in a group has been waiting. Two lines: the
+	  wait, and the date it started, because "44 days" is the urgency and
+	  "since Aug 4" is the fact. A group whose oldest arrived today has no
+	  second line: it would say "since today, since Sep 17".
+	*/
+	function waited(oldest: string, today: string): { wait: string; since: string | null } {
 		const days = Math.round(
 			(Date.parse(`${today}T00:00:00Z`) - Date.parse(`${oldest}T00:00:00Z`)) / 86_400_000
 		);
-		if (days <= 0) return 'since today';
-		if (days === 1) return 'oldest waiting 1 day';
-		return `oldest waiting ${days} days`;
+		if (days <= 0) return { wait: 'arrived today', since: null };
+		if (days === 1) return { wait: 'waiting 1 day', since: oldest };
+		return { wait: `oldest waiting ${days} days`, since: oldest };
 	}
 </script>
 
@@ -121,8 +125,11 @@
 								</span>
 								<span class="when">
 									{#if group.oldest}
-										<span class="t-meta muted">{waited(group.oldest, queue.today)}</span>
-										<span class="t-meta faint">since {day(group.oldest, data.year)}</span>
+										{@const age = waited(group.oldest, queue.today)}
+										<span class="t-meta muted">{age.wait}</span>
+										{#if age.since}
+											<span class="t-meta faint">since {day(group.oldest, data.year)}</span>
+										{/if}
 									{/if}
 								</span>
 								<ArrowRight size={15} strokeWidth={1.75} class="go" aria-hidden="true" />
