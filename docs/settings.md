@@ -4,7 +4,7 @@
 health of a deployment live, so a key can be pasted into the app instead of
 edited into a file or a hosting dashboard.
 
-Files: `db/migrations/0025_settings.sql` and `0026_settings_health.sql`,
+Files: `db/migrations/0025_settings.sql` and `0027_settings_health.sql`,
 `app/src/lib/server/settings/**`, `app/src/lib/components/settings/**`,
 `app/src/routes/settings/`.
 
@@ -194,7 +194,7 @@ of this page counted every row of the world before it would answer: on the full
 world that is about 450,000 ledger lines, 164,000 cost revisions and 19,000
 stock movements, and /settings took about fourteen seconds. Exactness is right
 for a drift check the nightly job runs. It is wrong for a line on a page
-somebody is waiting for. So migration 0026 split them.
+somebody is waiting for. So migration 0027 split them.
 
 **On every load**, bounded work only:
 

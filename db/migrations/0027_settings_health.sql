@@ -1,4 +1,4 @@
--- 0026 Health checks that do not make the Settings page wait.
+-- 0027 Health checks that do not make the Settings page wait.
 --
 -- What 0025 got wrong. Its two health functions were exact: they counted every
 -- row of the world before /settings could answer. On the full world that is

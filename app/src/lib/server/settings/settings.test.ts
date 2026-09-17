@@ -407,7 +407,7 @@ describe('the health checks on the page', () => {
 
 	it('leave the checks that read whole tables to the button', async () => {
 		// This is what makes the page quick: nothing here recounts every
-		// commitment or every stock movement (migration 0026).
+		// commitment or every stock movement (migration 0027).
 		const health = await readHealth(db, ADMIN, env);
 		const ids = health.checks.map((check) => check.id);
 		expect(ids).not.toContain('drift_delivery');
