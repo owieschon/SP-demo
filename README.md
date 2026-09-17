@@ -30,6 +30,7 @@ select public.gr_nightly_refresh();
 select public.gr_nightly_nudges();
 select public.gr_answer_pushed_windows();
 select public.gr_propose_next_steps();
+select public.gr_propose_account_owners();
 ```
 
 The build takes about a minute. Then sign in as the demo admin and open
@@ -47,5 +48,5 @@ into relational tables. There is no demo-only code in the application.
 
 Two things the world is deliberately not: perfect, and quiet. Revenue runs
 behind plan, a quarter of the open orders are past due, some accounts have
-gone quiet, and one deal's window closed short with nobody having answered
+gone quiet, and two deals' windows closed short with nobody having answered
 the question yet. That is what the tooling is for.

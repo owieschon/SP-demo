@@ -353,6 +353,8 @@ begin
   -- random values, and which accounts get which deals must not move with the date.
   perform setseed(p_seed + 0.11);
   -- Delivering: window open, parts shipping, more expected.
+  -- The board measures delivery against the tranche total, so the tranches add up
+  -- to the whole commitment (delivered plus still to come), not just the remainder.
   for acct in select rec.id, rec.data, cu.customer_no, cu.tier from public.records rec join demo.customers cu on cu.account_id = rec.id and cu.branch_of is null
               where rec.data ->> 'category' = 'Account Management' and cu.lifecycle in ('steady','new','growing','slipping') and cu.blocked = '' and cu.size <> 'D' order by random() limit 6 loop
     start_day := today - demo.ri(30, 90);
@@ -366,8 +368,8 @@ begin
       'oppType', demo.pick(array['New Business','Upsell','Reactivation','Renewal']), 'oppDescription', demo.pick(array['Buyer confirmed quantities on the call.','Waiting on their fleet manager to sign off.','Replaces a competitor part on the same trucks.','']),
       'buyerContactId', acct.data -> 'contacts' -> 0 ->> 'id', 'scopeItems', scope, 'quotes', '[]'::jsonb, 'noteLog', '[]'::jsonb, 'nextSteps', '[]'::jsonb, 'stageHistory', '[]'::jsonb, 'completed', false, 'lastContact', (today - demo.ri(1, 20))::text,
       'dateCreated', start_day::text, 'revenuePotential', value, 'dealConfidence', case when demo.chance(0.6) then (array['50','60','70','80','90'])[demo.ri(1,5)] else '' end,
-      'upcomingOrders', jsonb_build_array(jsonb_build_object('id', 'uo_' || demo.hex(16), 'amount', round(remaining * 0.6, 2), 'expectedDate', (today + demo.ri(7, 30))::text, 'dateBasis', 'customer', 'holdup', '', 'quoteId', null, 'itemLines', demo.relines((select jsonb_agg(z.v order by z.i) from jsonb_array_elements(scope) with ordinality as z(v, i) where z.i <= 3))),
-                                         jsonb_build_object('id', 'uo_' || demo.hex(16), 'amount', round(remaining * 0.4, 2), 'expectedDate', (today + demo.ri(31, 70))::text, 'dateBasis', 'estimate', 'holdup', '', 'quoteId', null, 'itemLines', '[]'::jsonb))), now(), now());
+      'upcomingOrders', jsonb_build_array(jsonb_build_object('id', 'uo_' || demo.hex(16), 'amount', round(value * 0.6, 2), 'expectedDate', (today + demo.ri(7, 30))::text, 'dateBasis', 'customer', 'holdup', '', 'quoteId', null, 'itemLines', demo.relines((select jsonb_agg(z.v order by z.i) from jsonb_array_elements(scope) with ordinality as z(v, i) where z.i <= 3))),
+                                         jsonb_build_object('id', 'uo_' || demo.hex(16), 'amount', round(value * 0.4, 2), 'expectedDate', (today + demo.ri(31, 70))::text, 'dateBasis', 'estimate', 'holdup', '', 'quoteId', null, 'itemLines', '[]'::jsonb))), now(), now());
     next_deal := next_deal + 1;
   end loop;
   -- Kept: window closed, delivered at or above 95%.
