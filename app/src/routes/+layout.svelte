@@ -11,6 +11,7 @@
 	import Inbox from '@lucide/svelte/icons/inbox';
 	import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
 	import ListChecks from '@lucide/svelte/icons/list-checks';
+	import Mails from '@lucide/svelte/icons/mails';
 	import Package from '@lucide/svelte/icons/package';
 	import LogOut from '@lucide/svelte/icons/log-out';
 	import Truck from '@lucide/svelte/icons/truck';
@@ -36,6 +37,7 @@
 	const NAV = [
 		{ href: '/ask', label: 'Ask', icon: Sparkles },
 		{ href: '/workspace', label: 'Workspace', icon: ClipboardCheck },
+		{ href: '/desk', label: 'Desk', icon: Mails },
 		{ href: '/commitments', label: 'Commitments', icon: ListChecks },
 		{ href: '/accounts', label: 'Accounts', icon: Building2 },
 		{ href: '/rfq', label: 'RFQ intake', icon: Inbox },
@@ -85,6 +87,13 @@
 			];
 		}
 		if (route === '/workspace') return [{ label: 'Workspace', href: null }];
+		if (route === '/desk') return [{ label: 'Desk', href: null }];
+		if (route === '/desk/[id=id]') {
+			return [
+				{ label: 'Desk', href: '/desk' },
+				{ label: 'Message', href: null }
+			];
+		}
 		if (route === '/settings/mcp') {
 			return [
 				{ label: 'Settings', href: null },

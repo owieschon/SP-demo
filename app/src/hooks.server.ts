@@ -14,7 +14,14 @@ import { readTheme, THEME_COOKIE } from '$lib/components/theme';
 // The daily automation run checks its own secret (routes/api/cron/automations).
 // The MCP server and the cron runs carry their own secrets (a bearer token
 // and a shared secret), so they must not be bounced to the sign-in page.
-const PUBLIC_PATHS = new Set(['/signin', '/robots.txt', '/api/cron/automations', '/api/mcp']);
+const PUBLIC_PATHS = new Set([
+	'/signin',
+	'/robots.txt',
+	'/api/cron/automations',
+	'/api/mcp',
+	'/api/mail/poll',
+	'/api/mail/webhook'
+]);
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const secret = sessionSecret(env.SESSION_SECRET, Boolean(env.VERCEL));
