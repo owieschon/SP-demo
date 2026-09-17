@@ -179,6 +179,12 @@ export interface ValidatedLine {
 	stated_line_total: number | null;
 	line_total: number | null;
 	price_check: Check;
+	/**
+	 * What the supply side says about this line, in plain English: what can
+	 * ship now, what is on order and when, or the earliest date if nothing is.
+	 * Information for the person reading the draft, not a check.
+	 */
+	supply: string | null;
 	removed: boolean;
 }
 
