@@ -1,7 +1,7 @@
 // Reading the workspace queue.
 //
 // Everything here is a read. One view, nl.agent_queue (migrations 0023 and
-// 0025), puts every waiting agent request into one row shape; this file turns
+// 0026), puts every waiting agent request into one row shape; this file turns
 // those rows into the shape the page uses and loads the detail behind each one.
 //
 // Reads run as the signed-in person, so row-level security decides what is in

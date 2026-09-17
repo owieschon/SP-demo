@@ -3,7 +3,7 @@
 //
 // When the workspace was built, 0021 was on another branch, so its mail branch
 // was assembled from whatever columns a table called nl.mail_drafts turned out
-// to have. 0021 has landed, migration 0025 writes that branch out properly,
+// to have. 0021 has landed, migration 0026 writes that branch out properly,
 // and this file holds it to the real shape: the account comes from the message
 // the draft replies to, and the reviewer comes from the mailbox.
 //

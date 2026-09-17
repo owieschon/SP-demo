@@ -13,7 +13,7 @@ approval card, so a person had to visit four pages to see what was waiting.
 autonomous; this page is only the moments where somebody has to say yes or no.
 
 Files: `db/migrations/0023_workspace.sql` and
-`db/migrations/0025_workspace_mail_source.sql`,
+`db/migrations/0026_workspace_mail_source.sql`,
 `app/src/lib/server/workspace/**`, `app/src/lib/workspace/**`,
 `app/src/lib/components/workspace/**`, `app/src/routes/workspace/**`.
 
@@ -154,9 +154,9 @@ Nothing is faked and nothing half-works.
 
 **After applying a migration that adds a source, run
 `select nl.rebuild_agent_queue();` once** as the owner of the schema. A one-line
-migration is the tidiest place for it, which is what migration 0025 is: 0021
+migration is the tidiest place for it, which is what migration 0026 is: 0021
 landed after 0023, so a database with 0023 already applied (the owner's
-Supabase) had no mail branch until 0025 ran. Until the rebuild runs, a new
+Supabase) had no mail branch until 0026 ran. Until the rebuild runs, a new
 table is not in the view.
 
 ### Where each branch's SQL comes from

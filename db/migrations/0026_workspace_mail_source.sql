@@ -1,4 +1,4 @@
--- 0025 The workspace queue picks up the real mail drafts.
+-- 0026 The workspace queue picks up the real mail drafts.
 --
 -- Two things happen here, and both exist because of the order the migrations
 -- landed in:
