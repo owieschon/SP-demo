@@ -179,7 +179,11 @@ async function errorOf(work: () => Promise<unknown>): Promise<AppError> {
 
 // ---------------------------------------------------------------------------
 
-describe('before the table exists', () => {
+// The stand-in below proved the mail path before migration 0021 existed. The
+// real nl.mail_drafts is in now, so creating a stand-in of the same name
+// cannot work. Parked until these are rewritten against the real table and
+// its own write functions, which is the follow-up recorded in docs/workspace.md.
+describe.skip('before the table exists', () => {
 	it('reports mail and purchase as absent and keeps them out of the view', async () => {
 		expect(await queueSources(db, DANA)).toEqual({
 			rfq: true,
@@ -192,7 +196,7 @@ describe('before the table exists', () => {
 	});
 });
 
-describe('once a mail source turns up', () => {
+describe.skip('once a mail source turns up', () => {
 	beforeAll(async () => {
 		await createStandInMailSource();
 		// The queue is a view, so it has to be assembled again.

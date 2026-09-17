@@ -260,3 +260,17 @@ corrections that source allows, and the two buttons. The empty state says
   real 0021 and 0022. Whoever lands those should read
   "What those two tables need" above, run `nl.rebuild_agent_queue()`, and
   check the detail columns they expose.
+
+## Follow-up: the mail source is real now
+
+`queue-sources.test.ts` proved the mail path against a stand-in table built
+inside the test, because migration 0021 did not exist when the queue was
+written. It does now, with its own shape and its own write functions, so a
+stand-in of the same name cannot be created and those tests are parked
+(`describe.skip`). The rewrite points them at the real `nl.mail_drafts`,
+builds its fixture through `nl.queue_mail_draft`, takes the reviewer from the
+mailbox rather than from the draft, and proves that approving through the
+queue equals approving on the desk page.
+
+A database where 0023 was applied before 0021 needs `select
+nl.rebuild_agent_queue();` once, or the mail source is missing from the view.

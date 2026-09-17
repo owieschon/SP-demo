@@ -573,10 +573,12 @@ describe('the record of decisions', () => {
 
 describe('a database without the mail and purchase tables', () => {
 	it('says which sources it has', async () => {
+		// The order desk's drafts (migration 0021) are a real source now; the
+		// procurement desk's are not in yet.
 		expect(await queueSources(db, DANA)).toEqual({
 			rfq: true,
 			assistant: true,
-			mail: false,
+			mail: true,
 			purchase: false
 		});
 	});
@@ -588,9 +590,9 @@ describe('a database without the mail and purchase tables', () => {
 		);
 		expect(row.definition).toContain('rfq_drafts');
 		expect(row.definition).toContain('assistant_proposals');
+		expect(row.definition).toContain('mail_drafts');
 		// Not even inside a guard: a view's names are resolved when it is
-		// created, so a missing table cannot appear in it at all.
-		expect(row.definition).not.toContain('mail_drafts');
+		// created, so a table that is not there yet cannot appear in it at all.
 		expect(row.definition).not.toContain('purchase_request');
 	});
 
