@@ -4,8 +4,9 @@
 health of a deployment live, so a key can be pasted into the app instead of
 edited into a file or a hosting dashboard.
 
-Files: `db/migrations/0025_settings.sql`, `app/src/lib/server/settings/**`,
-`app/src/lib/components/settings/**`, `app/src/routes/settings/`.
+Files: `db/migrations/0025_settings.sql` and `0026_settings_health.sql`,
+`app/src/lib/server/settings/**`, `app/src/lib/components/settings/**`,
+`app/src/routes/settings/`.
 
 ## The problem this page had to solve first
 
@@ -25,6 +26,13 @@ passcode for the whole instance, not one per person. There is no email
 confirmation, no recovery, no second factor, and no way to prove that the
 person who claimed the instance is its owner: whoever gets there first claims
 it. The rest of this file says exactly how far the guarantees go.
+
+There is now a second, outer curtain: with `SITE_PASSWORD` set, nobody reaches
+any page of the app at all without typing it once
+(`app/src/lib/server/gate.ts`). That reduces "whoever finds the URL" to
+"whoever was given the site password", which is a real improvement and not a
+replacement: the passcode is still what separates the people who can see the
+demo from the people who can change its keys.
 
 ## What is stored
 
@@ -163,28 +171,69 @@ The view `nl.settings` deliberately does not set `security_invoker = true`,
 unlike every other view in this project. That is what lets it read the base
 table for a caller who cannot. It is safe because the secret is not in it.
 
+### What the Supabase advisor says about this, on purpose
+
+The security advisor reports one INFO notice per `nl_config` table: row-level
+security is enabled with no policy. That is the intent, not an oversight, and
+it is listed here the way `DECISIONS.md` 10 lists the ten seed helpers the
+advisor flags for their `search_path`. No role is granted anything on those
+tables, so there is nothing for a policy to allow or deny; the `security
+definer` functions are the only door in, and they run as the owner, which RLS
+does not apply to. A policy would be an invitation to add a grant later and
+believe the policy was holding the line. Expect three INFO notices on
+`nl_config.settings`, `nl_config.admin_lock` and `nl_config.admin_attempts`,
+and leave them.
+
 ## Health
 
 The Health section runs on the server, streams in after the page, and contains
-no secret. It reports:
+no secret.
+
+**It comes in two speeds, and the difference is the point.** The first version
+of this page counted every row of the world before it would answer: on the full
+world that is about 450,000 ledger lines, 164,000 cost revisions and 19,000
+stock movements, and /settings took about fourteen seconds. Exactness is right
+for a drift check the nightly job runs. It is wrong for a line on a page
+somebody is waiting for. So migration 0026 split them.
+
+**On every load**, bounded work only:
 
 - whether `SESSION_SECRET` is set, and what happens if it is not;
 - whether the instance has been claimed;
 - how many stored secrets there are and whether this server can read them;
 - what Ask Northline will do right now;
-- the three drift checks, through `nl.diagnostic_drift()`:
-  `nl.delivery_drift()` (stored delivered figures against a fresh count),
-  `nl.warehouse_drift()` when the warehouse tables exist, and ledger lines
-  whose stored cost disagrees with the cost timeline for the day they were
-  posted, over the last ninety days so the check stays quick on the full world;
+- whether the ledger's cost is in step with the cost history, over a sample of
+  500 lines (`nl.diagnostic_cost_drift`). A restamp that did not run leaves the
+  whole ledger claiming today's cost, which is the failure that happens, and a
+  sample finds it at once. The line on the page says it is a sample;
 - the last nightly run: pg_cron's `cron.job_run_details` where pg_cron exists,
   otherwise the newest audit row the nightly job left;
-- the size of the database and the row counts of the main tables;
+- the size of the database;
+- **estimated** row counts for the main tables, from `pg_class.reltuples` and
+  the statistics collector's live count, whichever has seen the world as it is
+  now (`nl.diagnostic_row_estimates`). No table is read. The page says they are
+  estimates, because after a rebuild they can be a little out;
 - which environment variables are set, as set or not set, never as values,
   except for a few that are not secrets (the model name, `ASSISTANT_MOCK`, the
   commit);
 - the commit this deployment was built from, `VERCEL_GIT_COMMIT_SHA`, or
-  "local".
+  "local", and how long the checks took.
+
+These reads all go out at once rather than one after another, so the section
+costs about one round trip instead of six.
+
+**Behind "Run the exact checks"**, `nl.diagnostic_drift_exact()`: every
+commitment's stored delivered figure against a fresh count
+(`nl.delivery_drift`), stock on hand against the movement ledger
+(`nl.warehouse_drift`, where migration 0019 exists), and every line in the
+ledger against the cost timeline. These are exact by design, so they are left
+exact and moved off the page. Following the link streams the answers in the
+same way the rest of the section arrives, and the function carries its own
+thirty second statement timeout, so holding the button down cannot tie up the
+database.
+
+The page itself waits for three small reads (who owns the instance, what is
+set, the row version per key), in parallel, and nothing else.
 
 Each line is green, red or a plain figure, and a red one carries the sentence
 that says what to do.
@@ -204,7 +253,7 @@ this on the page, and Health shows when the last run was.
 ## The tests that prove each guarantee
 
 `app/src/lib/server/settings/admin.test.ts` (12 tests, no database) and
-`app/src/lib/server/settings/settings.test.ts` (33 tests, PGlite, today pinned
+`app/src/lib/server/settings/settings.test.ts` (39 tests, PGlite, today pinned
 to 2026-09-17).
 
 | Claim | Test |
@@ -223,8 +272,13 @@ to 2026-09-17).
 | A stored key overrides the environment variable, and a cleared one falls back | `storing a setting > takes over from the environment variable, and gives it back when cleared` |
 | The assistant's SQL tool cannot read the settings | `the assistant's read-only SQL tool > cannot read the settings, whichever way it asks` (six ways) |
 | Every write leaves an audit row, and a secret is not in it | `storing a setting > saves a value, leaves an audit row`, `> leaves an audit row when a setting is cleared, without the secret in it` |
-| The diagnostics never include a secret | `the health checks > report the world without any secret in them` |
-| A red check says what to do | `the health checks > say what to do when something is red` |
+| The diagnostics never include a secret | `the health checks on the page > report the world without any secret in them` |
+| A red check says what to do | `the health checks on the page > say what to do when something is red` |
+| Nothing on the page reads a whole table | `the health checks on the page > leave the checks that read whole tables to the button` |
+| Row counts come from the planner statistics | `the health checks on the page > count rows from the planner statistics, not by reading the tables` |
+| The page's checks stay quick | `the health checks on the page > take a fraction of a second on this world` |
+| The exact checks recount everything and report how long they took | `the exact checks, behind the button > recount everything and say how long it took` |
+| The exact checks catch drift the sample would miss | `the exact checks, behind the button > notice drift that the sample on the page would miss` |
 | Nothing can be stored before the instance is claimed | `before anyone has claimed the instance > refuses to store a setting at all` |
 | A stale page cannot overwrite a newer value | `storing a setting > refuses a save from a page that was loaded before somebody else saved` |
 | Only someone who knows the old passcode can change it | `changing the passcode > refuses somebody who cannot type the old one` |

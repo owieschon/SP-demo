@@ -15,7 +15,7 @@ import type { Db } from '../db/types.ts';
 import { AppError } from '../errors.ts';
 import { changePasscode, checkPasscode, claimInstance, PasscodeRefused, readLockState } from './admin.ts';
 import { decryptSecret } from './crypto.ts';
-import { readDiagnostics } from './diagnostics.ts';
+import { readExactChecks, readHealth } from './diagnostics.ts';
 import { SETTING_KEYS } from './keys.ts';
 import {
 	invalidateSettings,
@@ -382,37 +382,100 @@ describe("the assistant's read-only SQL tool", () => {
 	});
 });
 
-describe('the health checks', () => {
+describe('the health checks on the page', () => {
 	it('report the world without any secret in them', async () => {
 		await save(ADMIN, 'anthropic_api_key', API_KEY);
 		invalidateSettings();
-		const diagnostics = await readDiagnostics(db, ADMIN, env);
-		const json = JSON.stringify(diagnostics);
+		const health = await readHealth(db, ADMIN, env);
+		const json = JSON.stringify(health);
 		expect(json).not.toContain(API_KEY);
 		expect(json).not.toContain(ENV_KEY);
 		expect(json).not.toContain(PASSCODE);
 		expect(json).not.toContain(env.sessionSecret);
 
 		// And they say something useful.
-		const byId = new Map(diagnostics.checks.map((check) => [check.id, check]));
+		const byId = new Map(health.checks.map((check) => [check.id, check]));
 		expect(byId.get('claimed')?.state).toBe('good');
-		expect(byId.get('drift_delivery')?.state).toBe('good');
 		expect(byId.get('drift_cost')?.state).toBe('good');
 		expect(byId.get('unreadable')?.state).toBe('good');
-		expect(diagnostics.counts.find((row) => row.table === 'customers')?.rows).toBeGreaterThan(0);
+		expect(health.counts.find((row) => row.table === 'customers')?.rows).toBeGreaterThan(0);
 		// The environment is reported as set or not set, never as a value.
-		const apiKeyFlag = diagnostics.environment.find((row) => row.name === 'ANTHROPIC_API_KEY')!;
+		const apiKeyFlag = health.environment.find((row) => row.name === 'ANTHROPIC_API_KEY')!;
 		expect(apiKeyFlag.set).toBe(true);
 		expect(apiKeyFlag.shown).toBe('');
 	});
 
+	it('leave the checks that read whole tables to the button', async () => {
+		// This is what makes the page quick: nothing here recounts every
+		// commitment or every stock movement (migration 0026).
+		const health = await readHealth(db, ADMIN, env);
+		const ids = health.checks.map((check) => check.id);
+		expect(ids).not.toContain('drift_delivery');
+		expect(ids).not.toContain('drift_warehouse');
+		expect(ids).not.toContain('drift_cost_exact');
+		// The cost check that is here says it is a sample.
+		expect(health.checks.find((check) => check.id === 'drift_cost')?.detail).toContain('sample');
+	});
+
+	it('take a fraction of a second on this world', async () => {
+		// A guard, not a benchmark: the point is that nothing in here grows
+		// with the size of the ledger. On the full world this is the
+		// difference between fourteen seconds and well under one.
+		const health = await readHealth(db, ADMIN, env);
+		expect(health.ms).toBeLessThan(3000);
+	});
+
+	it('count rows from the planner statistics, not by reading the tables', async () => {
+		const [row] = await db.asUser(ADMIN, (tx) => tx.sql<{ counts: Record<string, number> }>`
+			select nl.diagnostic_row_estimates() as counts`);
+		// Eight tables, and the estimates are in the right order of magnitude
+		// for the small world (90 customers, a couple of years of invoices).
+		expect(Object.keys(row.counts).sort()).toEqual(
+			['audit_log', 'commitments', 'contacts', 'customers', 'invoice_lines', 'invoices', 'items', 'users'].sort()
+		);
+		expect(Number(row.counts.customers)).toBeGreaterThan(50);
+		expect(Number(row.counts.invoice_lines)).toBeGreaterThan(Number(row.counts.invoices));
+	});
+
 	it('say what to do when something is red', async () => {
-		const diagnostics = await readDiagnostics(db, ADMIN, { record: {}, sessionSecret: 'x' });
-		const sessionCheck = diagnostics.checks.find((check) => check.id === 'session_secret')!;
+		const health = await readHealth(db, ADMIN, { record: {}, sessionSecret: 'x' });
+		const sessionCheck = health.checks.find((check) => check.id === 'session_secret')!;
 		expect(sessionCheck.state).toBe('bad');
 		expect(sessionCheck.advice).toContain('SESSION_SECRET');
 		// A rotated session secret is called out, not hidden.
-		expect(diagnostics.checks.find((check) => check.id === 'unreadable')?.state).toBe('bad');
+		expect(health.checks.find((check) => check.id === 'unreadable')?.state).toBe('bad');
+	});
+});
+
+describe('the exact checks, behind the button', () => {
+	it('recount everything and say how long it took', async () => {
+		const exact = await readExactChecks(db, ADMIN);
+		const byId = new Map(exact.checks.map((check) => [check.id, check]));
+		expect([...byId.keys()]).toEqual(['drift_delivery', 'drift_warehouse', 'drift_cost_exact']);
+		expect(byId.get('drift_delivery')?.state).toBe('good');
+		expect(byId.get('drift_cost_exact')?.state).toBe('good');
+		// The warehouse tables are in this database, so it has an answer.
+		expect(byId.get('drift_warehouse')?.state).toBe('good');
+		expect(exact.ms).toBeGreaterThanOrEqual(0);
+	});
+
+	it('notice drift that the sample on the page would miss', async () => {
+		// Put one commitment's stored delivered figure out of step behind the
+		// triggers' back, which is what the exact check exists to catch.
+		const [row] = await db.asSystem((tx) => tx.sql<{ commitment_id: number }>`
+			select commitment_id from nl.commitment_delivery limit 1`);
+		await db.asSystem((tx) => tx.sql`
+			update nl.commitment_delivery set delivered = delivered + 1000 where commitment_id = ${row.commitment_id}`);
+
+		const exact = await readExactChecks(db, ADMIN);
+		const delivery = exact.checks.find((check) => check.id === 'drift_delivery')!;
+		expect(delivery.state).toBe('bad');
+		expect(delivery.advice).toContain('nightly');
+
+		// Put it back, so the tests after this one see a world that agrees.
+		await db.asSystem((tx) => tx.sql`select nl.repair_delivery()`);
+		const again = await readExactChecks(db, ADMIN);
+		expect(again.checks.find((check) => check.id === 'drift_delivery')?.state).toBe('good');
 	});
 });
 
