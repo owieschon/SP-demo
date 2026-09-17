@@ -17,6 +17,7 @@
 	import MessageSquareText from '@lucide/svelte/icons/message-square-text';
 	import Moon from '@lucide/svelte/icons/moon';
 	import PackageX from '@lucide/svelte/icons/package-x';
+	import TruckElectric from '@lucide/svelte/icons/truck-electric';
 	import Plus from '@lucide/svelte/icons/plus';
 	import {
 		ACTION_LABELS,
@@ -62,7 +63,8 @@
 		window_closed_short: CalendarX,
 		commitment_behind_pace: Gauge,
 		account_gone_quiet: Moon,
-		order_line_at_risk: PackageX
+		order_line_at_risk: PackageX,
+		order_line_projected_late: TruckElectric
 	};
 	const KINDS = [
 		{ value: 'next_step', icon: ListTodo },

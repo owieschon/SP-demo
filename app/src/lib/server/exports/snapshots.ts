@@ -13,6 +13,7 @@ import type {
 	Bucket,
 	BucketTotal,
 	ChangeLineView,
+	ExportKind,
 	HoldReason,
 	LineChange,
 	OpenLineView,
@@ -25,7 +26,16 @@ import type {
 import { BUCKET_ORDER } from '$lib/components/exports/types';
 import type { Db, Tx } from '../db/types.ts';
 import { guarded } from '../errors.ts';
-import { describe, readOpenLines, type OpenLine, type OpenLinesFile, type RowProblem } from './openLines.ts';
+import { describe, type OpenLine } from './openLines.ts';
+import {
+	describeProductionOrder,
+	describePurchaseLine,
+	readReport,
+	type ProductionOrder,
+	type PurchaseLine,
+	type ReportFile,
+	type RowProblem
+} from './reports.ts';
 
 /** Bigger than any real open-lines export (1,500 lines is about 200 KB). */
 export const MAX_FILE_BYTES = 2_000_000;
@@ -50,25 +60,36 @@ export async function uploadExport(
 	rid: string
 ): Promise<UploadOutcome> {
 	requestId.parse(rid);
-	const read = readOpenLines(file.name, file.text);
+	// Which of the three reports this is, or a refusal. Nothing is written yet.
+	const read = readReport(file.name, file.text);
 	if (!read.ok) return { kind: 'refused', refusal: read.refusal };
+	const report = read.file.kind;
 
 	return guarded(() =>
 		db.asUser(userId, async (tx) => {
 			// The same form sent twice: hand back what the first one did.
-			const [prior] = await tx.sql<{ result: { snapshot_id: number; status: SnapshotStatus } | null }>`
+			const [prior] = await tx.sql<{
+				result: { snapshot_id: number; status: SnapshotStatus; kind?: ExportKind } | null;
+			}>`
 				select result from nl.request_log where request_id = ${rid} and action = 'stage_export'`;
 			if (prior?.result) {
-				return { kind: 'staged', snapshotId: prior.result.snapshot_id, status: prior.result.status, replayed: true };
+				return {
+					kind: 'staged',
+					snapshotId: prior.result.snapshot_id,
+					status: prior.result.status,
+					report: prior.result.kind ?? report,
+					replayed: true
+				};
 			}
 
-			// The same data, whatever the file is called.
+			// The same data, whatever the file is called. A fingerprint belongs
+			// to one report, so the same rows under two reports are two files.
 			const [existing] = await tx.sql<{ id: number; staged_on: string; staged_by: string; status: SnapshotStatus }>`
 				select s.id, (s.staged_at at time zone 'America/Chicago')::date as staged_on,
 				       u.full_name as staged_by, s.status
 				from nl.export_snapshots s
 				join nl.users u on u.id = s.staged_by
-				where s.kind = 'open_sales_lines' and s.content_hash = ${read.file.hash}`;
+				where s.kind = ${report} and s.content_hash = ${read.file.hash}`;
 			if (existing) {
 				return {
 					kind: 'duplicate',
@@ -76,7 +97,8 @@ export async function uploadExport(
 					snapshotId: existing.id,
 					stagedOn: existing.staged_on,
 					stagedBy: existing.staged_by,
-					status: existing.status
+					status: existing.status,
+					report
 				};
 			}
 
@@ -86,14 +108,16 @@ export async function uploadExport(
 					${file.name},
 					${read.file.hash},
 					(select coalesce(array_agg(value), '{}') from jsonb_array_elements_text(${JSON.stringify(read.file.ignoredColumns)}::jsonb)),
-					${JSON.stringify(checked.lines.map(lineJson))}::jsonb,
+					${JSON.stringify(checked.lines)}::jsonb,
 					${JSON.stringify(checked.problems.map(problemJson))}::jsonb,
-					${rid}
+					${rid},
+					${report}
 				) as result`;
 			return {
 				kind: 'staged',
 				snapshotId: row.result.snapshot_id,
 				status: row.result.status,
+				report,
 				replayed: row.result.replayed === true
 			};
 		})
@@ -101,40 +125,109 @@ export async function uploadExport(
 }
 
 /**
- * The checks a file cannot make on its own: every customer and item must
- * exist. A row naming an unknown one becomes a problem.
+ * The checks a file cannot make on its own: everything it names must exist in
+ * the book. A sales line needs its customer and its part, a purchase line its
+ * vendor and its part, a production order its part. A row naming an unknown
+ * one becomes a problem, and the rest of the file still loads.
+ *
+ * The good rows come back in the JSON shapes nl.stage_export reads for this
+ * report (snake_case, as the SQL names them).
  */
-async function checkReferences(tx: Tx, file: OpenLinesFile): Promise<{ lines: OpenLine[]; problems: RowProblem[] }> {
-	const customers = [...new Set(file.lines.map((l) => l.customerNo))];
-	const items = [...new Set(file.lines.map((l) => l.itemNo))];
-	const known = await tx.sql<{ kind: 'customer' | 'item'; code: string }>`
-		select 'customer' as kind, c.customer_no as code
-		from nl.customers c
-		where c.customer_no in (select jsonb_array_elements_text(${JSON.stringify(customers)}::jsonb))
-		union all
-		select 'item', i.item_no
-		from nl.items i
-		where i.item_no in (select jsonb_array_elements_text(${JSON.stringify(items)}::jsonb))`;
-	const knownCustomers = new Set(known.filter((k) => k.kind === 'customer').map((k) => k.code));
-	const knownItems = new Set(known.filter((k) => k.kind === 'item').map((k) => k.code));
-
-	const lines: OpenLine[] = [];
+async function checkReferences(
+	tx: Tx,
+	file: ReportFile
+): Promise<{ lines: Record<string, unknown>[]; problems: RowProblem[] }> {
 	const problems = [...file.problems];
-	for (const line of file.lines) {
-		const reasons: string[] = [];
-		if (!knownCustomers.has(line.customerNo)) reasons.push(`Customer ${line.customerNo} is not in the customer list.`);
-		if (!knownItems.has(line.itemNo)) reasons.push(`Item ${line.itemNo} is not in the item list.`);
-		if (reasons.length === 0) {
-			lines.push(line);
-		} else {
-			problems.push({ rowNo: line.rowNo, key: [line.documentNo, String(line.lineNo)], reasons, raw: describe(line) });
+	const lines: Record<string, unknown>[] = [];
+
+	// Every code the file mentions, looked up in one round trip.
+	const codes = { customer: new Set<string>(), item: new Set<string>(), vendor: new Set<string>() };
+	if (file.kind === 'open_sales_lines') {
+		for (const l of file.salesLines) {
+			codes.customer.add(l.customerNo);
+			codes.item.add(l.itemNo);
+		}
+	} else if (file.kind === 'open_purchase_lines') {
+		for (const l of file.purchaseLines) {
+			codes.vendor.add(l.vendorNo);
+			codes.item.add(l.itemNo);
+		}
+	} else {
+		for (const o of file.productionOrders) codes.item.add(o.itemNo);
+	}
+	const known = await knownCodes(tx, codes);
+
+	if (file.kind === 'open_sales_lines') {
+		for (const line of file.salesLines) {
+			const reasons: string[] = [];
+			if (!known.customer.has(line.customerNo)) reasons.push(`Customer ${line.customerNo} is not in the customer list.`);
+			if (!known.item.has(line.itemNo)) reasons.push(`Item ${line.itemNo} is not in the item list.`);
+			if (reasons.length === 0) {
+				lines.push(salesLineJson(line));
+			} else {
+				problems.push({ rowNo: line.rowNo, key: [line.documentNo, String(line.lineNo)], reasons, raw: describe(line) });
+			}
+		}
+	} else if (file.kind === 'open_purchase_lines') {
+		for (const line of file.purchaseLines) {
+			const reasons: string[] = [];
+			if (!known.vendor.has(line.vendorNo)) reasons.push(`Vendor ${line.vendorNo} is not in the vendor list.`);
+			if (!known.item.has(line.itemNo)) reasons.push(`Item ${line.itemNo} is not in the item list.`);
+			if (reasons.length === 0) {
+				lines.push(purchaseLineJson(line));
+			} else {
+				problems.push({
+					rowNo: line.rowNo,
+					key: [line.documentNo, String(line.lineNo)],
+					reasons,
+					raw: describePurchaseLine(line)
+				});
+			}
+		}
+	} else {
+		for (const order of file.productionOrders) {
+			if (known.item.has(order.itemNo)) {
+				lines.push(productionOrderJson(order));
+			} else {
+				problems.push({
+					rowNo: order.rowNo,
+					key: [order.orderNo, ''],
+					reasons: [`Item ${order.itemNo} is not in the item list.`],
+					raw: describeProductionOrder(order)
+				});
+			}
 		}
 	}
+
 	return { lines, problems: problems.sort((a, b) => a.rowNo - b.rowNo) };
 }
 
-// The JSON shapes nl.stage_export reads (snake_case, as the SQL names them).
-function lineJson(l: OpenLine) {
+/** Which of the codes a file mentions exist in the book. */
+async function knownCodes(
+	tx: Tx,
+	codes: { customer: Set<string>; item: Set<string>; vendor: Set<string> }
+): Promise<{ customer: Set<string>; item: Set<string>; vendor: Set<string> }> {
+	const rows = await tx.sql<{ kind: 'customer' | 'item' | 'vendor'; code: string }>`
+		select 'customer' as kind, c.customer_no as code
+		from nl.customers c
+		where c.customer_no in (select jsonb_array_elements_text(${JSON.stringify([...codes.customer])}::jsonb))
+		union all
+		select 'item', i.item_no
+		from nl.items i
+		where i.item_no in (select jsonb_array_elements_text(${JSON.stringify([...codes.item])}::jsonb))
+		union all
+		select 'vendor', v.vendor_no
+		from nl.vendors v
+		where v.vendor_no in (select jsonb_array_elements_text(${JSON.stringify([...codes.vendor])}::jsonb))`;
+	return {
+		customer: new Set(rows.filter((r) => r.kind === 'customer').map((r) => r.code)),
+		item: new Set(rows.filter((r) => r.kind === 'item').map((r) => r.code)),
+		vendor: new Set(rows.filter((r) => r.kind === 'vendor').map((r) => r.code))
+	};
+}
+
+// The JSON shapes nl.stage_export reads, one per report.
+function salesLineJson(l: OpenLine) {
 	return {
 		row_no: l.rowNo,
 		document_no: l.documentNo,
@@ -150,8 +243,36 @@ function lineJson(l: OpenLine) {
 	};
 }
 
+function purchaseLineJson(l: PurchaseLine) {
+	return {
+		row_no: l.rowNo,
+		document_no: l.documentNo,
+		line_no: l.lineNo,
+		vendor_no: l.vendorNo,
+		item_no: l.itemNo,
+		description: l.description,
+		due_date: l.dueDate,
+		promised_date: l.promisedDate,
+		quantity: l.quantity,
+		location_code: l.locationCode
+	};
+}
+
+function productionOrderJson(o: ProductionOrder) {
+	return {
+		row_no: o.rowNo,
+		order_no: o.orderNo,
+		item_no: o.itemNo,
+		work_center: o.workCenter,
+		status: o.status,
+		due_date: o.dueDate,
+		quantity: o.quantity
+	};
+}
+
 function problemJson(p: RowProblem) {
-	// The key is [document, line], as the profile names it.
+	// The key is [document, line] for the line reports and [order, ''] for
+	// production orders, as each profile names it.
 	return { row_no: p.rowNo, document_no: p.key[0] ?? '', line_no: p.key[1] ?? '', reasons: p.reasons, raw: p.raw };
 }
 
@@ -223,8 +344,7 @@ export async function latestPendingSnapshotId(db: Db, userId: number): Promise<n
 		tx.sql<{ id: number }>`
 			select s.id
 			from nl.export_snapshots s
-			where s.kind = 'open_sales_lines'
-			  and s.status in ('staged', 'held')
+			where s.status in ('staged', 'held')
 			  and s.id > coalesce((select c.id from nl.export_snapshots c where c.kind = s.kind and c.is_current), 0)
 			order by s.id desc
 			limit 1`
@@ -237,6 +357,7 @@ export async function getSnapshotReview(db: Db, userId: number, id: number): Pro
 	return db.asUser(userId, async (tx) => {
 		const [s] = await tx.sql<{
 			id: number;
+			kind: ExportKind;
 			file_name: string;
 			status: SnapshotStatus;
 			is_current: boolean;
@@ -256,7 +377,7 @@ export async function getSnapshotReview(db: Db, userId: number, id: number): Pro
 			apply_summary: SnapshotReview['applySummary'];
 			updated_at: Date;
 		}>`
-			select s.id, s.file_name, s.status, s.is_current,
+			select s.id, s.kind, s.file_name, s.status, s.is_current,
 			       s.status in ('staged', 'held')
 			         and exists (select 1 from nl.export_snapshots c
 			                     where c.kind = s.kind and c.is_current and c.id > s.id) as older_than_current,
@@ -270,29 +391,10 @@ export async function getSnapshotReview(db: Db, userId: number, id: number): Pro
 			where s.id = ${id}`;
 		if (!s) return null;
 
-		// The staged lines against the live table as it is right now.
-		const [diff] = await tx.sql<{ added: number; changed: number; unchanged: number; removed: number }>`
-			select
-			  count(*) filter (where o.document_no is null)::int as added,
-			  count(*) filter (where o.document_no is not null
-			                     and (l.customer_no, l.item_no, l.description, l.ship_date, l.quantity,
-			                          l.unit_price, l.line_amount, l.location_code)
-			                         is distinct from
-			                         (o.customer_no, o.item_no, o.description, o.ship_date, o.quantity,
-			                          o.unit_price, o.line_amount, o.location_code))::int as changed,
-			  count(*) filter (where o.document_no is not null
-			                     and (l.customer_no, l.item_no, l.description, l.ship_date, l.quantity,
-			                          l.unit_price, l.line_amount, l.location_code)
-			                         is not distinct from
-			                         (o.customer_no, o.item_no, o.description, o.ship_date, o.quantity,
-			                          o.unit_price, o.line_amount, o.location_code))::int as unchanged,
-			  (select count(*)::int from nl.open_order_lines g
-			   where not exists (select 1 from nl.export_snapshot_lines x
-			                     where x.snapshot_id = ${id} and x.document_no = g.document_no and x.line_no = g.line_no))
-			    as removed
-			from nl.export_snapshot_lines l
-			left join nl.open_order_lines o on o.document_no = l.document_no and o.line_no = l.line_no
-			where l.snapshot_id = ${id}`;
+		// The staged rows against the live table of this report, as it is right
+		// now. Each report has its own key and its own columns, so each one
+		// asks the question in its own words.
+		const diff = await snapshotDiff(tx, id, s.kind);
 
 		const errors = await tx.sql<{ row_no: number; document_no: string; line_no: string; reasons: string[] }>`
 			select row_no, document_no, line_no, reasons
@@ -303,6 +405,7 @@ export async function getSnapshotReview(db: Db, userId: number, id: number): Pro
 
 		return {
 			id: s.id,
+			kind: s.kind,
 			fileName: s.file_name,
 			status: s.status,
 			isCurrent: s.is_current,
@@ -326,6 +429,80 @@ export async function getSnapshotReview(db: Db, userId: number, id: number): Pro
 			updatedAt: s.updated_at.toISOString()
 		};
 	});
+}
+
+type SnapshotDiff = { added: number; changed: number; unchanged: number; removed: number };
+
+/** What applying a staged snapshot would change in the live table of its kind. */
+async function snapshotDiff(tx: Tx, id: number, kind: ExportKind): Promise<SnapshotDiff> {
+	if (kind === 'open_purchase_lines') {
+		const [row] = await tx.sql<SnapshotDiff>`
+			select
+			  count(*) filter (where o.document_no is null)::int as added,
+			  count(*) filter (where o.document_no is not null
+			                     and (l.vendor_no, l.item_no, l.description, l.due_date, l.promised_date,
+			                          l.quantity, l.location_code)
+			                         is distinct from
+			                         (o.vendor_no, o.item_no, o.description, o.due_date, o.promised_date,
+			                          o.quantity, o.location_code))::int as changed,
+			  count(*) filter (where o.document_no is not null
+			                     and (l.vendor_no, l.item_no, l.description, l.due_date, l.promised_date,
+			                          l.quantity, l.location_code)
+			                         is not distinct from
+			                         (o.vendor_no, o.item_no, o.description, o.due_date, o.promised_date,
+			                          o.quantity, o.location_code))::int as unchanged,
+			  (select count(*)::int from nl.open_purchase_lines g
+			   where not exists (select 1 from nl.export_snapshot_purchase_lines x
+			                     where x.snapshot_id = ${id} and x.document_no = g.document_no
+			                       and x.line_no = g.line_no)) as removed
+			from nl.export_snapshot_purchase_lines l
+			left join nl.open_purchase_lines o on o.document_no = l.document_no and o.line_no = l.line_no
+			where l.snapshot_id = ${id}`;
+		return row;
+	}
+	if (kind === 'open_production_orders') {
+		const [row] = await tx.sql<SnapshotDiff>`
+			select
+			  count(*) filter (where o.order_no is null)::int as added,
+			  count(*) filter (where o.order_no is not null
+			                     and (l.item_no, l.work_center, l.status, l.due_date, l.quantity)
+			                         is distinct from
+			                         (o.item_no, o.work_center, o.status, o.due_date, o.quantity))::int as changed,
+			  count(*) filter (where o.order_no is not null
+			                     and (l.item_no, l.work_center, l.status, l.due_date, l.quantity)
+			                         is not distinct from
+			                         (o.item_no, o.work_center, o.status, o.due_date, o.quantity))::int as unchanged,
+			  (select count(*)::int from nl.open_production_orders g
+			   where not exists (select 1 from nl.export_snapshot_production_orders x
+			                     where x.snapshot_id = ${id} and x.order_no = g.order_no)) as removed
+			from nl.export_snapshot_production_orders l
+			left join nl.open_production_orders o on o.order_no = l.order_no
+			where l.snapshot_id = ${id}`;
+		return row;
+	}
+	const [row] = await tx.sql<SnapshotDiff>`
+		select
+		  count(*) filter (where o.document_no is null)::int as added,
+		  count(*) filter (where o.document_no is not null
+		                     and (l.customer_no, l.item_no, l.description, l.ship_date, l.quantity,
+		                          l.unit_price, l.line_amount, l.location_code)
+		                         is distinct from
+		                         (o.customer_no, o.item_no, o.description, o.ship_date, o.quantity,
+		                          o.unit_price, o.line_amount, o.location_code))::int as changed,
+		  count(*) filter (where o.document_no is not null
+		                     and (l.customer_no, l.item_no, l.description, l.ship_date, l.quantity,
+		                          l.unit_price, l.line_amount, l.location_code)
+		                         is not distinct from
+		                         (o.customer_no, o.item_no, o.description, o.ship_date, o.quantity,
+		                          o.unit_price, o.line_amount, o.location_code))::int as unchanged,
+		  (select count(*)::int from nl.open_order_lines g
+		   where not exists (select 1 from nl.export_snapshot_lines x
+		                     where x.snapshot_id = ${id} and x.document_no = g.document_no and x.line_no = g.line_no))
+		    as removed
+		from nl.export_snapshot_lines l
+		left join nl.open_order_lines o on o.document_no = l.document_no and o.line_no = l.line_no
+		where l.snapshot_id = ${id}`;
+	return row;
 }
 
 /** The buckets, the lines that need attention, day over day, and recent snapshots. */
@@ -403,10 +580,11 @@ export async function getOperationsBoard(db: Db, userId: number): Promise<Operat
 			select max(s.id) as id
 			from nl.export_snapshots s
 			join nl.export_snapshots c on c.kind = s.kind and c.is_current
-			where s.status = 'applied' and s.id < c.id`;
+			where s.kind = 'open_sales_lines' and s.status = 'applied' and s.id < c.id`;
 
 		const history = await tx.sql<{
 			id: number;
+			kind: ExportKind;
 			file_name: string;
 			status: SnapshotStatus;
 			is_current: boolean;
@@ -419,16 +597,15 @@ export async function getOperationsBoard(db: Db, userId: number): Promise<Operat
 			decided_at: Date | null;
 			decision_note: string | null;
 		}>`
-			select s.id, s.file_name, s.status, s.is_current, s.row_count, s.error_count,
+			select s.id, s.kind, s.file_name, s.status, s.is_current, s.row_count, s.error_count,
 			       array(select r->>'code' from jsonb_array_elements(s.hold_reasons) r) as hold_codes,
 			       st.full_name as staged_by, s.staged_at,
 			       de.full_name as decided_by, s.decided_at, s.decision_note
 			from nl.export_snapshots s
 			join nl.users st on st.id = s.staged_by
 			left join nl.users de on de.id = s.decided_by
-			where s.kind = 'open_sales_lines'
 			order by s.id desc
-			limit 8`;
+			limit 9`;
 
 		const counts: Record<LineChange, number> = { new: 0, shipped: 0, newly_short: 0 };
 		for (const c of changes) counts[c.change] += 1;
@@ -489,6 +666,7 @@ export async function getOperationsBoard(db: Db, userId: number): Promise<Operat
 			history: history.map(
 				(h): SnapshotHistoryRow => ({
 					id: h.id,
+					kind: h.kind,
 					fileName: h.file_name,
 					status: h.status,
 					isCurrent: h.is_current,
