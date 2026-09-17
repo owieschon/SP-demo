@@ -20,6 +20,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { ruleSchema } from '$lib/automation/catalog';
 import type { RiskClass } from '$lib/assistant/types';
+import { routes } from '$lib/routes';
 import type { Db, Row } from '../db/types.ts';
 import { testRule } from '../automation/rules.ts';
 import { toAskError } from './errors.ts';
@@ -177,7 +178,12 @@ const searchAccounts = tool({
 				order by a.revenue_ytd desc nulls last, a.name
 				limit ${input.limit}`
 		);
-		return { rows, row_count: rows.length };
+		// Each row carries its own address, built from the one route registry
+		// the pages use, so an answer can be followed rather than read out.
+		return {
+			rows: rows.map((r) => ({ ...r, url: routes.account(String(r.customer_no)) })),
+			row_count: rows.length
+		};
 	}
 });
 
@@ -218,7 +224,11 @@ const getAccount = tool({
 				order by o.ship_date, o.document_no, o.line_no
 				limit 25`;
 
-			return { account, open_commitments: commitments, open_order_lines: orders };
+			return {
+				account: { ...account, url: routes.account(input.customer_no) },
+				open_commitments: commitments.map((c) => ({ ...c, url: routes.commitment(Number(c.id)) })),
+				open_order_lines: orders
+			};
 		});
 	}
 });
@@ -263,7 +273,11 @@ const getCommitment = tool({
 				order by l.posted_on desc, l.invoice_no desc
 				limit 20`;
 
-			return { commitment: head, items, matched_lines: lines };
+			return {
+				commitment: { ...head, url: routes.commitment(input.commitment_id) },
+				items: items.map((i) => ({ ...i, url: routes.part(String(i.item_no)) })),
+				matched_lines: lines
+			};
 		});
 	}
 });
@@ -294,7 +308,11 @@ const listWindowsClosedShort = tool({
 				order by p.days_since_close desc, p.committed_value desc
 				limit ${input.limit}`
 		);
-		return { rows, row_count: rows.length, whose: input.owner };
+		return {
+			rows: rows.map((r) => ({ ...r, url: routes.commitmentAnswer(Number(r.id)) })),
+			row_count: rows.length,
+			whose: input.owner
+		};
 	}
 });
 
@@ -320,7 +338,7 @@ const getPart = tool({
 		if (!rows[0]) {
 			return { error: `There is no part ${input.item_no}. Part numbers look like L3515-630SC or CU-41545.` };
 		}
-		return { part: rows[0] };
+		return { part: { ...rows[0], url: routes.part(input.item_no) } };
 	}
 });
 
@@ -372,7 +390,7 @@ const testAutomationRule = tool({
 			};
 		} catch (error) {
 			const refusal = toAskError(error);
-			if (refusal) return { error: refusal.message };
+			if (refusal) return { error: refusal.message, code: refusal.code };
 			throw error;
 		}
 	}

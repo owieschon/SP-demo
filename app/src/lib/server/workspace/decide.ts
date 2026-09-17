@@ -10,12 +10,13 @@
 //              through app/src/lib/server/rfq/drafts.ts
 //   assistant  nl.decide_assistant_proposal and the assistant's own execution
 //              path, through app/src/lib/server/assistant/proposals.ts
-//   mail       nl.approve_mail_draft / nl.reject_mail_draft (migration 0021)
+//   mail       nl.approve_mail_draft, nl.reject_mail_draft, through the order
+//              desk's own app/src/lib/server/desk/writes.ts (migration 0021)
 //   purchase   nl.approve_purchase_request / nl.reject_purchase_request (0022)
 //
-// The last two are being built elsewhere. When they are not in this database
-// the queue has no rows from them and a decision on one is refused with a
-// plain reason; nothing here pretends to do their work.
+// The last one is being built elsewhere and is not in this database. While a
+// source is missing the queue has no rows from it and a decision on one is
+// refused with a plain reason; nothing here pretends to do its work.
 //
 // The order of a decision, and why:
 //   1. a decision already recorded under this request id is handed straight
@@ -36,6 +37,10 @@ import type { SessionUser } from '$lib/types';
 import { SOURCE_LABEL, type QueueSource } from '$lib/workspace/types';
 import { approveDraft, rejectDraft, reviseDraft } from '../rfq/drafts.ts';
 import { decideProposal } from '../assistant/proposals.ts';
+import {
+	approveDraft as approveMailDraft,
+	rejectDraft as rejectMailDraft
+} from '../desk/writes.ts';
 
 /** What a person may correct before approving, per source. */
 const editSchema = z.object({
@@ -63,10 +68,15 @@ export const decideQueueInput = z
 		requestId: z.string().min(8).max(100),
 		/** Assistant proposals only: which of its options was chosen. */
 		optionIndex: z.coerce.number().int().min(0).max(2).nullable().default(null),
-		/** The corrections, as JSON from the form. Absent means "as proposed". */
+		/**
+		 * The corrections, as JSON from the form. Absent means "as proposed".
+		 * The cap is loose because a mail body may be 20,000 characters and
+		 * JSON escaping can nearly double that; the fields inside are checked
+		 * to their own real limits by editSchema.
+		 */
 		edit: z
 			.string()
-			.max(30_000)
+			.max(50_000)
 			.optional()
 			.transform((raw, ctx) => {
 				if (raw === undefined || raw.trim() === '') return undefined;
@@ -209,6 +219,7 @@ interface Routed {
 function route(db: Db, user: SessionUser, input: DecideQueueInput): Promise<Routed> {
 	if (input.source === 'rfq') return routeRfq(db, user, input);
 	if (input.source === 'assistant') return routeAssistant(db, user, input);
+	if (input.source === 'mail') return routeMail(db, user, input);
 	return routeStoredFunction(db, user, input);
 }
 
@@ -341,20 +352,64 @@ async function routeAssistant(db: Db, user: SessionUser, input: DecideQueueInput
 }
 
 // ---------------------------------------------------------------------------
-// Mail drafts (0021) and purchase requests (0022)
+// Mail drafts (migration 0021)
 // ---------------------------------------------------------------------------
 
-/** The write function each of those sources is expected to have. */
-const STORED_FUNCTION: Record<'mail' | 'purchase', { approve: string; reject: string }> = {
-	mail: { approve: 'approve_mail_draft', reject: 'reject_mail_draft' },
+/**
+ * Straight to the order desk's own approve and reject, which are the two calls
+ * its queue page makes: nl.approve_mail_draft and nl.reject_mail_draft, both
+ * security definer, both checking that this person reviews that mailbox.
+ *
+ * Approving sends nothing. It stores the subject and the body a person signed
+ * off, marks the draft edited if they changed either, and the send happens
+ * afterwards on the desk's own path.
+ *
+ * An empty subject or body means "as the agent wrote it" to that function, so
+ * a correction is the only thing this ever passes.
+ */
+async function routeMail(db: Db, user: SessionUser, input: DecideQueueInput): Promise<Routed> {
+	if (input.decision === 'reject') {
+		const result = await rejectMailDraft(db, user.id, {
+			draftId: input.sourceId,
+			reason: input.note,
+			expectedUpdatedAt: input.expectedUpdatedAt,
+			requestId: input.requestId
+		});
+		return { decision: 'rejected', message: 'Rejected. Nothing was sent.', result: { ...result } };
+	}
+
+	const result = await approveMailDraft(db, user.id, {
+		draftId: input.sourceId,
+		subject: input.edit?.subject ?? '',
+		body: input.edit?.body ?? '',
+		expectedUpdatedAt: input.expectedUpdatedAt,
+		requestId: input.requestId
+	});
+	// The function itself decides whether that counted as an edit, by comparing
+	// what came in with what the agent wrote.
+	return {
+		decision: result.edited ? 'edited_approved' : 'approved',
+		message: result.edited
+			? 'Approved as you rewrote it. It goes out from the desk, which records the send.'
+			: 'Approved as the agent wrote it. It goes out from the desk, which records the send.',
+		result: { ...result }
+	};
+}
+
+// ---------------------------------------------------------------------------
+// Purchase requests (migration 0022), which is not in this database yet
+// ---------------------------------------------------------------------------
+
+/** The write function that source is expected to have. */
+const STORED_FUNCTION: Record<'purchase', { approve: string; reject: string }> = {
 	purchase: { approve: 'approve_purchase_request', reject: 'reject_purchase_request' }
 };
 
 /**
- * These two features own their own tables and their own write functions, and
- * this branch does not have either. Rather than guess at an argument order,
- * the router reads the function's parameter NAMES from the catalog and fills
- * each one from:
+ * That feature owns its own table and its own write functions, and this
+ * database has neither. Rather than guess at an argument order, the router
+ * reads the function's parameter NAMES from the catalog and fills each one
+ * from:
  *
  *   p_request_id            the decision's request id
  *   p_expected_updated_at   the row version the page loaded
@@ -365,10 +420,12 @@ const STORED_FUNCTION: Record<'mail' | 'purchase', { approve: string; reject: st
  *
  * A parameter it cannot fill is refused by name, which is a clear message
  * rather than a wrong write. The repository's own naming (p_<field>) is what
- * makes this work; docs/workspace.md says so plainly.
+ * makes this work; docs/workspace.md says so plainly. This is how mail drafts
+ * were routed before migration 0021 landed, and once 0022 lands its branch
+ * should be written out the way routeMail above now is.
  */
 async function routeStoredFunction(db: Db, user: SessionUser, input: DecideQueueInput): Promise<Routed> {
-	const source = input.source as 'mail' | 'purchase';
+	const source = 'purchase';
 	const names = STORED_FUNCTION[source];
 	const wanted = input.decision === 'approve' ? names.approve : names.reject;
 
@@ -382,7 +439,7 @@ async function routeStoredFunction(db: Db, user: SessionUser, input: DecideQueue
 					`This database has no nl.${wanted}, so a ${SOURCE_LABEL[source].toLowerCase()} cannot be decided here yet.`
 				);
 			}
-			const stored = await readStoredRow(tx, source, input.sourceId);
+			const stored = await readStoredRow(tx, input.sourceId);
 			const values = fillArguments(signature.names, input, stored, wanted);
 			// Named arguments, so the order in the function does not matter.
 			const call = signature.names.map((name, i) => `${quoteIdent(name)} => $${i + 1}`).join(', ');
@@ -423,13 +480,9 @@ async function readSignature(tx: Tx, name: string): Promise<{ names: string[] } 
 	return { names: row.argnames ?? [] };
 }
 
-async function readStoredRow(
-	tx: Tx,
-	source: 'mail' | 'purchase',
-	id: number
-): Promise<Record<string, unknown>> {
+async function readStoredRow(tx: Tx, id: number): Promise<Record<string, unknown>> {
 	const [table] = await tx.sql<{ name: string | null }>`
-		select nl.agent_queue_table(${source === 'mail' ? '{mail_drafts}' : '{purchase_requests,purchase_request_drafts}'}::text[]) as name`;
+		select nl.agent_queue_table('{purchase_requests,purchase_request_drafts}'::text[]) as name`;
 	if (!table?.name) return {};
 	const rows = await tx.query<Record<string, unknown>>(
 		`select * from nl.${quoteIdent(table.name)} where id = $1`,

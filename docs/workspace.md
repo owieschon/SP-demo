@@ -12,7 +12,8 @@ approval card, so a person had to visit four pages to see what was waiting.
 `/workspace` is one queue over all of them. Everything else the agents do stays
 autonomous; this page is only the moments where somebody has to say yes or no.
 
-Files: `db/migrations/0023_workspace.sql`,
+Files: `db/migrations/0023_workspace.sql` and
+`db/migrations/0026_workspace_mail_source.sql`,
 `app/src/lib/server/workspace/**`, `app/src/lib/workspace/**`,
 `app/src/lib/components/workspace/**`, `app/src/routes/workspace/**`.
 
@@ -86,7 +87,7 @@ through, and it does these six things in order:
 |---|---|---|---|
 | `rfq` | `nl.approve_rfq_draft` | `nl.reject_rfq_draft` | `nl.revise_rfq_draft`, one change at a time, each re-validated on the server |
 | `assistant` | `decideProposal` in `assistant/proposals.ts`, which records with `nl.decide_assistant_proposal` and then runs the chosen option's own SQL function | the same, with `reject` | not possible, and the UI says why |
-| `mail` | `nl.approve_mail_draft` | `nl.reject_mail_draft` | the subject and the body |
+| `mail` | `approveDraft` in `desk/writes.ts`, which calls `nl.approve_mail_draft` | the same, `nl.reject_mail_draft` | the subject and the body |
 | `purchase` | `nl.approve_purchase_request` | `nl.reject_purchase_request` | not here; open it |
 
 The request ids a decision uses are all derived from the one the page sent:
@@ -114,8 +115,16 @@ decision as `edited_approved` rather than `approved`:
   A draft with a field that still needs a person shows as `needs_review` and
   its Approve button is disabled, because `nl.approve_rfq_draft` would refuse
   it anyway.
-- **Mail draft:** the subject and the body. A field the person did not touch is
-  filled from the stored record, not sent empty.
+- **Mail draft:** the subject and the body. `nl.approve_mail_draft` treats an
+  empty field as "as the agent wrote it", so the queue sends only what a person
+  actually rewrote, and that function decides whether it counts as an edit by
+  comparing what came in with what is stored. It also sets the draft's own
+  `edited` flag, so the desk page shows the rewrite too. Approving sends
+  nothing: only `nl.mark_mail_sent` can say sent, and that happens on the
+  desk's own path after a send comes back with a provider id.
+  A draft the agent held (a `blocked_reason`) shows as `needs_review` with
+  Approve disabled, because `nl.approve_mail_draft` refuses a held draft. The
+  way out of one is to reject it.
 - **Assistant proposal:** cannot be edited, and the row says so in as many
   words. A proposal is a fixed option with a fixed input whose row version was
   captured when it was made; that fixedness is what makes approving it safe.
@@ -124,10 +133,10 @@ decision as `edited_approved` rather than `approved`:
 
 ## How it degrades when a source is missing
 
-Migrations 0021 (mail drafts) and 0022 (purchase requests) are being built on
-other branches. **On this branch they do not exist**, and a view cannot name a
-table that is not there, not even inside `where exists`: Postgres resolves the
-names when the view is created. So the view text is assembled by a function.
+A view cannot name a table that is not there, not even inside `where exists`:
+Postgres resolves the names when the view is created. Two of the four sources
+were being built elsewhere when the workspace was written, so the view text is
+assembled by a function instead of written out.
 
 - `nl.agent_queue_fragment(source)` returns one SELECT in the queue's shape for
   that source, or null when it is not in this database.
@@ -135,34 +144,55 @@ names when the view is created. So the view text is assembled by a function.
   `create or replace view nl.agent_queue ...`. It is DDL, so it is **not**
   granted to `nl_app`; the schema's owner runs it.
 - `nl.agent_queue_sources()` says which sources are in the view as it stands,
-  as `{"rfq": true, "assistant": true, "mail": false, "purchase": false}`. The
-  page reads it and tells a person that this database does not have mail drafts
-  yet, rather than leaving them wondering.
+  as `{"rfq": true, "assistant": true, "mail": true, "purchase": false}`. The
+  page reads it and tells a person that this database does not have purchase
+  requests yet, rather than leaving them wondering.
 
 With a source missing, the queue simply has no rows from it, a filter for it
 returns nothing, and a decision on one is a 404 because there is no such row.
 Nothing is faked and nothing half-works.
 
-**After applying 0021 or 0022, run `select nl.rebuild_agent_queue();` once** as
-the owner of the schema (a one-line migration is the tidiest place for it).
-Until that is run, the new table is not in the view.
+**After applying a migration that adds a source, run
+`select nl.rebuild_agent_queue();` once** as the owner of the schema. A one-line
+migration is the tidiest place for it, which is what migration 0026 is: 0021
+landed after 0023, so a database with 0023 already applied (the owner's
+Supabase) had no mail branch until 0026 ran. Until the rebuild runs, a new
+table is not in the view.
 
-### What those two tables need for the queue to carry them
+### Where each branch's SQL comes from
 
-The queue looks for a table called `nl.mail_drafts`, or `nl.purchase_requests`
-(`nl.purchase_request_drafts` is also accepted). It needs four columns and
-takes the rest if they are there:
+`rfq`, `assistant` and `mail` are written out against the real tables. Once a
+source exists, its branch should say exactly what it means, and guessing at
+columns is only for a source nobody can see yet.
+
+`mail` was assembled from probed columns until migration 0021 landed, and two of
+those guesses were wrong, which is worth remembering the next time:
+
+- a mail draft has **no customer of its own**. Who it concerns comes from
+  `in_reply_to_id` to `nl.mail_messages`, and it is a customer on the order desk
+  or a vendor on the procurement desk.
+- a mail draft has **no reviewer of its own**. The reviewer belongs to the
+  mailbox (`nl.mailboxes.reviewer_id`), which is also what
+  `nl.may_review_mailbox` reads, so the queue's 403 and the desk function's 403
+  agree by construction.
+- of `nl.mail_drafts`'s five statuses, only `draft` is waiting for a yes or a
+  no. An `approved` draft whose send failed (`failed`) has had its decision and
+  needs a resend, which is the desk page's job.
+
+### What the purchase table needs for the queue to carry it
+
+The queue looks for `nl.purchase_requests` (`nl.purchase_request_drafts` is also
+accepted). It needs four columns and takes the rest if they are there:
 
 - required: `id`, `status`, `created_at`, `updated_at`. Without all four the
   source stays out and `nl.agent_queue_sources()` reports it absent.
 - a row counts as waiting when its `status` is one of `draft`, `waiting`,
   `pending` or `proposed`.
 - optional, used when present: `summary` or `subject` for the one-line summary,
-  `customer_no` (mail) or `vendor_no` (purchase) for the account or vendor,
-  `value` / `total` / `total_value` for the figure, `created_by`, `reviewer_id`,
-  and `body`, `to_address` or `reason` for the detail behind the row.
+  `vendor_no` for the vendor, `value` / `total` / `total_value` for the figure,
+  `created_by`, `reviewer_id`, and `body` or `reason` for the detail.
 
-For routing, the write functions are called with **named arguments**, so their
+For routing, its write functions are called with **named arguments**, so their
 argument order does not matter, and each parameter is filled from:
 
 | Parameter | Filled with |
@@ -176,13 +206,8 @@ argument order does not matter, and each parameter is filled from:
 
 A parameter the workspace cannot fill is refused BY NAME, with a message that
 sends the person to that feature's own page. That is the whole extent of the
-guessing: no write is ever attempted with a value the workspace invented.
-
-`app/src/lib/server/workspace/queue-sources.test.ts` proves the mechanism with
-a stand-in `nl.mail_drafts` and its two write functions, built inside the test:
-the table appears, the queue is rebuilt, the row shows up, a correction reaches
-`nl.approve_mail_draft`, and the stored subject is used when nobody corrected
-it. The stand-in is not migration 0021; it is the shape above.
+guessing: no write is ever attempted with a value the workspace invented. When
+0022 lands, write that branch out the way the mail branch was.
 
 ## The workspace's own history
 
@@ -217,8 +242,11 @@ corrections that source allows, and the two buttons. The empty state says
 
 ## Tests
 
-`app/src/lib/server/workspace/workspace.test.ts` (17) and
-`queue-sources.test.ts` (8), both on PGlite with today pinned to 2026-09-17:
+`app/src/lib/server/workspace/workspace.test.ts` (17, quote requests and
+assistant proposals) and `queue-sources.test.ts` (12, the order desk and the
+source that is still missing), both on PGlite with today pinned to 2026-09-17.
+
+Quote requests and assistant proposals:
 
 - the queue shows a quote request and an assistant proposal created in the
   test, in one shape, newest first;
@@ -230,16 +258,40 @@ corrections that source allows, and the two buttons. The empty state says
 - correcting then approving goes through the revise step, ends up in the quote,
   and is recorded as `edited_approved`;
 - a stale row version is a 409 and leaves the record untouched;
-- somebody else's item is a 404 (row-level security gets there first, which is
-  why the 403 case needs a source the whole team can see);
-- a non-reviewer is refused with 403 on the stand-in mail source, and an admin
-  is not; a row with no reviewer is anyone's;
+- somebody else's item is a 404: row-level security gets there before any role
+  check, so for those two sources there is nothing to be forbidden from;
 - the same decision twice writes once: one quote, one decision row;
 - a rejected item leaves the queue and nothing was written;
-- the view works with 0021 and 0022 absent, and `pg_get_viewdef` shows it does
-  not name `mail_drafts` or `purchase_request` at all;
 - decisions are recorded with who, when, the note and the request id, and the
   whole team can read them.
+
+Mail drafts, against the real migration 0021. The fixture is built the way the
+agent builds one, through `startRun`, `queueDraft` and `finishRun`, because
+nothing is granted INSERT on those tables at all:
+
+- a draft carries the account from the message it answers and the reviewer from
+  its mailbox, with the desk's label and the facts the body rests on;
+- **approving through the queue writes exactly what approving on the desk page
+  writes**: two identical drafts, one approved each way, and the stored row and
+  the audit row are compared and equal, including `edited: false`, and neither
+  is sent;
+- correcting the subject and the body is recorded as `edited_approved`, and the
+  desk's own `edited` flag is set by its own function;
+- **403 for somebody who is not the mailbox's reviewer**, and the desk's own
+  function refuses that person just the same, which is the guarantee that
+  holds; an admin may decide;
+- a held draft (a `blocked_reason`) shows as `needs_review`, approving it is
+  refused with 422, and rejecting it works;
+- a stale row version is a 409; the same decision twice writes once, with one
+  `approve_mail_draft` in the trail and one decision row;
+- a draft that answers no message has no account to name and links to the desk.
+
+And the missing source, which is the state migrations 0021 and 0022 were both
+in when this was written:
+
+- `nl.agent_queue_sources()` reports `purchase` absent, a filter for it returns
+  nothing, and `pg_get_viewdef` shows the view does not name
+  `purchase_request` at all, while it does name `mail_drafts`.
 
 ## Not done
 
@@ -256,7 +308,16 @@ corrections that source allows, and the two buttons. The empty state says
   `created_by`. Unapproved drafts are few and short-lived, so this is cheap
   today; if it stops being cheap, the fix is a partial index on
   `nl.rfq_drafts (created_by, created_at desc) where status = 'draft'`.
-- The mail and purchase routing is proven against a stand-in, not against the
-  real 0021 and 0022. Whoever lands those should read
-  "What those two tables need" above, run `nl.rebuild_agent_queue()`, and
-  check the detail columns they expose.
+- Purchase requests are still routed by probing the catalog, because migration
+  0022 is not in this database. Whoever lands it should read "What the purchase
+  table needs" above, run `select nl.rebuild_agent_queue();` in their own
+  migration, and then write that branch out the way the mail branch is written
+  now.
+- The plan on the small world was measured with two branches, before the mail
+  branch existed. It has not been measured again with three, and not on the
+  full world.
+- The page has not been looked at since the shared `app.css` was reworked and
+  the twelve `ui/` components arrived on main. It uses the same class names it
+  always did and they all still exist, but nothing here was re-checked on a
+  screen after that change, and the workspace page does not use the new
+  components.

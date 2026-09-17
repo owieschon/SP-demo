@@ -3,9 +3,11 @@
 // have landed it.
 //
 // The small world, "today" pinned to 2026-09-17, plus the RFQ eval customers
-// and parts. This branch has migrations 0011 and 0017 but not 0021 or 0022, so
-// the queue here has two sources, which is also what the degradation tests
-// check.
+// and parts. This file covers the two sources a person owns their own records
+// in: quote requests (migration 0011) and assistant proposals (0017). The
+// order desk's mail drafts are in queue-sources.test.ts, and the procurement
+// desk's purchase requests (0022) are not in this database, which is what the
+// degradation tests at the bottom check.
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { SessionUser } from '$lib/types';
@@ -236,7 +238,8 @@ describe('the queue', () => {
 		expect(counts.needsYou + counts.needsSomeone).toBe(counts.total);
 		expect(counts.bySource.rfq).toBeGreaterThan(0);
 		expect(counts.bySource.assistant).toBeGreaterThan(0);
-		// Nothing from a source this database does not have.
+		// The seeded world has mail waiting to be worked but no drafts yet, and
+		// purchase requests are not in this database at all.
 		expect(counts.bySource.mail).toBe(0);
 		expect(counts.bySource.purchase).toBe(0);
 
@@ -491,14 +494,15 @@ describe('what the queue refuses', () => {
 	it('refuses a decision on a source this database does not have', async () => {
 		const refusal = await errorOf(() =>
 			decideQueueItem(db, user(DANA), {
-				source: 'mail',
+				source: 'purchase',
 				sourceId: 1,
 				decision: 'approve',
 				expectedUpdatedAt: '2026-09-17T00:00:00.000Z',
 				requestId: randomUUID()
 			})
 		);
-		// There is no such row, because there is no such table.
+		// There is no such row, because migration 0022 is not applied here, so
+		// there is no such table.
 		expect(refusal.status).toBe(404);
 	});
 });
@@ -571,12 +575,13 @@ describe('the record of decisions', () => {
 	});
 });
 
-describe('a database without the mail and purchase tables', () => {
+describe('a database without the purchase table', () => {
 	it('says which sources it has', async () => {
+		// Migrations 0011, 0017 and 0021 are applied here; 0022 is not.
 		expect(await queueSources(db, DANA)).toEqual({
 			rfq: true,
 			assistant: true,
-			mail: false,
+			mail: true,
 			purchase: false
 		});
 	});
@@ -588,9 +593,9 @@ describe('a database without the mail and purchase tables', () => {
 		);
 		expect(row.definition).toContain('rfq_drafts');
 		expect(row.definition).toContain('assistant_proposals');
+		expect(row.definition).toContain('mail_drafts');
 		// Not even inside a guard: a view's names are resolved when it is
 		// created, so a missing table cannot appear in it at all.
-		expect(row.definition).not.toContain('mail_drafts');
 		expect(row.definition).not.toContain('purchase_request');
 	});
 
