@@ -43,13 +43,13 @@ async function applySchema(pg: PGlite): Promise<void> {
 
 function makeDb(pg: PGlite, beforeEach?: () => Promise<void>): Db {
 	function wrap(tx: Transaction): Tx {
-		async function query<T extends Row = Row>(text: string, params: readonly Param[] = []) {
+		async function query<T extends object = Row>(text: string, params: readonly Param[] = []) {
 			const result = await tx.query<T>(text, [...params]);
 			return result.rows;
 		}
 		return {
 			query,
-			sql: <T extends Row = Row>(strings: TemplateStringsArray, ...values: Param[]) => {
+			sql: <T extends object = Row>(strings: TemplateStringsArray, ...values: Param[]) => {
 				const q = fromTemplate(strings, values);
 				return query<T>(q.text, q.params);
 			}

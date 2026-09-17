@@ -17,7 +17,7 @@ export type Row = Record<string, unknown>;
 /** A transaction in progress. */
 export interface Tx {
 	/** Run one statement with $1, $2 ... placeholders and return its rows. */
-	query<T extends Row = Row>(text: string, params?: readonly Param[]): Promise<T[]>;
+	query<T extends object = Row>(text: string, params?: readonly Param[]): Promise<T[]>;
 	/**
 	 * The same thing, written as a tagged template:
 	 *
@@ -26,7 +26,7 @@ export interface Tx {
 	 * Every ${...} becomes a numbered parameter. Values are never pasted into
 	 * the SQL text, so a value can never change what the statement does.
 	 */
-	sql<T extends Row = Row>(strings: TemplateStringsArray, ...values: Param[]): Promise<T[]>;
+	sql<T extends object = Row>(strings: TemplateStringsArray, ...values: Param[]): Promise<T[]>;
 }
 
 export interface Db {
