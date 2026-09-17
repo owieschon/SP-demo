@@ -9,7 +9,7 @@
 // saying what to do. Every read is guarded on its own: a database that cannot
 // answer one question still answers the others.
 //
-// Two speeds, and the difference is the point (migration 0026):
+// Two speeds, and the difference is the point (migration 0027):
 //
 //   readHealth        what the page streams in on every load. Bounded work:
 //                     row estimates out of the planner's own statistics, and a
@@ -53,7 +53,7 @@ export interface Diagnostics {
 	/** How long these checks took, in milliseconds. Shown on the page. */
 	ms: number;
 	checks: HealthCheck[];
-	/** Estimates, not counts. See migration 0026. */
+	/** Estimates, not counts. See migration 0027. */
 	counts: TableCount[];
 	/** Environment variables the app reads, and whether they are set. Never their values. */
 	environment: EnvFlag[];
@@ -227,7 +227,7 @@ export async function readHealth(db: Db, userId: number, env: SettingsEnv = curr
 			label: 'Ledger cost',
 			state: 'bad',
 			detail: 'The cost check could not be run.',
-			advice: 'Check that migrations 0025 and 0026 have been applied to this database.'
+			advice: 'Check that migrations 0025 and 0027 have been applied to this database.'
 		});
 	} else {
 		const result = cost[0].result;
@@ -345,7 +345,7 @@ export async function readExactChecks(db: Db, userId: number): Promise<ExactChec
 					state: 'bad',
 					detail: 'They did not finish.',
 					advice:
-						'They stop after thirty seconds. Either the database is busy, or migration 0026 has not been applied here.'
+						'They stop after thirty seconds. Either the database is busy, or migration 0027 has not been applied here.'
 				}
 			]
 		};

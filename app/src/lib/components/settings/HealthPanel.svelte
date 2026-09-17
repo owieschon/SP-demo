@@ -5,7 +5,7 @@
 	//
 	// The checks on the page are the bounded ones. The two exact drift checks
 	// read every row by design, so they sit behind a link and stream in on
-	// their own (see diagnostics.ts and migration 0026).
+	// their own (see diagnostics.ts and migration 0027).
 	import { count, moment } from '$lib/format';
 	import type { DiagnosticsView, ExactChecksView, HealthCheckView } from './types';
 
