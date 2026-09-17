@@ -39,6 +39,13 @@ export interface Db {
 	/** A transaction as nobody yet (the sign-in page): role nl_app, no user. */
 	asVisitor<T>(work: (tx: Tx) => Promise<T>): Promise<T>;
 	/**
+	 * A read-only transaction as nl_readonly, the role the assistant's SQL
+	 * tool uses: SELECT on business tables only, no grant at all on tables
+	 * about people, and Postgres itself refuses any write. Statements time
+	 * out after ten seconds.
+	 */
+	asReadonly<T>(work: (tx: Tx) => Promise<T>): Promise<T>;
+	/**
 	 * A transaction as the connection's own role, which is not subject to
 	 * row-level security. Only for jobs, rebuilding the world and test setup.
 	 */
@@ -56,6 +63,19 @@ export function fromTemplate(
 		text += `$${i}${strings[i]}`;
 	}
 	return { text, params: [...values] };
+}
+
+/**
+ * The statements that start a read-only transaction for the assistant's SQL
+ * tool. `set transaction read only` comes first, before any other statement
+ * in the transaction, which is the only place Postgres accepts it.
+ */
+export function readonlySetup(): { text: string; params: Param[] }[] {
+	return [
+		{ text: 'set transaction read only', params: [] },
+		{ text: 'set local role nl_readonly', params: [] },
+		{ text: "set local statement_timeout = '10s'", params: [] }
+	];
 }
 
 /**
