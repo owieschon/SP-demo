@@ -43,7 +43,7 @@
 
 <main class="page">
 	<header class="head">
-		<h1 class="sr-only">Settings</h1>
+		<h1>Settings</h1>
 		<p class="faint">
 			Keys, mail desks, the scheduled run and the health of this deployment. A key pasted here is stored
 			encrypted and never shown again: the page can only say that it is set, its last four characters and
