@@ -26,16 +26,37 @@
 	--surface-hover: light-dark(#f5f5f4, #1f1f1d);
 	--surface-sunken: light-dark(#f2f1ef, #0c0c0b);
 	--surface-press: light-dark(#ecebe8, #262624);
+	/*
+	  Selected is not the same thing as hovered or pressed, so it gets its own
+	  fill and a left marker (see .is-selected below). Three states, three
+	  looks.
+	*/
+	--surface-selected: light-dark(#e7e5e1, #2c2b28);
 	--text: light-dark(#1c1917, #e9e7e4);
-	--text-muted: light-dark(#6b6661, #a29d97);
-	--text-faint: light-dark(#9a948e, #6f6a65);
+	/*
+	  The three text steps all clear 4.5:1 on --bg and on --surface, measured
+	  with a headless browser on 2026-09-17. Before that, --text-faint was
+	  #9a948e in light (3.00:1) and #6f6a65 in dark (3.32:1) and was carrying
+	  real content, not decoration.
+	    --text-muted  6.6:1 light, 6.6:1 dark
+	    --text-faint  4.8:1 light, 4.9:1 dark
+	*/
+	--text-muted: light-dark(#625d58, #a29d97);
+	--text-faint: light-dark(#787269, #8b857f);
 	--hairline: light-dark(#ebe9e6, #262523);
 	--hairline-strong: light-dark(#dcd9d5, #34322f);
 	--focus: light-dark(#3a6fb0, #7fa8dc);
-	/* light-dark() only takes colors, so the shadow picks its color with it. */
+	/*
+	  Overlays get two layers, tight plus soft. One big blur looks pasted on.
+	  light-dark() only takes colors, so the shadow picks its color with it.
+	*/
 	--overlay-shadow:
 		0 1px 2px light-dark(rgb(28 25 23 / 0.05), rgb(0 0 0 / 0.3)),
 		0 12px 32px light-dark(rgb(28 25 23 / 0.1), rgb(0 0 0 / 0.45));
+	/* The same two-layer idea, one step down, for a raised control. */
+	--raised-shadow:
+		0 1px 1px light-dark(rgb(28 25 23 / 0.06), rgb(0 0 0 / 0.35)),
+		0 2px 6px light-dark(rgb(28 25 23 / 0.06), rgb(0 0 0 / 0.3));
 
 	/* The brand: only on the logo mark. A deep ink teal, never red. */
 	--brand: #0d4a47;
@@ -59,9 +80,40 @@
 	--status-pushed: light-dark(#9a6a1c, #d4a459);
 	--status-broken: light-dark(#a3453b, #de8a80);
 
+	/*
+	  One type scale, six steps, nothing under 12px. The base is 13px, so
+	  these are written in px to stop 0.85rem style guesses drifting back in
+	  and to stop .mono compounding a second multiplier on top.
+
+	    --fs-meta     labels, table headers, chips, captions, eyebrows
+	    --fs-body     the default: rows, prose, form values
+	    --fs-section  a panel's own title, h3
+	    --fs-title    a section heading on a page, h2
+	    --fs-page     the page's h1
+	    --fs-figure   one hero figure, not a row of them
+	*/
+	--fs-meta: 12px;
+	--fs-body: 13px;
+	--fs-section: 15px;
+	--fs-title: 17px;
+	--fs-page: 21px;
+	--fs-figure: 27px;
+
+	/*
+	  Two content widths and nothing else. A list needs room for columns; text
+	  a person reads needs a short line. Everything else is a variant of one of
+	  these two.
+	*/
+	--width-list: 1180px;
+	--width-read: 720px;
+	/* The measure for running prose inside either width. */
+	--measure: 72ch;
+
+	/* Three radii plus round. An inner radius is never larger than its outer. */
 	--radius-sm: 4px;
 	--radius: 6px;
 	--radius-lg: 8px;
+	--radius-full: 999px;
 	--space-1: 4px;
 	--space-2: 8px;
 	--space-3: 12px;
@@ -69,6 +121,8 @@
 	--space-5: 24px;
 	--space-6: 32px;
 	--control-h: 28px;
+	/* The smallest a control may be where a finger is the pointer. */
+	--touch-h: 44px;
 	--rail-w: 52px;
 	--rail-open-w: 216px;
 	--topbar-h: 44px;
@@ -112,7 +166,7 @@ body {
 	background: var(--bg);
 	color: var(--text);
 	font-family: var(--font-sans);
-	font-size: 13px;
+	font-size: var(--fs-body);
 	line-height: 1.45;
 	font-feature-settings: 'cv11', 'ss01';
 	-webkit-font-smoothing: antialiased;
@@ -130,19 +184,44 @@ h3 {
 }
 
 h1 {
-	font-size: 1.35rem;
+	font-size: var(--fs-page);
 }
 
 h2 {
-	font-size: 1rem;
+	font-size: var(--fs-title);
 }
 
 h3 {
-	font-size: 0.92rem;
+	font-size: var(--fs-section);
 }
 
 p {
 	margin: 0;
+}
+
+/* The type scale as classes, for text that is not a heading. */
+.t-meta {
+	font-size: var(--fs-meta);
+}
+
+.t-body {
+	font-size: var(--fs-body);
+}
+
+.t-section {
+	font-size: var(--fs-section);
+}
+
+.t-figure {
+	font-size: var(--fs-figure);
+	font-weight: 600;
+	letter-spacing: -0.02em;
+	line-height: 1.1;
+}
+
+/* Running prose gets a short line, inside either content width. */
+.prose {
+	max-width: var(--measure);
 }
 
 a {
@@ -180,15 +259,20 @@ table th.num {
 	color: var(--text-faint);
 }
 
+/*
+  Monospace is for identifiers only: item numbers, invoice numbers, record
+  ids. Never for money, which lives in the sans face with tabular figures
+  (see .num). There is deliberately no font-size here: it used to be 0.92em,
+  which multiplied against any smaller parent and produced 10px part numbers.
+*/
 .mono {
 	font-family: var(--font-mono);
-	font-size: 0.92em;
 	letter-spacing: -0.01em;
 }
 
-/* Small uppercase label above a figure or section. */
+/* Small label above a figure or section. */
 .eyebrow {
-	font-size: 0.75rem;
+	font-size: var(--fs-meta);
 	font-weight: 500;
 	color: var(--text-muted);
 }
@@ -228,7 +312,7 @@ table th.num {
 		transform var(--speed) var(--ease);
 }
 
-.button:hover {
+.button:hover:not(:disabled) {
 	background: var(--surface-hover);
 }
 
@@ -259,14 +343,60 @@ table th.num {
 	color: var(--text-muted);
 }
 
-.button.quiet:hover {
+.button.quiet:hover:not(:disabled) {
 	background: var(--surface-hover);
 	color: var(--text);
+}
+
+/*
+  A button that removes something or writes an answer that cannot be taken
+  back. It must not look like the button next to it.
+*/
+.button.danger {
+	border-color: color-mix(in srgb, var(--danger) 40%, var(--hairline-strong));
+	color: var(--danger);
+}
+
+.button.danger:hover:not(:disabled) {
+	background: var(--danger-soft);
+	border-color: var(--danger);
+}
+
+/* One small button, so panels stop each inventing their own. */
+.button.sm {
+	height: 22px;
+	padding: 0 8px;
+	font-size: var(--fs-meta);
 }
 
 .button.icon {
 	width: var(--control-h);
 	padding: 0;
+}
+
+.button.sm.icon {
+	width: 22px;
+}
+
+/*
+  One spinner. Put it inside a button that is saving, next to aria-busy on
+  the form, so "working" is visible and announced.
+*/
+.spinner {
+	display: inline-block;
+	flex: none;
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	border: 1.5px solid color-mix(in srgb, currentColor 25%, transparent);
+	border-top-color: currentColor;
+	animation: spin 700ms linear infinite;
+}
+
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
 }
 
 /* A row of joined options (Mine / Everyone, theme). */
@@ -305,19 +435,26 @@ table th.num {
 
 .segmented > *:hover {
 	color: var(--text);
+	background: var(--surface-hover);
 }
 
 .segmented > *:active {
 	transform: scale(0.97);
 }
 
+/*
+  Selected is its own look, not a darker hover: the chosen option sits on a
+  raised surface with a ring. Hover tints, press shrinks, selected lifts.
+*/
 .segmented > [aria-current='true'],
-.segmented > [aria-pressed='true'] {
+.segmented > [aria-current='page'],
+.segmented > [aria-pressed='true'],
+.segmented > [aria-selected='true'] {
 	background: var(--surface);
 	color: var(--text);
 	box-shadow:
 		0 0 0 1px var(--hairline-strong),
-		0 1px 2px rgb(0 0 0 / 0.05);
+		var(--raised-shadow);
 }
 
 /* ------------------------------------------------------------------ */
@@ -357,6 +494,23 @@ textarea:focus-visible {
 	box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 22%, transparent);
 }
 
+/* A field that cannot be used has to look like it. */
+input:disabled,
+select:disabled,
+textarea:disabled {
+	background: var(--surface-sunken);
+	color: var(--text-muted);
+	cursor: not-allowed;
+	opacity: 0.7;
+}
+
+/* A field the server rejected. Pair with aria-invalid and aria-describedby. */
+input[aria-invalid='true'],
+select[aria-invalid='true'],
+textarea[aria-invalid='true'] {
+	border-color: var(--danger);
+}
+
 textarea {
 	width: 100%;
 	resize: vertical;
@@ -366,11 +520,84 @@ textarea {
 	color: var(--text-faint);
 }
 
+/*
+  A placeholder is never a label. Every field gets a real one, and the help
+  text under it is joined with aria-describedby.
+*/
 label {
 	display: grid;
 	gap: var(--space-1);
-	font-size: 0.92rem;
+	font-size: var(--fs-meta);
 	color: var(--text-muted);
+}
+
+.field-help {
+	font-size: var(--fs-meta);
+	color: var(--text-muted);
+}
+
+.field-error {
+	font-size: var(--fs-meta);
+	color: var(--danger);
+}
+
+/* Checkboxes and radios big enough to hit. */
+input[type='checkbox'],
+input[type='radio'] {
+	width: 16px;
+	height: 16px;
+	padding: 0;
+	accent-color: var(--text);
+}
+
+/* ------------------------------------------------------------------ */
+/* Page shells: two widths, one heading position                        */
+/* ------------------------------------------------------------------ */
+
+/*
+  Every page uses one of these two and nothing else. `.page` is the list
+  width, for columns and boards. `.page.read` is the reading width, for a
+  form, a single record's question, or an error. Put the h1 in `.page-head`
+  so the title starts in the same place on every screen.
+*/
+.page {
+	max-width: var(--width-list);
+	margin: 0 auto;
+	padding: var(--space-5) var(--space-4) var(--space-6);
+	display: grid;
+	gap: var(--space-4);
+	align-content: start;
+}
+
+.page.read {
+	max-width: var(--width-read);
+}
+
+.page-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: var(--space-3);
+	flex-wrap: wrap;
+}
+
+.page-head .titles {
+	display: grid;
+	gap: var(--space-1);
+	min-width: 0;
+}
+
+.page-head .actions {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	flex-wrap: wrap;
+}
+
+@media (max-width: 720px) {
+	.page {
+		padding: var(--space-4) var(--space-3) var(--space-5);
+	}
 }
 
 /* ------------------------------------------------------------------ */
@@ -394,8 +621,35 @@ label {
 	border-bottom: 1px solid var(--hairline);
 }
 
-.panel-head h2 {
-	font-size: 0.92rem;
+/* A panel's own title is a section, not a page title. */
+.panel-head h2,
+.panel-head h3 {
+	font-size: var(--fs-section);
+}
+
+/* The padded area under a panel head. Was copied into ten files. */
+.panel-body {
+	padding: var(--space-3);
+}
+
+/* A list inside a panel: no bullets, hairlines between rows. */
+.rows {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.rows > li + li {
+	border-top: 1px solid var(--hairline);
+}
+
+/*
+  A wide table inside a panel. tabindex makes the scroller reachable from
+  the keyboard, which an overflow container is not by default.
+*/
+.table-wrap {
+	overflow-x: auto;
+	border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }
 
 table {
@@ -406,11 +660,22 @@ table {
 th {
 	text-align: left;
 	font-weight: 500;
-	font-size: 0.85rem;
+	font-size: var(--fs-meta);
 	color: var(--text-muted);
 	padding: 6px var(--space-3);
 	border-bottom: 1px solid var(--hairline);
 	white-space: nowrap;
+}
+
+/*
+  The header stays put once a table is longer than the screen. Add
+  `.sticky` to the table when it can run past thirty rows.
+*/
+table.sticky thead th {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	background: var(--surface);
 }
 
 td {
@@ -430,6 +695,79 @@ tbody tr {
 
 tbody tr:hover {
 	background: var(--surface-hover);
+}
+
+/*
+  Selected is its own fill plus a marker down the left edge, so it does not
+  read as a stuck hover.
+*/
+tbody tr.is-selected,
+.rows > li.is-selected,
+.is-selected {
+	background: var(--surface-selected);
+	box-shadow: inset 2px 0 0 var(--text);
+}
+
+/* A figure below zero. One rule, not one per feature. */
+.negative {
+	color: var(--danger);
+}
+
+/* ------------------------------------------------------------------ */
+/* One stat tile                                                        */
+/* ------------------------------------------------------------------ */
+
+/*
+  A row of figures. Flexbox on purpose: auto-fit grid tracks behave
+  differently on Safari iOS and this app has been bitten by that.
+*/
+.figures {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-3);
+	margin: 0;
+	padding: var(--space-3);
+}
+
+.figures > div {
+	flex: 1 1 160px;
+	min-width: 0;
+	display: grid;
+	gap: 2px;
+}
+
+.figures dt {
+	font-size: var(--fs-meta);
+	color: var(--text-muted);
+}
+
+.figures dd {
+	margin: 0;
+	font-size: var(--fs-section);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	text-align: left;
+}
+
+/* The note under a figure: its comparison, or where it came from. */
+.figures .note {
+	font-size: var(--fs-meta);
+	color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------------ */
+/* Empty and failed states                                              */
+/* ------------------------------------------------------------------ */
+
+/* One line and one action. Never a paragraph. */
+.empty {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-3);
+	flex-wrap: wrap;
+	padding: var(--space-4) var(--space-3);
+	color: var(--text-muted);
 }
 
 /* ------------------------------------------------------------------ */
@@ -463,10 +801,10 @@ tbody tr:hover {
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;
-	height: 18px;
+	height: 20px;
 	padding: 0 6px;
 	border-radius: var(--radius-sm);
-	font-size: 0.82rem;
+	font-size: var(--fs-meta);
 	font-weight: 500;
 	white-space: nowrap;
 	background: var(--surface-sunken);
@@ -478,6 +816,36 @@ tbody tr:hover {
 	background: var(--warning-soft);
 	color: var(--warning);
 	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning) 25%, transparent);
+}
+
+/*
+  A chip that navigates or submits is a control and needs control states and
+  a control's height. A call to action must never be an 18px static label.
+*/
+a.chip,
+button.chip {
+	height: var(--control-h);
+	padding: 0 8px;
+	border: 0;
+	color: var(--text);
+	font-family: inherit;
+	cursor: pointer;
+	-webkit-tap-highlight-color: transparent;
+	transition:
+		background-color var(--speed) var(--ease),
+		box-shadow var(--speed) var(--ease),
+		transform var(--speed) var(--ease);
+}
+
+a.chip:hover,
+button.chip:hover:not(:disabled) {
+	background: var(--surface-hover);
+	box-shadow: inset 0 0 0 1px var(--hairline-strong);
+}
+
+a.chip:active,
+button.chip:active:not(:disabled) {
+	transform: scale(0.97);
 }
 
 @keyframes fade-in {
@@ -511,6 +879,81 @@ tbody tr:hover {
 	to {
 		background-position: -200% 0;
 	}
+}
+
+/* ------------------------------------------------------------------ */
+/* Touch and small screens                                              */
+/* ------------------------------------------------------------------ */
+
+/*
+  Two separate problems, two separate queries.
+
+  1. A finger is not a pointer. Where the pointer is coarse, every control
+     grows to 44px. This is keyed on the pointer, not the width, so a touch
+     laptop gets it too.
+  2. iOS Safari zooms the whole page when a field smaller than 16px takes
+     focus. The fix is the field's font size, not the viewport tag, because
+     `user-scalable=no` would stop a person zooming on purpose.
+*/
+@media (pointer: coarse) {
+	:root {
+		--control-h: var(--touch-h);
+	}
+
+	.button.sm {
+		height: 36px;
+		padding: 0 12px;
+	}
+
+	.segmented > * {
+		height: 36px;
+		min-width: 36px;
+	}
+
+	.chip {
+		height: 24px;
+	}
+
+	td {
+		height: var(--touch-h);
+	}
+
+	input[type='checkbox'],
+	input[type='radio'] {
+		width: 20px;
+		height: 20px;
+	}
+}
+
+@media (max-width: 720px) {
+	input,
+	select,
+	textarea {
+		font-size: 16px;
+	}
+}
+
+/*
+  A person who lands on a page with the keyboard should be able to skip the
+  rail. Visible only when it has focus.
+*/
+.skip-link {
+	position: fixed;
+	top: var(--space-2);
+	left: var(--space-2);
+	z-index: 60;
+	padding: 8px 12px;
+	border-radius: var(--radius);
+	background: var(--surface);
+	color: var(--text);
+	font-weight: 500;
+	box-shadow: var(--overlay-shadow);
+	transform: translateY(-200%);
+	transition: transform var(--speed) var(--ease);
+}
+
+.skip-link:focus-visible {
+	transform: translateY(0);
 }
 
 /* Screen-reader-only text */
