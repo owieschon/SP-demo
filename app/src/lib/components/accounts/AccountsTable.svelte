@@ -130,14 +130,17 @@
 					</div>
 
 					<div class="actions">
-						<a
-							class="button icon action"
-							href="/accounts/{row.customerNo}"
-							aria-label="Open {row.name}"
-							tabindex="-1"
-						>
-							<ArrowRight size={13} strokeWidth={1.75} aria-hidden="true" />
-						</a>
+						<!--
+							Decoration, not a control. The row's name is already a
+							link that stretches over the whole row (.name::after), so
+							this was a second link to the same account, announced
+							twice and given tabindex="-1" to keep it out of the tab
+							order, which left a visible control no keyboard could
+							reach. A span says what it is.
+						-->
+						<span class="button icon action" aria-hidden="true">
+							<ArrowRight size={13} strokeWidth={1.75} />
+						</span>
 					</div>
 				</li>
 			{/each}
@@ -296,6 +299,11 @@
 		width: 22px;
 		height: 22px;
 		padding: 0;
+	}
+
+	/* The decorative chevron must not swallow the row's own click. */
+	span.action {
+		pointer-events: none;
 	}
 
 	.row:hover .actions,

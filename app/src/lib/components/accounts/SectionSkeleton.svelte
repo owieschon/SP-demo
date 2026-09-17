@@ -11,18 +11,28 @@
 	const lines = $derived(Array.from({ length: rows }, (_, i) => i));
 </script>
 
-<section class="panel" aria-hidden="true">
-	<header class="panel-head">
-		<span class="skeleton" style:width="110px" style:height="12px"></span>
-	</header>
-	{#each lines as line (line)}
-		<div class="row">
-			<span class="skeleton" style:width="{(wide ? 40 : 28) - (line % 3) * 5}%" style:height="11px"></span>
-			<span class="skeleton" style:width="16%" style:height="11px"></span>
-			<span class="skeleton" style:width="10%" style:height="11px"></span>
-		</div>
-	{/each}
-	<span class="sr-only">Loading {title}</span>
+<!--
+	role="status" on the section and aria-hidden on the shimmer inside it.
+
+	This used to be aria-hidden="true" on the <section> with the "Loading
+	{title}" text inside it, which put the announcement inside the hidden
+	subtree: an account page streams six sections and a screen reader was
+	told nothing about any of them. The sibling TableSkeleton had it the
+	right way round.
+-->
+<section class="panel" role="status" aria-label="Loading {title}">
+	<div aria-hidden="true">
+		<header class="panel-head">
+			<span class="skeleton" style:width="110px" style:height="12px"></span>
+		</header>
+		{#each lines as line (line)}
+			<div class="row">
+				<span class="skeleton" style:width="{(wide ? 40 : 28) - (line % 3) * 5}%" style:height="11px"></span>
+				<span class="skeleton" style:width="16%" style:height="11px"></span>
+				<span class="skeleton" style:width="10%" style:height="11px"></span>
+			</div>
+		{/each}
+	</div>
 </section>
 
 <style>

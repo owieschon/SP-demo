@@ -42,7 +42,7 @@
 		/>
 	{/key}
 
-	<RuleActivity detail={d} message={runMessage} />
+	<RuleActivity detail={d} message={runMessage} year={data.year} />
 </main>
 
 <style>

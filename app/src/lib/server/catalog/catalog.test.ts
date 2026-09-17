@@ -18,7 +18,14 @@ import {
 	readPartListQuery,
 	resolveItemNo
 } from './parts.ts';
-import { addVendorContact, getVendor, getVendorParts, listVendors, vendorContactInput } from './vendors.ts';
+import {
+	addVendorContact,
+	getVendor,
+	getVendorParts,
+	listVendors,
+	VENDOR_PART_LIMIT,
+	vendorContactInput
+} from './vendors.ts';
 import { cleanQuery, escapeLike, looksLikeNumber, searchAll } from './search.ts';
 
 const ADMIN = 1;
@@ -298,10 +305,15 @@ describe('nl.vendor_summary', () => {
 		expect(vendor!.revenue12m).toBeCloseTo(direct.revenue, 2);
 
 		// The parts it supplies are the same set, and each carries its own year.
-		const parts = await getVendorParts(db, DANA, vendorNo);
-		expect(parts).toHaveLength(direct.items);
-		const summed = parts.reduce((sum, p) => sum + p.revenue12m, 0);
-		expect(summed).toBeCloseTo(vendor!.revenue12m, 2);
+		// `total` counts every part; `parts` is capped, so the sum only matches
+		// the vendor's revenue while nothing was cut off.
+		const supplied = await getVendorParts(db, DANA, vendorNo);
+		expect(supplied.total).toBe(direct.items);
+		expect(supplied.parts.length).toBe(Math.min(direct.items, VENDOR_PART_LIMIT));
+		if (supplied.total <= VENDOR_PART_LIMIT) {
+			const summed = supplied.parts.reduce((sum, p) => sum + p.revenue12m, 0);
+			expect(summed).toBeCloseTo(vendor!.revenue12m, 2);
+		}
 	});
 
 	it('hides vendors with no parts until they are asked for', async () => {

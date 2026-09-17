@@ -3,10 +3,12 @@
 	// a person can make, and the proposal to approve or reject.
 	import { invalidateAll } from '$app/navigation';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+	import Attachments from '$lib/components/rfq/Attachments.svelte';
 	import ChangeForm from '$lib/components/rfq/ChangeForm.svelte';
 	import CheckBadge from '$lib/components/rfq/CheckBadge.svelte';
 	import DraftLines from '$lib/components/rfq/DraftLines.svelte';
 	import ProposalCard from '$lib/components/rfq/ProposalCard.svelte';
+	import QuoteActions from '$lib/components/rfq/QuoteActions.svelte';
 	import { day, moment, moneyExact, percent, place } from '$lib/format';
 	import type { PageProps } from './$types';
 
@@ -14,6 +16,9 @@
 
 	const d = $derived(data.draft);
 	const v = $derived(d.validation);
+	// Where each extracted line came from, kept on the draft rather than on
+	// the validation, and lined up with the validated lines by position.
+	const sources = $derived(d.draft.lines.map((line) => line.source ?? null));
 	const editable = $derived(d.status === 'draft');
 	const change = $derived({ draftId: d.id, updatedAt: d.updatedAt, requestId: data.requestIds.revise });
 	const activeLines = $derived(v.lines.filter((l) => !l.removed));
@@ -23,7 +28,7 @@
 </script>
 
 <svelte:head>
-	<title>R-{d.id} · RFQ intake · Northline</title>
+	<title>R-{d.id} · Quote requests · Northline</title>
 </svelte:head>
 
 <main class="page">
@@ -47,9 +52,11 @@
 			</div>
 			{#if d.usage}
 				<div>
-					<dt>Tokens</dt>
-					<dd class="num">
-						{d.usage.input_tokens} in · {d.usage.output_tokens} out · {d.usage.cache_read_input_tokens} cached
+					<dt>Read by</dt>
+					<dd
+						title="{d.usage.input_tokens} tokens in, {d.usage.output_tokens} out, {d.usage.cache_read_input_tokens} from cache"
+					>
+						AI reading
 					</dd>
 				</div>
 			{/if}
@@ -73,16 +80,26 @@
 		<p class="notice done" role="status">
 			<span>
 				Approved by {d.decidedByName}{d.decidedAt ? ` on ${moment(d.decidedAt)}` : ''}. Quote
-				<span class="mono">SQ-{d.quoteId}</span> was created for commitment
+				<a class="link mono" href="/quotes/{d.quoteId}">SQ-{d.quoteId}</a> was created for commitment
 				<a class="link mono" href="/commitments/{d.commitmentId}">C-{d.commitmentId}</a>.
 			</span>
-			<a class="button" href="/commitments/{d.commitmentId}">Open the commitment</a>
+			<a class="button" href="/quotes/{d.quoteId}">Open the quote</a>
 		</p>
 	{:else if d.status === 'rejected'}
 		<p class="notice" role="status">
 			Rejected by {d.decidedByName}{d.decidedAt ? ` on ${moment(d.decidedAt)}` : ''}.
 			{#if d.rejectReason}Reason: {d.rejectReason}{/if} Nothing was created.
 		</p>
+	{/if}
+
+	{#if d.attachments.length > 0}
+		<section class="panel" aria-labelledby="files">
+			<header class="panel-head">
+				<h2 id="files">What arrived</h2>
+				<span class="chip">{d.attachments.length} {d.attachments.length === 1 ? 'file' : 'files'}</span>
+			</header>
+			<Attachments attachments={d.attachments} draftId={d.id} />
+		</section>
 	{/if}
 
 	<section class="panel" aria-labelledby="customer">
@@ -159,7 +176,14 @@
 		{#if v.lines.length === 0}
 			<p class="body muted">{v.lines_check.reason}</p>
 		{:else}
-			<DraftLines lines={v.lines} draftId={d.id} updatedAt={d.updatedAt} requestId={data.requestIds.revise} {editable} />
+			<DraftLines
+				lines={v.lines}
+				{sources}
+				draftId={d.id}
+				updatedAt={d.updatedAt}
+				requestId={data.requestIds.revise}
+				{editable}
+			/>
 		{/if}
 	</section>
 
@@ -224,6 +248,28 @@
 		</section>
 	{/if}
 
+	{#if editable && data.draftQuote && data.draftMail}
+		<section class="panel" aria-labelledby="send">
+			<header class="panel-head">
+				<h2 id="send">Send it as a draft quote</h2>
+				<span class="chip">Not approved</span>
+			</header>
+			<div class="body">
+				<QuoteActions
+					pdfUrl="/rfq/{d.id}/quote"
+					mail={data.draftMail}
+					lineCount={data.draftQuote.lineCount}
+					subtotal={data.draftQuote.subtotal}
+					fileName={data.draftQuote.fileName}
+				/>
+				<p class="faint small">
+					The PDF is marked DRAFT QUOTE and says nothing has been approved. Approving below writes the real quote,
+					with its own number.
+				</p>
+			</div>
+		</section>
+	{/if}
+
 	{#if editable}
 		<ProposalCard
 			draftId={d.id}
@@ -243,7 +289,7 @@
 		<pre class="mono">{d.sourceText}</pre>
 	</details>
 
-	<p><a class="link" href="/rfq">Back to RFQ intake</a></p>
+	<p><a class="link" href="/rfq">Back to quote requests</a></p>
 </main>
 
 <style>

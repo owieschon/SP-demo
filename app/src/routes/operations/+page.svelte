@@ -27,9 +27,14 @@
 	<header class="head">
 		<h1 class="sr-only">Operations</h1>
 		<p class="faint">
-			Each morning the ERP's open sales lines export is checked, staged and shown here before anything
-			changes. A file that looks wrong is held for a person; the wrong report is refused.
+			Each morning the ERP's three open-order exports (sales lines, purchase lines, production orders) are
+			checked, staged and shown here before anything changes. A file that looks wrong is held for a person;
+			a file that is none of the three is refused.
 		</p>
+		<nav class="tabs" aria-label="Operations views">
+			<a class="button quiet" href="/operations" aria-current="page">Morning exports</a>
+			<a class="button quiet" href="/operations/forecast">Late-order forecast</a>
+		</nav>
 	</header>
 
 	{#if uploadMessage}
@@ -81,6 +86,18 @@
 	.head p {
 		max-width: 80ch;
 		font-size: 0.92rem;
+	}
+
+	.tabs {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2);
+		margin-top: var(--space-2);
+	}
+
+	.tabs [aria-current='page'] {
+		box-shadow: inset 0 0 0 1px var(--hairline-strong);
+		color: var(--text);
 	}
 
 	@media (max-width: 720px) {

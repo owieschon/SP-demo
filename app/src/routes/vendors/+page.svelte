@@ -58,13 +58,13 @@
 					<table>
 						<thead>
 							<tr>
-								<th>Vendor</th>
-								<th>Where</th>
-								<th>Terms</th>
-								<th>Lead time</th>
-								<th class="num">Parts</th>
-								<th class="num">Revenue 12m</th>
-								<th>Watch</th>
+								<th scope="col">Vendor</th>
+								<th scope="col">Where</th>
+								<th scope="col">Terms</th>
+								<th scope="col">Lead time</th>
+								<th scope="col" class="num">Parts</th>
+								<th scope="col" class="num">Revenue 12m</th>
+								<th scope="col">Watch</th>
 							</tr>
 						</thead>
 						<tbody>

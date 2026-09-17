@@ -238,13 +238,27 @@ export async function getCommitment(db: Db, userId: number, id: number): Promise
 			amount: number;
 			running_delivered: number;
 		}>`
-			select l.invoice_no, l.line_no, l.posted_on, l.customer_no, cu.name as customer_name,
-			       l.family_depth, l.item_no, l.quantity, l.unit_price, l.amount,
-			       sum(l.amount) over (order by l.posted_on, l.invoice_no, l.line_no) as running_delivered
-			from nl.commitment_lines l
-			join nl.customers cu on cu.customer_no = l.customer_no
-			where l.commitment_id = ${id}
-			order by l.posted_on, l.invoice_no, l.line_no`;
+			/*
+			  The newest fifty lines, but the running total is still counted
+			  over every line. A commitment that has been running for a year
+			  can have hundreds of matched lines, and this query had no limit
+			  at all, so the page rendered one row for each of them.
+
+			  The window function has to run before the limit, so the sum
+			  lives in the inner query and the outer one takes the newest
+			  rows off the end. Each row therefore still carries the true
+			  cumulative figure as at that line, not a total that restarts.
+			*/
+			select * from (
+			  select l.invoice_no, l.line_no, l.posted_on, l.customer_no, cu.name as customer_name,
+			         l.family_depth, l.item_no, l.quantity, l.unit_price, l.amount,
+			         sum(l.amount) over (order by l.posted_on, l.invoice_no, l.line_no) as running_delivered
+			  from nl.commitment_lines l
+			  join nl.customers cu on cu.customer_no = l.customer_no
+			  where l.commitment_id = ${id}
+			) q
+			order by q.posted_on desc, q.invoice_no desc, q.line_no desc
+			limit 50`;
 
 		const outcomes = await tx.sql<{
 			outcome: Outcome;
@@ -318,19 +332,25 @@ export async function getCommitment(db: Db, userId: number, id: number): Promise
 				deliveredQty: r.delivered_qty,
 				delivered: r.delivered
 			})),
-			lines: lines.map((r) => ({
-				invoiceNo: r.invoice_no,
-				lineNo: r.line_no,
-				postedOn: r.posted_on,
-				customerNo: r.customer_no,
-				customerName: r.customer_name,
-				viaFamily: r.family_depth > 0,
-				itemNo: r.item_no,
-				quantity: r.quantity,
-				unitPrice: r.unit_price,
-				amount: r.amount,
-				runningDelivered: r.running_delivered
-			})),
+			// The query fetched the newest first so the limit took the right
+			// end; the page reads oldest first, which is also the order the
+			// running total makes sense in.
+			lines: lines
+				.slice()
+				.reverse()
+				.map((r) => ({
+					invoiceNo: r.invoice_no,
+					lineNo: r.line_no,
+					postedOn: r.posted_on,
+					customerNo: r.customer_no,
+					customerName: r.customer_name,
+					viaFamily: r.family_depth > 0,
+					itemNo: r.item_no,
+					quantity: r.quantity,
+					unitPrice: r.unit_price,
+					amount: r.amount,
+					runningDelivered: r.running_delivered
+				})),
 			outcomes: outcomes.map((r) => ({
 				outcome: r.outcome,
 				source: r.source,

@@ -1,14 +1,17 @@
 <script lang="ts">
 	// The app shell: a left rail (icons, expands over the content on hover or
 	// keyboard focus), a slim top bar, and the page. Signed-out pages (sign in)
-	// get no shell, only the portfolio note.
+	// get no shell, only the demo note.
 	import '@fontsource-variable/geist';
 	import '@fontsource-variable/geist-mono';
 	import '../app.css';
+	import Boxes from '@lucide/svelte/icons/boxes';
 	import Building2 from '@lucide/svelte/icons/building-2';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Inbox from '@lucide/svelte/icons/inbox';
+	import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
 	import ListChecks from '@lucide/svelte/icons/list-checks';
+	import Mails from '@lucide/svelte/icons/mails';
 	import Package from '@lucide/svelte/icons/package';
 	import LogOut from '@lucide/svelte/icons/log-out';
 	import Truck from '@lucide/svelte/icons/truck';
@@ -17,6 +20,8 @@
 	import Workflow from '@lucide/svelte/icons/workflow';
 	import { navigating, page } from '$app/state';
 	import Mark from '$lib/components/Mark.svelte';
+	import Settings from '@lucide/svelte/icons/settings';
+	import Sparkles from '@lucide/svelte/icons/sparkles';
 	import SearchBox from '$lib/components/SearchBox.svelte';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import type { LayoutProps } from './$types';
@@ -31,12 +36,17 @@
 		);
 
 	const NAV = [
+		{ href: '/ask', label: 'Ask', icon: Sparkles },
+		{ href: '/workspace', label: 'Workspace', icon: ClipboardCheck },
+		{ href: '/desk', label: 'Desk', icon: Mails },
+		{ href: '/settings', label: 'Settings', icon: Settings },
 		{ href: '/commitments', label: 'Commitments', icon: ListChecks },
 		{ href: '/accounts', label: 'Accounts', icon: Building2 },
-		{ href: '/rfq', label: 'RFQ intake', icon: Inbox },
+		{ href: '/rfq', label: 'Quote requests', icon: Inbox },
 		{ href: '/parts', label: 'Parts', icon: Package },
 		{ href: '/vendors', label: 'Vendors', icon: Truck },
 		{ href: '/operations', label: 'Operations', icon: Warehouse },
+		{ href: '/warehouse', label: 'Warehouse', icon: Boxes },
 		{ href: '/automations', label: 'Automations', icon: Workflow }
 	];
 
@@ -71,11 +81,33 @@
 				{ label: `C-${page.params.id}`, href: null }
 			];
 		}
-		if (route === '/rfq') return [{ label: 'RFQ intake', href: null }];
+		if (route === '/rfq') return [{ label: 'Quote requests', href: null }];
 		if (route === '/rfq/[id=id]') {
 			return [
-				{ label: 'RFQ intake', href: '/rfq' },
+				{ label: 'Quote requests', href: '/rfq' },
 				{ label: `R-${page.params.id}`, href: null }
+			];
+		}
+		if (route === '/workspace') return [{ label: 'Workspace', href: null }];
+		if (route === '/desk') return [{ label: 'Desk', href: null }];
+		if (route === '/desk/[id=id]') {
+			return [
+				{ label: 'Desk', href: '/desk' },
+				{ label: 'Message', href: null }
+			];
+		}
+		if (route === '/settings') return [{ label: 'Settings', href: null }];
+		if (route === '/settings/mcp') {
+			return [
+				{ label: 'Settings', href: null },
+				{ label: 'Coding agents', href: null }
+			];
+		}
+		if (route === '/ask') return [{ label: 'Ask', href: null }];
+		if (route === '/ask/[id=id]') {
+			return [
+				{ label: 'Ask', href: '/ask' },
+				{ label: `Conversation ${page.params.id}`, href: null }
 			];
 		}
 		if (route === '/accounts') return [{ label: 'Accounts', href: null }];
@@ -114,18 +146,37 @@
 			];
 		}
 		if (route.startsWith('/operations')) return [{ label: 'Operations', href: null }];
+		if (route.startsWith('/warehouse')) return [{ label: 'Warehouse', href: null }];
 		if (page.error) return [{ label: page.status === 404 ? 'Not found' : 'Error', href: null }];
 		return [];
 	});
 
-	// On a phone the rail is a bar that scrolls sideways, so the section you
-	// are in may start out off screen. Bring it into view on every navigation.
+	/*
+	  On a phone the rail is a bar that scrolls sideways, so the section you
+	  are in may start out off screen. Bring it into view on every navigation.
+
+	  Two things were wrong here and both were visible. The old guard was
+	  `scrollWidth > clientWidth`, which is true on a desktop too: the rail is
+	  52px wide with its labels clipped, so the check passed and the desktop
+	  rail was scrolled sideways on every navigation, taking its icons out of
+	  view. And `scrollIntoView` moves the browser's sequential focus
+	  navigation starting point, so the first Tab after a page load landed in
+	  the middle of the rail instead of at the top of the document, which
+	  would make the skip link unreachable.
+
+	  So: only when the rail really is the horizontal phone bar, and by
+	  setting scrollLeft rather than asking an element to scroll itself.
+	*/
 	let rail: HTMLElement | null = $state(null);
 	$effect(() => {
 		// Reading the path is what makes this run again after a navigation.
 		void page.url.pathname;
-		if (!rail || rail.scrollWidth <= rail.clientWidth) return;
-		rail.querySelector('[aria-current="page"]')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+		if (!rail) return;
+		if (!window.matchMedia('(max-width: 720px)').matches) return;
+		const current = rail.querySelector<HTMLElement>('[aria-current="page"]');
+		if (!current) return;
+		const middle = current.offsetLeft + current.offsetWidth / 2 - rail.clientWidth / 2;
+		rail.scrollTo({ left: Math.max(0, middle), behavior: 'smooth' });
 	});
 
 	function whoHref(value: 'mine' | 'all') {
@@ -133,20 +184,38 @@
 		params.set('who', value);
 		return `?${params}`;
 	}
+
+	/*
+	  Which section is the current one. It matches on whole path segments, so
+	  /parts/L3515 lights up Parts but a future /parts-catalog would not.
+	*/
+	function isCurrent(href: string): boolean {
+		const path = page.url.pathname;
+		return path === href || path.startsWith(href + '/');
+	}
 </script>
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
 </svelte:head>
 
-<!-- A thin bar while the next page loads. -->
+<!--
+	A thin bar while the next page loads. role="progressbar" with no value
+	says "something is happening, length unknown", which is the truth.
+-->
 {#if navigating.to}
-	<div class="loading-bar" aria-hidden="true"></div>
+	<div class="loading-bar" role="progressbar" aria-label="Loading the next page"></div>
 {/if}
 
 {#if data.user}
+	<!--
+		Straight to the page content, for anyone arriving on the keyboard. It
+		is the first thing in the tab order and visible only when focused.
+	-->
+	<a class="skip-link" href="#content">Skip to the page</a>
+
 	<div class="shell">
-		<nav class="rail" bind:this={rail} aria-label="Main">
+		<nav class="rail" bind:this={rail} aria-label="Sections">
 			<a class="brand item pressable" href="/commitments">
 				<Mark size={24} />
 				<span class="label brand-name">Northline</span>
@@ -158,7 +227,7 @@
 						<a
 							class="item pressable"
 							href={item.href}
-							aria-current={page.url.pathname.startsWith(item.href) ? 'page' : undefined}
+							aria-current={isCurrent(item.href) ? 'page' : undefined}
 						>
 							<item.icon size={16} strokeWidth={1.75} aria-hidden="true" />
 							<span class="label">{item.label}</span>
@@ -168,12 +237,15 @@
 			</ul>
 
 			<div class="foot">
-				<div class="me" title="{data.user.fullName}, {data.user.title}">
+				<div class="me">
 					<span class="avatar" aria-hidden="true">{initials}</span>
 					<span class="label who">
 						<span class="name">{data.user.fullName}</span>
 						<span class="title">{data.user.title}</span>
 					</span>
+					<!-- The rail is 52px wide most of the time, so the name is only
+					     visible on hover. It is always here for a screen reader. -->
+					<span class="sr-only">Signed in as {data.user.fullName}, {data.user.title}</span>
 				</div>
 				<a class="item pressable" href="/signin">
 					<UserRoundArrowLeft size={16} strokeWidth={1.75} aria-hidden="true" />
@@ -210,15 +282,17 @@
 						</div>
 					{/if}
 					<ThemeToggle />
-					<span class="portfolio-note" role="note">Portfolio app · all data is invented</span>
+					<span class="demo-note" role="note">Demo app · synthetic data</span>
 				</div>
 			</header>
 
-			{@render children()}
+			<main id="content" tabindex="-1">
+				{@render children()}
+			</main>
 		</div>
 	</div>
 {:else}
-	<div class="portfolio-note standalone" role="note">Portfolio app · all data is invented</div>
+	<div class="demo-note standalone" role="note">Demo app · synthetic data</div>
 	{@render children()}
 {/if}
 
@@ -349,7 +423,7 @@
 		border-radius: 50%;
 		display: grid;
 		place-items: center;
-		font-size: 0.78rem;
+		font-size: var(--fs-meta);
 		font-weight: 600;
 		letter-spacing: 0.02em;
 		color: var(--text);
@@ -368,7 +442,7 @@
 	}
 
 	.who .title {
-		font-size: 0.85rem;
+		font-size: var(--fs-meta);
 		color: var(--text-muted);
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -440,25 +514,30 @@
 		flex: none;
 	}
 
-	.portfolio-note {
-		font-size: 0.82rem;
+	.demo-note {
+		font-size: var(--fs-meta);
 		color: var(--text-faint);
 		white-space: nowrap;
 	}
 
-	.tools .portfolio-note {
+	.tools .demo-note {
 		margin-left: var(--space-1);
 		padding-left: var(--space-3);
 		border-left: 1px solid var(--hairline);
 	}
 
-	.portfolio-note.standalone {
+	.demo-note.standalone {
 		padding: 6px var(--space-4);
 		text-align: center;
 		border-bottom: 1px solid var(--hairline);
 	}
 
 	/* ------------------------------------------------------ loading bar */
+
+
+	main:focus-visible {
+		outline: none;
+	}
 
 	.loading-bar {
 		position: fixed;
@@ -486,7 +565,7 @@
 
 	/*
 	  On a phone the rail becomes a bottom bar: icons only, no hover
-	  expansion. The portfolio note drops under the top bar's tools.
+	  expansion. The demo note drops under the top bar's tools.
 	*/
 	@media (max-width: 720px) {
 		.shell {
@@ -540,7 +619,7 @@
 		.item {
 			flex: none;
 			width: auto;
-			min-width: 60px;
+			min-width: 66px;
 			height: calc(var(--rail-w) - 6px);
 			flex-direction: column;
 			justify-content: center;
@@ -549,7 +628,7 @@
 		}
 
 		.item .label {
-			font-size: 10px;
+			font-size: var(--fs-meta);
 			line-height: 1;
 			letter-spacing: 0.01em;
 			opacity: 1;
@@ -582,7 +661,7 @@
 			width: 100%;
 		}
 
-		.tools .portfolio-note {
+		.tools .demo-note {
 			flex-basis: 100%;
 			margin: 0;
 			padding: 0;

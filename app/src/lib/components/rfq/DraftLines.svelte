@@ -10,12 +10,19 @@
 
 	let {
 		lines,
+		sources,
 		draftId,
 		updatedAt,
 		requestId,
 		editable
 	}: {
 		lines: ValidatedLine[];
+		/**
+		 * Where each line was read from ("attachment 2, sheet Quote, row 14"),
+		 * by position in the draft. Empty for a draft made before attachments
+		 * existed, or for a line read straight out of a pasted email.
+		 */
+		sources: (string | null)[];
 		draftId: number;
 		updatedAt: string;
 		requestId: string;
@@ -34,12 +41,12 @@
 	<table>
 		<thead>
 			<tr>
-				<th>As written</th>
-				<th>Part</th>
-				<th class="num">Qty</th>
-				<th class="num">Unit price</th>
-				<th class="num">Line total</th>
-				<th>Price check</th>
+				<th scope="col">As written</th>
+				<th scope="col">Part</th>
+				<th scope="col" class="num">Qty</th>
+				<th scope="col" class="num">Unit price</th>
+				<th scope="col" class="num">Line total</th>
+				<th scope="col">Price check</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -52,6 +59,10 @@
 						<div class="stack">
 							<span class="mono">{line.item_as_written ?? 'no part number'}</span>
 							<span class="faint raw" title={line.raw_text}>{line.raw_text}</span>
+							{#if sources[line.index]}
+								<!-- Where to look in the file this came out of. -->
+								<span class="faint source">{sources[line.index]}</span>
+							{/if}
 						</div>
 					</td>
 
@@ -105,7 +116,7 @@
 												maxlength="40"
 												autocomplete="off"
 											/>
-											<button class="button" disabled={saving}>Use</button>
+											<button class="button" disabled={saving} aria-label="Use this part number for line {line.index + 1}">Use</button>
 										{/snippet}
 									</ChangeForm>
 								{/if}
@@ -133,7 +144,7 @@
 												aria-label="Quantity in pieces"
 												value={line.quantity ?? ''}
 											/>
-											<button class="button" disabled={saving}>Set</button>
+											<button class="button" disabled={saving} aria-label="Set the quantity for line {line.index + 1}">Set</button>
 										{/snippet}
 									</ChangeForm>
 								{/if}
@@ -169,18 +180,23 @@
 						<td data-label="Price check" class="price">
 							<div class="stack">
 								<CheckBadge check={line.price_check} />
+								<!-- What the late-order forecast says about shipping it in time.
+								     Information only: it never blocks approval. -->
+								{#if line.supply}
+									<span class="faint small supply">{line.supply}</span>
+								{/if}
 								{#if editable}
 									<div class="line-actions">
 										{#if line.price_check.status === 'needs_review'}
 											<ChangeForm {...form} change="accept_price" line={line.index} label="Quote line {line.index + 1} at our price">
 												{#snippet children({ saving })}
-													<button class="button" disabled={saving}>Quote at our price</button>
+													<button class="button" disabled={saving} aria-label="Quote line {line.index + 1} at our price">Quote at our price</button>
 												{/snippet}
 											</ChangeForm>
 										{/if}
 										<ChangeForm {...form} change="remove_line" line={line.index} label="Remove line {line.index + 1}">
 											{#snippet children({ saving })}
-												<button class="button quiet" disabled={saving}>Remove line</button>
+												<button class="button danger" disabled={saving} aria-label="Remove line {line.index + 1}">Remove line</button>
 											{/snippet}
 										</ChangeForm>
 									</div>
@@ -236,7 +252,18 @@
 		text-overflow: ellipsis;
 	}
 
+	.source {
+		font-size: 0.78rem;
+		font-variant-numeric: tabular-nums;
+	}
+
 	.desc,
+	/* The supply note can be a sentence; let it wrap in its cell. */
+	.supply {
+		max-width: 32ch;
+		white-space: normal;
+	}
+
 	.small {
 		font-size: 0.85rem;
 	}

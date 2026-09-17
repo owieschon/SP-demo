@@ -57,8 +57,24 @@ export const rfqDraftSchema = z.object({
 	is_request: z.boolean()
 });
 
-export type DraftLine = z.infer<typeof draftLineSchema>;
-export type RfqDraft = z.infer<typeof rfqDraftSchema>;
+/**
+ * A draft line, plus where it was read from.
+ *
+ * `source` is deliberately outside the zod schema. The schema is also what
+ * builds the JSON schema a live model must answer in (see claude.ts), and a
+ * model cannot know which attachment, sheet and row a line came from: only
+ * our own readers know that (../documents/request.ts). Keeping it in the
+ * type and out of the schema means the model's contract does not change,
+ * the value is still stored in the draft's JSONB and the page can show it.
+ * A draft that goes back through `rfqDraftSchema.parse` loses it, which is
+ * harmless: nothing ever writes a parsed draft back.
+ */
+export type DraftLine = z.infer<typeof draftLineSchema> & {
+	/** "attachment 2, sheet Quote, row 14", or "page 1, line 8". */
+	source?: string;
+};
+
+export type RfqDraft = Omit<z.infer<typeof rfqDraftSchema>, 'lines'> & { lines: DraftLine[] };
 export type TextField = z.infer<typeof textField>;
 export type NumberField = z.infer<typeof numberField>;
 
@@ -179,6 +195,13 @@ export interface ValidatedLine {
 	stated_line_total: number | null;
 	line_total: number | null;
 	price_check: Check;
+	/**
+	 * What the late-order forecast says about shipping this line by the
+	 * needed-by date ("8 on hand, 4 due Sep 28 on PO-104471: can ship by
+	 * Oct 3"). Information for whoever quotes it, never a reason to review:
+	 * a quote can be approved whatever it says.
+	 */
+	supply: string | null;
 	removed: boolean;
 }
 
