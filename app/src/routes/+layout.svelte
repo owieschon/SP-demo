@@ -145,20 +145,38 @@
 		params.set('who', value);
 		return `?${params}`;
 	}
+
+	/*
+	  Which section is the current one. It matches on whole path segments, so
+	  /parts/L3515 lights up Parts but a future /parts-catalog would not.
+	*/
+	function isCurrent(href: string): boolean {
+		const path = page.url.pathname;
+		return path === href || path.startsWith(href + '/');
+	}
 </script>
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
 </svelte:head>
 
-<!-- A thin bar while the next page loads. -->
+<!--
+	A thin bar while the next page loads. role="progressbar" with no value
+	says "something is happening, length unknown", which is the truth.
+-->
 {#if navigating.to}
-	<div class="loading-bar" aria-hidden="true"></div>
+	<div class="loading-bar" role="progressbar" aria-label="Loading the next page"></div>
 {/if}
 
 {#if data.user}
+	<!--
+		Straight to the page content, for anyone arriving on the keyboard. It
+		is the first thing in the tab order and visible only when focused.
+	-->
+	<a class="skip-link" href="#content">Skip to the page</a>
+
 	<div class="shell">
-		<nav class="rail" bind:this={rail} aria-label="Main">
+		<nav class="rail" bind:this={rail} aria-label="Sections">
 			<a class="brand item pressable" href="/commitments">
 				<Mark size={24} />
 				<span class="label brand-name">Northline</span>
@@ -170,7 +188,7 @@
 						<a
 							class="item pressable"
 							href={item.href}
-							aria-current={page.url.pathname.startsWith(item.href) ? 'page' : undefined}
+							aria-current={isCurrent(item.href) ? 'page' : undefined}
 						>
 							<item.icon size={16} strokeWidth={1.75} aria-hidden="true" />
 							<span class="label">{item.label}</span>
@@ -180,12 +198,15 @@
 			</ul>
 
 			<div class="foot">
-				<div class="me" title="{data.user.fullName}, {data.user.title}">
+				<div class="me">
 					<span class="avatar" aria-hidden="true">{initials}</span>
 					<span class="label who">
 						<span class="name">{data.user.fullName}</span>
 						<span class="title">{data.user.title}</span>
 					</span>
+					<!-- The rail is 52px wide most of the time, so the name is only
+					     visible on hover. It is always here for a screen reader. -->
+					<span class="sr-only">Signed in as {data.user.fullName}, {data.user.title}</span>
 				</div>
 				<a class="item pressable" href="/signin">
 					<UserRoundArrowLeft size={16} strokeWidth={1.75} aria-hidden="true" />
@@ -361,7 +382,7 @@
 		border-radius: 50%;
 		display: grid;
 		place-items: center;
-		font-size: 0.78rem;
+		font-size: var(--fs-meta);
 		font-weight: 600;
 		letter-spacing: 0.02em;
 		color: var(--text);
@@ -380,7 +401,7 @@
 	}
 
 	.who .title {
-		font-size: 0.85rem;
+		font-size: var(--fs-meta);
 		color: var(--text-muted);
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -453,7 +474,7 @@
 	}
 
 	.portfolio-note {
-		font-size: 0.82rem;
+		font-size: var(--fs-meta);
 		color: var(--text-faint);
 		white-space: nowrap;
 	}
@@ -552,7 +573,7 @@
 		.item {
 			flex: none;
 			width: auto;
-			min-width: 60px;
+			min-width: 66px;
 			height: calc(var(--rail-w) - 6px);
 			flex-direction: column;
 			justify-content: center;
@@ -561,7 +582,7 @@
 		}
 
 		.item .label {
-			font-size: 10px;
+			font-size: var(--fs-meta);
 			line-height: 1;
 			letter-spacing: 0.01em;
 			opacity: 1;
