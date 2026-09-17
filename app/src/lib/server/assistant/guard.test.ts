@@ -6,7 +6,7 @@ import { MAX_TOOL_RESULT_BYTES } from './caps.ts';
 import { checkReadOnlySql, wrapQuery } from './sql.ts';
 import { canonicalJson } from './proposals.ts';
 import { escapeForWrapper, fitResult, unwrapToolResult, wrapToolResult } from './wrap.ts';
-import { LIVE_MINUTES, liveConfigured, passphraseMatches, signLiveCookie, verifyLiveCookie } from './live.ts';
+import { LIVE_MINUTES, liveConfigured, passphraseMatches, passphraseRequired, signLiveCookie, verifyLiveCookie } from './live.ts';
 import { shapeOf } from './mock.ts';
 
 describe('the SQL tool only lets a SELECT through', () => {
@@ -153,9 +153,13 @@ describe('live mode is off unless two separate things are true', () => {
 	const secret = 'test-secret-for-the-ask-cookie';
 
 	it('needs both a key and a passphrase on the server', () => {
+		// The key alone turns live mode on; a passphrase is optional friction.
 		expect(liveConfigured({ apiKey: undefined, passphrase: 'p', model: undefined })).toBe(false);
-		expect(liveConfigured({ apiKey: 'k', passphrase: undefined, model: undefined })).toBe(false);
+		expect(liveConfigured({ apiKey: 'k', passphrase: undefined, model: undefined })).toBe(true);
 		expect(liveConfigured({ apiKey: 'k', passphrase: 'p', model: undefined })).toBe(true);
+		expect(passphraseRequired({ apiKey: 'k', passphrase: undefined, model: undefined })).toBe(false);
+		expect(passphraseRequired({ apiKey: 'k', passphrase: 'p', model: undefined })).toBe(true);
+		expect(passphraseRequired({ apiKey: undefined, passphrase: 'p', model: undefined })).toBe(false);
 	});
 
 	it('only accepts the right passphrase', () => {
