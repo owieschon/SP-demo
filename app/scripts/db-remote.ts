@@ -7,6 +7,7 @@
 //   node --env-file=.env scripts/db-remote.ts seed       load db/seed.sql and db/seed.d (functions only)
 //   node --env-file=.env scripts/db-remote.ts rebuild    reset and build the full world, step by step
 //   node --env-file=.env scripts/db-remote.ts nightly    run the nightly job once, as pg_cron would
+//   node --env-file=.env scripts/db-remote.ts fresh      drop schema nl, re-apply every migration, seed, rebuild
 //
 // Each migration runs in its own transaction and is recorded in
 // supabase_migrations.schema_migrations, the same table Supabase's own tools
@@ -106,6 +107,26 @@ async function step(label: string, text: string) {
 	console.log(`${label.padEnd(22)} ${String(Date.now() - started).padStart(6)} ms  ${summary.slice(0, 160)}`);
 }
 
+/**
+ * Start over: drop everything this project owns, then apply every migration
+ * from 0001, load the generator and build the world. For when a migration
+ * file changed after it was applied (a rewrite during development), which
+ * Postgres cannot apply twice.
+ */
+async function fresh() {
+	const started = Date.now();
+	await sql.unsafe(`
+		drop schema if exists nl cascade;
+		drop schema if exists nl_seed cascade;
+		drop schema if exists nl_bench cascade;
+		delete from supabase_migrations.schema_migrations where name similar to '[0-9]{4}\_%';
+	`);
+	console.log(`dropped the old schema in ${Date.now() - started} ms`);
+	await migrate(undefined);
+	await seed();
+	await rebuild();
+}
+
 async function rebuild() {
 	await step('reset', 'select nl.reset()');
 	await step('begin_build', "select nl_seed.begin_build('full')");
@@ -125,8 +146,9 @@ try {
 	else if (command === 'migrate') await migrate(process.argv[3]);
 	else if (command === 'seed') await seed();
 	else if (command === 'rebuild') await rebuild();
+	else if (command === 'fresh') await fresh();
 	else if (command === 'nightly') await step('nightly', 'select nl.nightly()');
-	else throw new Error(`Unknown command ${command}. Use status, migrate, seed, rebuild or nightly.`);
+	else throw new Error(`Unknown command ${command}. Use status, migrate, seed, rebuild, nightly or fresh.`);
 } catch (error) {
 	// Postgres errors carry no connection details; print the message only.
 	console.error(`failed: ${(error as Error).message}`);
