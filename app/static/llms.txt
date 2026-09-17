@@ -1,16 +1,28 @@
 # Northline
 
 The sales and operations system for Northline Exhaust Co., an invented maker
-of heavy-duty truck exhaust parts. A portfolio app. Every record in it is
-invented; nothing here describes a real company, person or customer.
+of heavy-duty truck exhaust parts. A demo app on synthetic data: every record
+in it is made up, and nothing here describes a real company, person or
+customer.
 
 SvelteKit 2, Svelte 5, TypeScript, Postgres with no ORM. Every request runs in
 a transaction as the signed-in person, and row-level security in Postgres
 decides what they may read and change.
 
+## Getting in
+
+The site may sit behind one shared password (a form at /gate sets a signed
+cookie). Endpoints that carry their own secret skip it: /api/mcp, the cron
+runs and the mail webhook.
+
+An agent with an MCP token should use /api/mcp rather than the pages: it
+speaks MCP over HTTP, its read tools answer directly, and anything that
+changes data becomes a proposal for a person in /workspace. /settings/mcp
+mints a token.
+
 ## Signing in
 
-There are no passwords. GET /signin lists the people you can be and a POST
+Inside the site there are no passwords. GET /signin lists the people you can be and a POST
 with `userId` sets a signed cookie. Every other path redirects to /signin
 without one. Reads and writes are scoped to whoever the cookie names.
 

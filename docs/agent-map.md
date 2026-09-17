@@ -16,8 +16,14 @@ post with `userId` sets a signed `nl_session` cookie. Without it every path
 redirects to `/signin?next=<path>`. The cookie names one person, and every
 database call afterwards runs as that person under row-level security.
 
-Public paths, in `app/src/hooks.server.ts`: `/signin`, `/robots.txt`,
-`/api/cron/automations`. Nothing else.
+Public paths, in `app/src/hooks.server.ts`: `/signin`, `/gate`,
+`/robots.txt`, `/api/cron/automations`, `/api/mcp`, `/api/mail/poll`,
+`/api/mail/webhook`.
+
+In front of all of it, when `SITE_PASSWORD` is set, is one shared password
+(`app/src/lib/server/gate.ts`). The exempt list there is the same set of
+secret-carrying endpoints, so a coding agent, the schedulers and the mail
+webhook still work while the pages are closed.
 
 ## What the pages give an agent, and what they do not
 
