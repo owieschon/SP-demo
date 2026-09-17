@@ -573,6 +573,20 @@ input[type='radio'] {
 	max-width: var(--width-read);
 }
 
+/*
+  A grid item's default min-width is auto, so one child that cannot shrink
+  (a table with a min-width, a flex row of fixed items, an auto-fit grid
+  track) pushes the whole page wider than the phone it is on. Measured on
+  2026-09-17: eleven of twenty-one pages scrolled sideways at 375px, seven
+  of them because the page container itself had grown to between 640 and
+  918 pixels. This is the one rule that stops that, and it is why the
+  scrollers inside (.table-wrap) can finally do their job.
+*/
+.page > *,
+.panel {
+	min-width: 0;
+}
+
 .page-head {
 	display: flex;
 	align-items: flex-start;

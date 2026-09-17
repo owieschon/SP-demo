@@ -130,14 +130,32 @@
 		return [];
 	});
 
-	// On a phone the rail is a bar that scrolls sideways, so the section you
-	// are in may start out off screen. Bring it into view on every navigation.
+	/*
+	  On a phone the rail is a bar that scrolls sideways, so the section you
+	  are in may start out off screen. Bring it into view on every navigation.
+
+	  Two things were wrong here and both were visible. The old guard was
+	  `scrollWidth > clientWidth`, which is true on a desktop too: the rail is
+	  52px wide with its labels clipped, so the check passed and the desktop
+	  rail was scrolled sideways on every navigation, taking its icons out of
+	  view. And `scrollIntoView` moves the browser's sequential focus
+	  navigation starting point, so the first Tab after a page load landed in
+	  the middle of the rail instead of at the top of the document, which
+	  would make the skip link unreachable.
+
+	  So: only when the rail really is the horizontal phone bar, and by
+	  setting scrollLeft rather than asking an element to scroll itself.
+	*/
 	let rail: HTMLElement | null = $state(null);
 	$effect(() => {
 		// Reading the path is what makes this run again after a navigation.
 		void page.url.pathname;
-		if (!rail || rail.scrollWidth <= rail.clientWidth) return;
-		rail.querySelector('[aria-current="page"]')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+		if (!rail) return;
+		if (!window.matchMedia('(max-width: 720px)').matches) return;
+		const current = rail.querySelector<HTMLElement>('[aria-current="page"]');
+		if (!current) return;
+		const middle = current.offsetLeft + current.offsetWidth / 2 - rail.clientWidth / 2;
+		rail.scrollTo({ left: Math.max(0, middle), behavior: 'smooth' });
 	});
 
 	function whoHref(value: 'mine' | 'all') {
