@@ -5,15 +5,19 @@
 	import '@fontsource-variable/geist';
 	import '@fontsource-variable/geist-mono';
 	import '../app.css';
+	import Building2 from '@lucide/svelte/icons/building-2';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Inbox from '@lucide/svelte/icons/inbox';
 	import ListChecks from '@lucide/svelte/icons/list-checks';
+	import Package from '@lucide/svelte/icons/package';
 	import LogOut from '@lucide/svelte/icons/log-out';
+	import Truck from '@lucide/svelte/icons/truck';
 	import UserRoundArrowLeft from '@lucide/svelte/icons/user-round-arrow-left';
 	import Warehouse from '@lucide/svelte/icons/warehouse';
 	import Workflow from '@lucide/svelte/icons/workflow';
 	import { navigating, page } from '$app/state';
 	import Mark from '$lib/components/Mark.svelte';
+	import SearchBox from '$lib/components/SearchBox.svelte';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import type { LayoutProps } from './$types';
 
@@ -28,7 +32,10 @@
 
 	const NAV = [
 		{ href: '/commitments', label: 'Commitments', icon: ListChecks },
+		{ href: '/accounts', label: 'Accounts', icon: Building2 },
 		{ href: '/rfq', label: 'RFQ intake', icon: Inbox },
+		{ href: '/parts', label: 'Parts', icon: Package },
+		{ href: '/vendors', label: 'Vendors', icon: Truck },
 		{ href: '/operations', label: 'Operations', icon: Warehouse },
 		{ href: '/automations', label: 'Automations', icon: Workflow }
 	];
@@ -71,6 +78,28 @@
 				{ label: `R-${page.params.id}`, href: null }
 			];
 		}
+		if (route === '/accounts') return [{ label: 'Accounts', href: null }];
+		if (route === '/accounts/[customer=customer]') {
+			return [
+				{ label: 'Accounts', href: '/accounts' },
+				{ label: page.data.account?.name ?? page.params.customer, href: null }
+			];
+		}
+		if (route === '/parts') return [{ label: 'Parts', href: null }];
+		if (route === '/parts/[item=item]') {
+			return [
+				{ label: 'Parts', href: '/parts' },
+				{ label: page.params.item ?? '', href: null }
+			];
+		}
+		if (route === '/vendors') return [{ label: 'Vendors', href: null }];
+		if (route === '/vendors/[vendor=vendor]') {
+			return [
+				{ label: 'Vendors', href: '/vendors' },
+				{ label: page.params.vendor ?? '', href: null }
+			];
+		}
+		if (route === '/search') return [{ label: 'Search', href: null }];
 		if (route === '/automations') return [{ label: 'Automations', href: null }];
 		if (route === '/automations/new') {
 			return [
@@ -87,6 +116,16 @@
 		if (route.startsWith('/operations')) return [{ label: 'Operations', href: null }];
 		if (page.error) return [{ label: page.status === 404 ? 'Not found' : 'Error', href: null }];
 		return [];
+	});
+
+	// On a phone the rail is a bar that scrolls sideways, so the section you
+	// are in may start out off screen. Bring it into view on every navigation.
+	let rail: HTMLElement | null = $state(null);
+	$effect(() => {
+		// Reading the path is what makes this run again after a navigation.
+		void page.url.pathname;
+		if (!rail || rail.scrollWidth <= rail.clientWidth) return;
+		rail.querySelector('[aria-current="page"]')?.scrollIntoView({ inline: 'center', block: 'nearest' });
 	});
 
 	function whoHref(value: 'mine' | 'all') {
@@ -107,7 +146,7 @@
 
 {#if data.user}
 	<div class="shell">
-		<nav class="rail" aria-label="Main">
+		<nav class="rail" bind:this={rail} aria-label="Main">
 			<a class="brand item pressable" href="/commitments">
 				<Mark size={24} />
 				<span class="label brand-name">Northline</span>
@@ -163,8 +202,9 @@
 				</nav>
 
 				<div class="tools">
+					<SearchBox />
 					{#if who}
-						<div class="segmented" role="group" aria-label="Whose commitments">
+						<div class="segmented" role="group" aria-label="Whose records">
 							<a href={whoHref('mine')} aria-current={who === 'mine' ? 'true' : undefined}>Mine</a>
 							<a href={whoHref('all')} aria-current={who === 'all' ? 'true' : undefined}>Everyone</a>
 						</div>
@@ -473,8 +513,7 @@
 		}
 
 		.brand,
-		.me,
-		.label {
+		.me {
 			display: none;
 		}
 
@@ -483,11 +522,43 @@
 			display: contents;
 		}
 
+		/* The bar scrolls sideways, so more sections can be added without
+		   squeezing the icons. Labels stay: an icon alone says too little. */
+		.rail {
+			justify-content: flex-start;
+			scroll-behavior: smooth;
+			overflow-x: auto;
+			overflow-y: hidden;
+			gap: 2px;
+			scrollbar-width: none;
+		}
+
+		.rail::-webkit-scrollbar {
+			display: none;
+		}
+
 		.item {
-			width: 44px;
-			height: 44px;
+			flex: none;
+			width: auto;
+			min-width: 60px;
+			height: calc(var(--rail-w) - 6px);
+			flex-direction: column;
 			justify-content: center;
-			padding: 0;
+			gap: 3px;
+			padding: 0 8px;
+		}
+
+		.item .label {
+			font-size: 10px;
+			line-height: 1;
+			letter-spacing: 0.01em;
+			opacity: 1;
+			transform: none;
+		}
+
+		/* The page's own heading already names the section. */
+		.crumbs {
+			display: none;
 		}
 
 		.topbar {
@@ -500,6 +571,15 @@
 
 		.tools {
 			flex-wrap: wrap;
+			width: 100%;
+		}
+
+		.tools :global(form.search) {
+			flex: 1 1 160px;
+		}
+
+		.tools :global(form.search input) {
+			width: 100%;
 		}
 
 		.tools .portfolio-note {

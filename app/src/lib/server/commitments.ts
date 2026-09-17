@@ -117,6 +117,8 @@ export async function listBoard(db: Db, userId: number, ownerId: number | null):
 
 export interface CommitmentDetail extends BoardCard {
 	notes: string;
+	/** Who the buyer is, so the page can offer to change them (migration 0014). */
+	buyerContactId: number | null;
 	matchedLines: number;
 	lastDeliveryOn: string | null;
 	remaining: number;
@@ -183,6 +185,7 @@ export async function getCommitment(db: Db, userId: number, id: number): Promise
 				is_settled: boolean;
 				kept_by_measure: boolean;
 				buyer_email: string | null;
+				buyer_contact_id: number | null;
 				city: string;
 				state: string;
 				country: string;
@@ -191,6 +194,7 @@ export async function getCommitment(db: Db, userId: number, id: number): Promise
 		>`
 			select p.id, p.title, p.customer_no, cu.name as customer_name, cu.city, cu.state, cu.country,
 			       p.owner_id, u.full_name as owner_name, ct.full_name as buyer_name, ct.email as buyer_email,
+			       p.buyer_contact_id,
 			       p.committed_value, p.delivered, p.delivered_ratio, p.expected_value, p.confidence,
 			       p.starts_on, p.ends_on, p.status, p.needs_outcome, p.days_since_close,
 			       p.window_elapsed_ratio, p.outcome_source, p.updated_at,
@@ -301,6 +305,7 @@ export async function getCommitment(db: Db, userId: number, id: number): Promise
 			isSettled: head.is_settled,
 			keptByMeasure: head.kept_by_measure,
 			buyerEmail: head.buyer_email,
+			buyerContactId: head.buyer_contact_id,
 			customerCity: head.city,
 			customerState: head.state,
 			customerCountry: head.country,

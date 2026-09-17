@@ -18,7 +18,10 @@
 		<a class="title" href="/commitments/{card.id}">{card.title}</a>
 		<span class="id mono faint">C-{card.id}</span>
 	</div>
-	<div class="customer muted">{card.customerName}</div>
+	<!-- Sits above the stretched title link, so the account is reachable too. -->
+	<div class="customer muted">
+		<a class="over link" href="/accounts/{card.customerNo}">{card.customerName}</a>
+	</div>
 
 	<div class="money">
 		<span class="num"><span class="delivered">{money(card.delivered)}</span> <span class="faint">of</span> {money(card.committedValue)}</span>
@@ -47,7 +50,8 @@
 				<span class="chip warn">Closed short {card.daysSinceClose}d ago</span>
 			{/if}
 			{#if !card.buyerName}
-				<span class="chip">No buyer</span>
+				<!-- An empty state that does something: it opens the buyer form. -->
+				<a class="chip over" href="/commitments/{card.id}#buyer">Name the buyer</a>
 			{/if}
 			{#if card.outcomeSource === 'nightly'}
 				<span class="chip" title="Pushed by the nightly job, with evidence">Nightly</span>
@@ -130,6 +134,12 @@
 		flex: none;
 		font-size: 0.85rem;
 		transition: opacity var(--speed) var(--ease);
+	}
+
+	/* Anything with .over is clickable on top of the row-wide title link. */
+	.over {
+		position: relative;
+		z-index: 1;
 	}
 
 	.customer {

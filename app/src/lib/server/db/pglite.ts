@@ -5,7 +5,7 @@
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { PGlite, types, type Transaction } from '@electric-sql/pglite';
 import { findDbDir, fingerprint, readMigrations, readSeed } from './files.ts';
-import { fromTemplate, roleSetup, type Db, type Param, type Row, type Tx } from './types.ts';
+import { fromTemplate, readonlySetup, roleSetup, type Db, type Param, type Row, type Tx } from './types.ts';
 
 export type WorldSize = 'full' | 'demo' | 'small';
 
@@ -75,6 +75,7 @@ function makeDb(pg: PGlite, beforeEach?: () => Promise<void>): Db {
 		kind: 'pglite',
 		asUser: (userId, work) => transaction(roleSetup(userId), work),
 		asVisitor: (work) => transaction(roleSetup(null), work),
+		asReadonly: (work) => transaction(readonlySetup(), work),
 		asSystem: (work) => transaction([], work),
 		close: () => pg.close()
 	};

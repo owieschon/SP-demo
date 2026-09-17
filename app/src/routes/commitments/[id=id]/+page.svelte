@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
+	import BuyerPicker from '$lib/components/accounts/BuyerPicker.svelte';
 	import OutcomeForm from '$lib/components/OutcomeForm.svelte';
 	import ProgressBar from '$lib/components/ProgressBar.svelte';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
@@ -10,7 +11,15 @@
 	let { data, form }: PageProps = $props();
 
 	const c = $derived(data.commitment);
-	const failed = $derived(form && 'message' in form && !('replayed' in form));
+	// The outcome and confidence forms answer here; the buyer forms carry a
+	// `from` and answer inside the buyer picker instead.
+	const general = $derived(form && !('from' in form) ? form : null);
+	const failed = $derived(general && 'message' in general && !('replayed' in general));
+	const buyerAnswer = $derived(
+		form && 'from' in form && form.from === 'buyer'
+			? { text: form.message, failed: form.failed, conflict: form.conflict }
+			: null
+	);
 	const where = $derived(place(c.customerCity, c.customerState, c.customerCountry));
 
 	// The confidence picker offers tens, plus the current value if it is not one.
@@ -34,7 +43,8 @@
 			<div>
 				<dt>Customer</dt>
 				<dd>
-					{c.customerName} <span class="mono faint">{c.customerNo}</span>
+					<a class="link" href="/accounts/{c.customerNo}">{c.customerName}</a>
+					<span class="mono faint">{c.customerNo}</span>
 					{#if where}<span class="muted">· {where}</span>{/if}
 				</dd>
 			</div>
@@ -42,14 +52,22 @@
 				<dt>Owner</dt>
 				<dd>{c.ownerName}</dd>
 			</div>
-			<div>
+			<div class="buyer-fact">
 				<dt>Buyer</dt>
 				<dd>
-					{#if c.buyerName}
-						{c.buyerName}{#if c.buyerEmail}&nbsp;<span class="faint">{c.buyerEmail}</span>{/if}
-					{:else}
-						<span class="chip warn">No buyer named</span>
-					{/if}
+					<!-- Nobody named is a button, not a label: it opens a small form. -->
+					<BuyerPicker
+						commitmentId={c.id}
+						customerNo={c.customerNo}
+						updatedAt={c.updatedAt}
+						buyerName={c.buyerName}
+						buyerEmail={c.buyerEmail}
+						choices={data.buyerChoices}
+						canEdit={c.canEdit}
+						setRequestId={data.requestIds.setBuyer}
+						addRequestId={data.requestIds.addBuyer}
+						message={buyerAnswer}
+					/>
 				</dd>
 			</div>
 			<div>
@@ -59,10 +77,10 @@
 		</dl>
 	</header>
 
-	{#if form?.message}
+	{#if general?.message}
 		<p class="notice" class:error={failed} role={failed ? 'alert' : 'status'}>
-			<span>{form.message}</span>
-			{#if form && 'conflict' in form && form.conflict}
+			<span>{general.message}</span>
+			{#if general && 'conflict' in general && general.conflict}
 				<button class="button" onclick={() => invalidateAll()}>Reload</button>
 			{/if}
 		</p>
@@ -329,6 +347,11 @@
 
 	.facts dd {
 		margin: 0;
+	}
+
+	/* The buyer form opens under the facts row, full width. */
+	.buyer-fact {
+		flex: 1 1 100%;
 	}
 
 	.body {

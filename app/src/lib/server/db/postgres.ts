@@ -1,6 +1,6 @@
 // Supabase Postgres, through the `postgres` package.
 import postgres from 'postgres';
-import { fromTemplate, roleSetup, type Db, type Param, type Row, type Tx } from './types.ts';
+import { fromTemplate, readonlySetup, roleSetup, type Db, type Param, type Row, type Tx } from './types.ts';
 
 // What the custom type parsers below turn each Postgres type into.
 type ParsedTypes = { dateText: string; numericNumber: number; bigintNumber: number; jsonText: unknown };
@@ -82,6 +82,7 @@ export function createPostgresDb(url: string): Db {
 		kind: 'postgres',
 		asUser: (userId, work) => transaction(roleSetup(userId), work),
 		asVisitor: (work) => transaction(roleSetup(null), work),
+		asReadonly: (work) => transaction(readonlySetup(), work),
 		asSystem: (work) => transaction([], work),
 		close: () => client.end({ timeout: 5 })
 	};
