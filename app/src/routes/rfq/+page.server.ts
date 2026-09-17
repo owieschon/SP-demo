@@ -5,10 +5,12 @@ import { env } from '$env/dynamic/private';
 import { getDb } from '$lib/server/db';
 import { toAppError } from '$lib/server/errors';
 import { sessionSecret } from '$lib/server/session';
+import { ACCEPTED_EXTENSIONS } from '$lib/server/documents/read';
+import { extractRequest } from '$lib/server/documents/request';
+import { draftsHolding } from '$lib/server/documents/store';
 import { DEFAULT_MODEL, ExtractionError, messagesApi } from '$lib/server/rfq/claude';
 import { createDraft, listDrafts } from '$lib/server/rfq/drafts';
-import { extract } from '$lib/server/rfq/extract';
-import { emailFromForm } from '$lib/server/rfq/forms';
+import { requestFromForm } from '$lib/server/rfq/forms';
 import { LIVE_COOKIE, LIVE_MINUTES, liveConfigured, passphraseMatches, signLiveCookie, verifyLiveCookie } from '$lib/server/rfq/live';
 import { SAMPLES } from '$lib/server/rfq/samples';
 import type { Extraction } from '$lib/server/rfq/schema';
@@ -30,6 +32,8 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 		// Not awaited: the page shows skeleton rows until the list arrives.
 		drafts: listDrafts(await getDb(), user.id),
 		samples: SAMPLES.map((s) => ({ name: s.name, label: s.label, text: s.text })),
+		// One list of accepted formats, shared by the reader and the file input.
+		accept: ACCEPTED_EXTENSIONS.join(','),
 		live: { configured: live.configured, unlocked: live.unlocked, model: live.unlocked ? live.model : null },
 		requestId: randomUUID()
 	};
@@ -39,32 +43,45 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 let anthropic: Anthropic | null = null;
 
 export const actions: Actions = {
-	// Read an email and store the validated draft, then open it.
+	// Read an emailed request, with whatever was attached to it, and store the
+	// validated draft, then open it.
 	extract: async ({ locals, request, cookies }) => {
 		const user = locals.user!;
 		const data = await request.formData();
-		const email = await emailFromForm(data);
-		if (!email.ok) return fail(400, { message: email.message });
+		const read = await requestFromForm(data);
+		if (!read.ok) return fail(400, { message: read.message });
 		const requestId = String(data.get('requestId') ?? '');
 
 		const live = liveState({ cookies, locals });
 		const db = await getDb();
 		const [{ today }] = await db.asUser(user.id, (tx) => tx.sql<{ today: string }>`select nl.today() as today`);
 
+		// A file this person has already read is the same request coming round
+		// again, which is worth saying instead of making a second draft of it.
+		const held = await draftsHolding(db, user.id, read.stored.map((file) => file.sha256));
+		if (held.size > 0) {
+			const named = read.stored
+				.filter((file) => held.has(file.sha256))
+				.map((file) => `${file.fileName} was already read into R-${held.get(file.sha256)}`);
+			return fail(400, { message: `${named.join(', ')}. Open that draft, or leave the file off.` });
+		}
+
 		let draftId: number;
 		try {
-			let extraction: Extraction;
-			if (live.unlocked) {
-				anthropic ??= new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
-				extraction = await extract(email.text, {
-					mode: 'claude',
-					today,
-					claude: { api: messagesApi(anthropic), model: live.model }
-				});
-			} else {
-				extraction = await extract(email.text, { mode: 'rules', today });
-			}
-			const result = await createDraft(db, user.id, { source: email.text, sourceName: email.name, extraction, requestId });
+			const extraction: Extraction & { sourceText: string } = live.unlocked
+				? await extractRequest(read.documents, {
+						mode: 'claude',
+						today,
+						claude: { api: messagesApi((anthropic ??= new Anthropic({ apiKey: env.ANTHROPIC_API_KEY }))), model: live.model }
+					})
+				: await extractRequest(read.documents, { mode: 'rules', today });
+			const result = await createDraft(db, user.id, {
+				source: extraction.sourceText,
+				sourceName: read.sourceName,
+				extraction,
+				attachments: read.stored,
+				requestId
+			});
 			draftId = result.draftId;
 		} catch (error) {
 			if (error instanceof ExtractionError) return fail(502, { message: error.message });

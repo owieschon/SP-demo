@@ -5,3 +5,9 @@
 # Sample ERP exports keep their bytes exactly (CRLF, BOM): the tests compare
 # them with the generator byte for byte, and real exports look like this.
 fixtures/exports/*.csv -text
+
+# Sample RFQ documents keep their bytes exactly (the tests rebuild them and
+# compare byte for byte).
+fixtures/rfq/*.csv -text
+fixtures/rfq/*.pdf -text
+fixtures/rfq/*.xlsx -text

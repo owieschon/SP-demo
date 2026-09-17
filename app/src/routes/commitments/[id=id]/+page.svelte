@@ -273,7 +273,7 @@
 					{#each c.quotes as q (q.id)}
 						<li>
 							<span class="line">
-								<span class="mono">SQ-{q.id}</span>
+								<a class="link mono" href="/quotes/{q.id}">SQ-{q.id}</a>
 								<span class="muted">{day(q.quotedOn, data.year)}</span>
 								<span class="num push">{money(q.total)}</span>
 							</span>

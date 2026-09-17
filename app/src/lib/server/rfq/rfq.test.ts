@@ -353,6 +353,20 @@ describe('the draft as a whole', () => {
 		expect(v.needs_review).toBe(0);
 	});
 
+	it('says what the supply side thinks, without blocking the quote', async () => {
+		// The eval world's parts have no stock row and nothing on order, so the
+		// only way to get one is to buy or make it. That is worth telling the
+		// person who quotes it, and it is never a reason to review.
+		const v = await validate(draftOf({ lines: [line('CL6SZ', 4)] }));
+		expect(v.needs_review).toBe(0);
+		expect(v.lines[0].supply).toMatch(/0 of 4 free on the shelf/);
+		expect(v.lines[0].supply).toMatch(/cannot ship 4 by|can ship by/);
+
+		// A removed line is not asked about at all.
+		const removed = await validate(draftOf({ lines: [line('CL6SZ', 4)] }), { lines: { '0': { removed: true } } });
+		expect(removed.lines[0].supply).toBeNull();
+	});
+
 	it('does not check a line a person removed', async () => {
 		const v = await validate(draftOf({ lines: [line('CL6SZ', 1), line('NOPE-1', null)] }), { lines: { '1': { removed: true } } });
 		expect(v.needs_review).toBe(0);
