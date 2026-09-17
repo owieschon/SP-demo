@@ -563,6 +563,33 @@ describe('the free-freight threshold on a vendor card', () => {
 	});
 });
 
+describe('what the assistant’s read-only role may read', () => {
+	it('gets the parts and the money, and nothing about people', async () => {
+		// nl.part_replenishment walks the desk's own purchase orders on its way
+		// to "what is already on order", so nl_readonly is granted those
+		// tables column by column, without created_by. If a column were
+		// missed, this read would fail outright rather than quietly.
+		const rows = await db.asReadonly(
+			(tx) => tx.sql<{ n: number }>`
+				select count(*)::int as n from nl.part_replenishment where needs_buying`
+		);
+		expect(rows[0].n).toBeGreaterThanOrEqual(0);
+
+		const usage = await db.asReadonly(
+			(tx) => tx.sql<{ n: number }>`select count(*)::int as n from nl.part_usage`
+		);
+		expect(usage[0].n).toBeGreaterThan(0);
+
+		// And the tables that say who did what stay out of its reach.
+		for (const table of ['nl.purchase_requests', 'nl.purchase_request_drafts']) {
+			await expect(
+				db.asReadonly((tx) => tx.query(`select 1 from ${table} limit 1`)),
+				table
+			).rejects.toMatchObject({ code: '42501' }); // insufficient_privilege
+		}
+	});
+});
+
 describe('which neighbouring migrations the desk found', () => {
 	it('names them, so a page can say which numbers it is working from', async () => {
 		const found = await sources();
