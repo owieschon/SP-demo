@@ -35,8 +35,20 @@ export function readMigrations(dbDir: string): SqlFile[] {
 		.map((name) => ({ name, sql: readFileSync(join(dir, name), 'utf8') }));
 }
 
+/**
+ * The world generator: seed.sql, then every db/seed.d/NN_name.sql in name
+ * order. A seed.d file adds to the world by defining nl_seed.extra_NN_name(),
+ * which nl_seed.finish_build() calls.
+ */
 export function readSeed(dbDir: string): SqlFile {
-	return { name: 'seed.sql', sql: readFileSync(join(dbDir, 'seed.sql'), 'utf8') };
+	const parts = [readFileSync(join(dbDir, 'seed.sql'), 'utf8')];
+	const extraDir = join(dbDir, 'seed.d');
+	if (existsSync(extraDir)) {
+		for (const name of readdirSync(extraDir).filter((n) => /^\d{2}_[a-z0-9_]+\.sql$/.test(n)).sort()) {
+			parts.push(readFileSync(join(extraDir, name), 'utf8'));
+		}
+	}
+	return { name: 'seed.sql', sql: parts.join('\n') };
 }
 
 /** Changes whenever a migration or the seed changes, so a stale local database gets rebuilt. */

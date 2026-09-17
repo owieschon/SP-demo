@@ -1,0 +1,19 @@
+{
+  "sender": "parker.reyes@canyonpartswarehouse.example",
+  "customer_no": "10146",
+  "lines": [
+    {
+      "item_no": "PR-7011",
+      "quantity": null
+    },
+    {
+      "item_no": "CU-41545",
+      "quantity": null
+    }
+  ],
+  "needed_by": null,
+  "needs_review": [
+    "line_quantity",
+    "line_quantity"
+  ]
+}

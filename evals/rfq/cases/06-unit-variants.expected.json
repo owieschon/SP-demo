@@ -1,0 +1,24 @@
+{
+  "sender": "kendall.alvarez@ironhorsefabshop.example",
+  "customer_no": "10091",
+  "lines": [
+    {
+      "item_no": "CL6SZ",
+      "quantity": 24
+    },
+    {
+      "item_no": "S6-36SC",
+      "quantity": 4
+    },
+    {
+      "item_no": "CL45UZ",
+      "quantity": 30
+    },
+    {
+      "item_no": "P6-12CP",
+      "quantity": 5
+    }
+  ],
+  "needed_by": null,
+  "needs_review": []
+}

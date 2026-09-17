@@ -1,0 +1,16 @@
+{
+  "sender": "micah.petrakis@hilltoptruckrepair.example",
+  "customer_no": "10106",
+  "lines": [
+    {
+      "item_no": "L822-1818C",
+      "quantity": 2
+    },
+    {
+      "item_no": "L890-148C",
+      "quantity": 2
+    }
+  ],
+  "needed_by": "2026-09-30",
+  "needs_review": []
+}

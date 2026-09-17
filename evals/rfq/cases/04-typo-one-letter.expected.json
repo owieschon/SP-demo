@@ -1,0 +1,17 @@
+{
+  "sender": "lee.ibarra@heartlandagfleet.example",
+  "customer_no": "10062",
+  "lines": [
+    {
+      "item_no": "FL6-36SS",
+      "quantity": 2
+    }
+  ],
+  "needed_by": null,
+  "needs_review": [
+    "line_item"
+  ],
+  "suggestions": {
+    "S6-96BX": "S6-96BC"
+  }
+}

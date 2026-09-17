@@ -1,0 +1,16 @@
+From: Parker Reyes <parker.reyes@canyonpartswarehouse.example>
+To: Quotes <quotes@northline.example>
+Subject: PO draft, please confirm pricing
+Date: Mon, 14 Sep 2026 10:10:00 -0400
+
+Parker here. Here is what we plan to order at our usual pricing. Please confirm.
+
+| Qty | Part | Price | Total |
+|-----|------|-------|-------|
+| 4 | S6-96BC | $157.73 | $630.92 |
+| 10 | CL6SZ | $16.91 | $169.10 |
+| 2 | FL6-36SS | $126.38 | $262.76 |
+| | | Subtotal | $1,052.78 |
+
+Parker Reyes
+Canyon Parts Warehouse

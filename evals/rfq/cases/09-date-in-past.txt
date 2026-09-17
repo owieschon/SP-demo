@@ -1,0 +1,9 @@
+From: Pat Sandoval <pat.sandoval@mileagetruckcenters.example>
+To: Quotes <quotes@northline.example>
+Subject: pipe
+Date: Wed, 16 Sep 2026 15:45:00 -0500
+
+Please quote 6 P5-72CE, needed by 9/10.
+
+Pat Sandoval
+Mileage Truck Centers - Kansas City

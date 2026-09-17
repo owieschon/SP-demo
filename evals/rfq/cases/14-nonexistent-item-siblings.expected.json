@@ -1,0 +1,12 @@
+{
+  "sender": "alex.sorensen@pineywoodsmufflershop.example",
+  "customer_no": "10143",
+  "lines": [],
+  "needed_by": null,
+  "needs_review": [
+    "line_item"
+  ],
+  "suggestions": {
+    "S6-96BS": "S6-96BC"
+  }
+}

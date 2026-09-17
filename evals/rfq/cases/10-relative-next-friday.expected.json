@@ -1,0 +1,12 @@
+{
+  "sender": "shawn.iverson@deltadieselrepair.example",
+  "customer_no": "10125",
+  "lines": [
+    {
+      "item_no": "K-3095",
+      "quantity": 2
+    }
+  ],
+  "needed_by": "2026-09-25",
+  "needs_review": []
+}

@@ -1,0 +1,17 @@
+From: Micah Crowley <micah.crowley@driftlessmachinefab.example>
+To: Quotes <quotes@northline.example>
+Subject: quote
+Date: Tue, 15 Sep 2026 11:11:00 -0400
+
+Quote please:
+S7-96SA qty 2
+FL8-30GA qty 2
+
+Thanks,
+Micah Crowley
+Driftless Machine & Fab
+Office 304-555-0110 x 12
+Cell (304) 555-0187
+Fax 304 555 0111
+1200 Industrial Pkwy, Unit 4
+Charleston, WV 25301

@@ -6,6 +6,7 @@
 	import '@fontsource-variable/geist-mono';
 	import '../app.css';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
+	import Inbox from '@lucide/svelte/icons/inbox';
 	import ListChecks from '@lucide/svelte/icons/list-checks';
 	import LogOut from '@lucide/svelte/icons/log-out';
 	import UserRoundArrowLeft from '@lucide/svelte/icons/user-round-arrow-left';
@@ -26,6 +27,7 @@
 
 	const NAV = [
 		{ href: '/commitments', label: 'Commitments', icon: ListChecks },
+		{ href: '/rfq', label: 'RFQ intake', icon: Inbox },
 		{ href: '/operations', label: 'Operations', icon: Warehouse }
 	];
 
@@ -58,6 +60,13 @@
 			return [
 				{ label: 'Commitments', href: '/commitments' },
 				{ label: `C-${page.params.id}`, href: null }
+			];
+		}
+		if (route === '/rfq') return [{ label: 'RFQ intake', href: null }];
+		if (route === '/rfq/[id=id]') {
+			return [
+				{ label: 'RFQ intake', href: '/rfq' },
+				{ label: `R-${page.params.id}`, href: null }
 			];
 		}
 		if (route.startsWith('/operations')) return [{ label: 'Operations', href: null }];

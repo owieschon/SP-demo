@@ -1,0 +1,16 @@
+{
+  "sender": "alex.brennan@bulldogtruckcenters.example",
+  "customer_no": "10033",
+  "lines": [
+    {
+      "item_no": "S5-96KC",
+      "quantity": 3
+    },
+    {
+      "item_no": "L545-1020SC",
+      "quantity": 2
+    }
+  ],
+  "needed_by": null,
+  "needs_review": []
+}

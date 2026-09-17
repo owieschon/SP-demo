@@ -1,0 +1,16 @@
+{
+  "sender": "shawn.iverson@deltadieselrepair.example",
+  "customer_no": "10125",
+  "lines": [
+    {
+      "item_no": "FL5-14SS",
+      "quantity": 2
+    },
+    {
+      "item_no": "S7-96SA",
+      "quantity": 4
+    }
+  ],
+  "needed_by": null,
+  "needs_review": []
+}

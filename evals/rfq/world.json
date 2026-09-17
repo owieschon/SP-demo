@@ -1,0 +1,658 @@
+{
+ "about": "Invented customers, contacts and parts the RFQ evals run against. Loaded on top of the small test world (see app/src/lib/server/rfq/evals.ts). All names are invented.",
+ "items": [
+  {
+   "item_no": "L3515-630SC",
+   "description": "3.5\" 15 DEG ELBOW 6\" X 30\" CHROME SLIP",
+   "family": "elbow",
+   "category": "ELBOWS",
+   "list_price": 146.13
+  },
+  {
+   "item_no": "L490-168B",
+   "description": "4\" 90 DEG ELBOW 16\" X 8\" BLACK",
+   "family": "elbow",
+   "category": "ELBOWS",
+   "list_price": 112.79
+  },
+  {
+   "item_no": "L660-1018SC",
+   "description": "6\" 60 DEG ELBOW 10\" X 18\" CHROME SLIP",
+   "family": "elbow",
+   "category": "ELBOWS",
+   "list_price": 159.88
+  },
+  {
+   "item_no": "L522-830SC",
+   "description": "5\" 22 DEG ELBOW 8\" X 30\" CHROME SLIP",
+   "family": "elbow",
+   "category": "ELBOWS",
+   "list_price": 166.26
+  },
+  {
+   "item_no": "L630-818C",
+   "description": "6\" 30 DEG ELBOW 8\" X 18\" CHROME",
+   "family": "elbow",
+   "category": "ELBOWS",
+   "list_price": 142.08
+  },
+  {
+   "item_no": "L822-1818C",
+   "description": "8\" 22 DEG ELBOW 18\" X 18\" CHROME",
+   "family": "elbow",
+   "category": "ELBOWS",
+   "list_price": 230.11
+  },
+  {
+   "item_no": "L690-1812SA",
+   "description": "6\" 90 DEG ELBOW 18\" X 12\" ALUMINIZED SLIP",
+   "family": "elbow",
+   "category": "ELBOWS",
+   "list_price": 110.63
+  },
+  {
+   "item_no": "L545-1020SC",
+   "description": "5\" 45 DEG ELBOW 10\" X 20\" CHROME SLIP",
+   "family": "elbow",
+   "category": "ELBOWS",
+   "list_price": 156.83
+  },
+  {
+   "item_no": "L490-810C",
+   "description": "4\" 90 DEG ELBOW 8\" X 10\" CHROME",
+   "family": "elbow",
+   "category": "ELBOWS",
+   "list_price": 138.5
+  },
+  {
+   "item_no": "L890-148C",
+   "description": "8\" 90 DEG ELBOW 14\" X 8\" CHROME",
+   "family": "elbow",
+   "category": "ELBOWS",
+   "list_price": 179.62
+  },
+  {
+   "item_no": "S7-36SS",
+   "description": "7\" X 36\" STRAIGHT CUT STACK STAINLESS",
+   "family": "stack",
+   "category": "STACKS",
+   "list_price": 288.04
+  },
+  {
+   "item_no": "S8-36BS",
+   "description": "8\" X 36\" BULL HAULER STACK STAINLESS",
+   "family": "stack",
+   "category": "STACKS",
+   "list_price": 310.1
+  },
+  {
+   "item_no": "S5-96KC",
+   "description": "5\" X 96\" CURVED STACK CHROME",
+   "family": "stack",
+   "category": "STACKS",
+   "list_price": 354.97
+  },
+  {
+   "item_no": "S6-96BC",
+   "description": "6\" X 96\" BULL HAULER STACK CHROME",
+   "family": "stack",
+   "category": "STACKS",
+   "list_price": 366.81
+  },
+  {
+   "item_no": "S7-96SA",
+   "description": "7\" X 96\" STRAIGHT CUT STACK ALUMINIZED",
+   "family": "stack",
+   "category": "STACKS",
+   "list_price": 209.95
+  },
+  {
+   "item_no": "S6-42SS",
+   "description": "6\" X 42\" STRAIGHT CUT STACK STAINLESS",
+   "family": "stack",
+   "category": "STACKS",
+   "list_price": 253.34
+  },
+  {
+   "item_no": "S7-144BC",
+   "description": "7\" X 144\" BULL HAULER STACK CHROME",
+   "family": "stack",
+   "category": "STACKS",
+   "list_price": 513.8
+  },
+  {
+   "item_no": "S6-48BC",
+   "description": "6\" X 48\" BULL HAULER STACK CHROME",
+   "family": "stack",
+   "category": "STACKS",
+   "list_price": 313.41
+  },
+  {
+   "item_no": "S8-96KC",
+   "description": "8\" X 96\" CURVED STACK CHROME",
+   "family": "stack",
+   "category": "STACKS",
+   "list_price": 463.59
+  },
+  {
+   "item_no": "S6-36SC",
+   "description": "6\" X 36\" STRAIGHT CUT STACK CHROME",
+   "family": "stack",
+   "category": "STACKS",
+   "list_price": 245.45
+  },
+  {
+   "item_no": "P4-72SP",
+   "description": "4\" X 72\" PIPE STAINLESS PLAIN",
+   "family": "pipe",
+   "category": "PIPE",
+   "list_price": 103.5
+  },
+  {
+   "item_no": "P4-18CP",
+   "description": "4\" X 18\" PIPE CHROME PLAIN",
+   "family": "pipe",
+   "category": "PIPE",
+   "list_price": 68.42
+  },
+  {
+   "item_no": "P6-12CP",
+   "description": "6\" X 12\" PIPE CHROME PLAIN",
+   "family": "pipe",
+   "category": "PIPE",
+   "list_price": 91.44
+  },
+  {
+   "item_no": "P5-72CE",
+   "description": "5\" X 72\" PIPE CHROME ONE END EXPANDED",
+   "family": "pipe",
+   "category": "PIPE",
+   "list_price": 137.24
+  },
+  {
+   "item_no": "P6-60CX",
+   "description": "6\" X 60\" PIPE CHROME BOTH ENDS EXPANDED",
+   "family": "pipe",
+   "category": "PIPE",
+   "list_price": 146.68
+  },
+  {
+   "item_no": "P8-96SP",
+   "description": "8\" X 96\" PIPE STAINLESS PLAIN",
+   "family": "pipe",
+   "category": "PIPE",
+   "list_price": 169.26
+  },
+  {
+   "item_no": "FL6-36SS",
+   "description": "6\" X 36\" FLEX PIPE STAINLESS",
+   "family": "flex",
+   "category": "FLEX",
+   "list_price": 293.91
+  },
+  {
+   "item_no": "FL8-30GA",
+   "description": "8\" X 30\" FLEX PIPE GALVANIZED",
+   "family": "flex",
+   "category": "FLEX",
+   "list_price": 190.97
+  },
+  {
+   "item_no": "FL5-14SS",
+   "description": "5\" X 14\" FLEX PIPE STAINLESS",
+   "family": "flex",
+   "category": "FLEX",
+   "list_price": 163.35
+  },
+  {
+   "item_no": "FL4-24SS",
+   "description": "4\" X 24\" FLEX PIPE STAINLESS",
+   "family": "flex",
+   "category": "FLEX",
+   "list_price": 180.7
+  },
+  {
+   "item_no": "FL6-12GA",
+   "description": "6\" X 12\" FLEX PIPE GALVANIZED",
+   "family": "flex",
+   "category": "FLEX",
+   "list_price": 142.53
+  },
+  {
+   "item_no": "CL6SZ",
+   "description": "6\" SADDLE CLAMP ZINC",
+   "family": "clamp",
+   "category": "CLAMPS",
+   "list_price": 39.32
+  },
+  {
+   "item_no": "CL6WSS",
+   "description": "6\" WIDE BAND CLAMP STAINLESS",
+   "family": "clamp",
+   "category": "CLAMPS",
+   "list_price": 77.29
+  },
+  {
+   "item_no": "CL3SZ",
+   "description": "3\" SADDLE CLAMP ZINC",
+   "family": "clamp",
+   "category": "CLAMPS",
+   "list_price": 23.43
+  },
+  {
+   "item_no": "CL4WZ",
+   "description": "4\" WIDE BAND CLAMP ZINC",
+   "family": "clamp",
+   "category": "CLAMPS",
+   "list_price": 31.88
+  },
+  {
+   "item_no": "CL45UZ",
+   "description": "4.5\" U-BOLT CLAMP ZINC",
+   "family": "clamp",
+   "category": "CLAMPS",
+   "list_price": 19.68
+  },
+  {
+   "item_no": "CL7BZ",
+   "description": "7\" BAND CLAMP ZINC",
+   "family": "clamp",
+   "category": "CLAMPS",
+   "list_price": 29.92
+  },
+  {
+   "item_no": "CL6VSS",
+   "description": "6\" V-BAND CLAMP STAINLESS",
+   "family": "clamp",
+   "category": "CLAMPS",
+   "list_price": 128.42
+  },
+  {
+   "item_no": "CL5UZ",
+   "description": "5\" U-BOLT CLAMP ZINC",
+   "family": "clamp",
+   "category": "CLAMPS",
+   "list_price": 19.78
+  },
+  {
+   "item_no": "M-4164",
+   "description": "MUFFLER RECTANGULAR 13\" X 24\" 4\" IN/OUT",
+   "family": "muffler",
+   "category": "MUFFLERS",
+   "list_price": 373.2
+  },
+  {
+   "item_no": "M-4514",
+   "description": "MUFFLER ROUND 12\" X 24\" 4\" IN/OUT",
+   "family": "muffler",
+   "category": "MUFFLERS",
+   "list_price": 537.85
+  },
+  {
+   "item_no": "M-6250",
+   "description": "MUFFLER OVAL 11\" X 36\" 5\" IN/OUT",
+   "family": "muffler",
+   "category": "MUFFLERS",
+   "list_price": 511.64
+  },
+  {
+   "item_no": "M-1469",
+   "description": "MUFFLER RECTANGULAR 11\" X 24\" 6\" IN/OUT",
+   "family": "muffler",
+   "category": "MUFFLERS",
+   "list_price": 298.45
+  },
+  {
+   "item_no": "K-3095",
+   "description": "DUAL STACK KIT 5\" ALUMINIZED",
+   "family": "kit",
+   "category": "KITS",
+   "list_price": 1324.68
+  },
+  {
+   "item_no": "K-2363",
+   "description": "DUAL STACK KIT 8\" ALUMINIZED",
+   "family": "kit",
+   "category": "KITS",
+   "list_price": 1120.29
+  },
+  {
+   "item_no": "HS6-30S",
+   "description": "HEAT SHIELD 6\" X 30\" SOLID STAINLESS",
+   "family": "shield",
+   "category": "SHIELDS",
+   "list_price": 103.28
+  },
+  {
+   "item_no": "HS5-30C",
+   "description": "HEAT SHIELD 5\" X 30\" CHROME",
+   "family": "shield",
+   "category": "SHIELDS",
+   "list_price": 89.43
+  },
+  {
+   "item_no": "HS8-36C",
+   "description": "HEAT SHIELD 8\" X 36\" CHROME",
+   "family": "shield",
+   "category": "SHIELDS",
+   "list_price": 123.71
+  },
+  {
+   "item_no": "RBSB5S3",
+   "description": "STACK BRACKET 5\" STAINLESS STYLE 3",
+   "family": "bracket",
+   "category": "BRACKETS",
+   "list_price": 71.22
+  },
+  {
+   "item_no": "RBRC10B3",
+   "description": "RAIN CAP 10\" BLACK STYLE 3",
+   "family": "bracket",
+   "category": "BRACKETS",
+   "list_price": 84.28
+  },
+  {
+   "item_no": "RBMB4S3",
+   "description": "MOUNTING BRACKET 4\" STAINLESS STYLE 3",
+   "family": "bracket",
+   "category": "BRACKETS",
+   "list_price": 26.69
+  },
+  {
+   "item_no": "PR-7011",
+   "description": "PROPRIETARY Y-PIPE DWG 860",
+   "family": "proprietary",
+   "category": "PROPRIETARY",
+   "list_price": 436.38
+  },
+  {
+   "item_no": "CU-41545",
+   "description": "CUSTOM STACK PER DRAWING 85320",
+   "family": "custom",
+   "category": "CUSTOM",
+   "list_price": 1106.8
+  }
+ ],
+ "customers": [
+  {
+   "customer_no": "21842",
+   "name": "Bulldog Truck Centers",
+   "city": "Dallas",
+   "state": "TX",
+   "email_domain": null,
+   "bill_to_no": null,
+   "price_group": "MASTER"
+  },
+  {
+   "customer_no": "10005",
+   "name": "Bulldog Parts",
+   "city": "Tulsa",
+   "state": "OK",
+   "email_domain": null,
+   "bill_to_no": null,
+   "price_group": "DEALER"
+  },
+  {
+   "customer_no": "12997",
+   "name": "Crossline Fleet Supply",
+   "city": "Charlotte",
+   "state": "NC",
+   "email_domain": null,
+   "bill_to_no": null,
+   "price_group": "DEALER"
+  },
+  {
+   "customer_no": "10012",
+   "name": "Driftless Machine & Fab",
+   "city": "Charleston",
+   "state": "WV",
+   "email_domain": "driftlessmachinefab.example",
+   "bill_to_no": null,
+   "price_group": "DEALER"
+  },
+  {
+   "customer_no": "10017",
+   "name": "Kennebec Lube & Tire",
+   "city": "Saginaw",
+   "state": "MI",
+   "email_domain": "kennebeclubetire.example",
+   "bill_to_no": null,
+   "price_group": "JOBBER"
+  },
+  {
+   "customer_no": "10045",
+   "name": "Truckworks Heavy Duty - Baton Rouge",
+   "city": "Baton Rouge",
+   "state": "LA",
+   "email_domain": "truckworksheavyduty.example",
+   "bill_to_no": null,
+   "price_group": "PERFORMANC"
+  },
+  {
+   "customer_no": "10062",
+   "name": "Heartland Ag & Fleet",
+   "city": "Jacksonville",
+   "state": "FL",
+   "email_domain": "heartlandagfleet.example",
+   "bill_to_no": null,
+   "price_group": "DEALER"
+  },
+  {
+   "customer_no": "10072",
+   "name": "Coastal Parts Depot",
+   "city": "Houston",
+   "state": "TX",
+   "email_domain": "coastalpartsdepot.example",
+   "bill_to_no": null,
+   "price_group": "ELITE"
+  },
+  {
+   "customer_no": "10091",
+   "name": "Ironhorse Fab Shop",
+   "city": "Houston",
+   "state": "TX",
+   "email_domain": "ironhorsefabshop.example",
+   "bill_to_no": null,
+   "price_group": "DEALER"
+  },
+  {
+   "customer_no": "10106",
+   "name": "Hilltop Truck Repair",
+   "city": "Indianapolis",
+   "state": "IN",
+   "email_domain": "hilltoptruckrepair.example",
+   "bill_to_no": null,
+   "price_group": "DEALER"
+  },
+  {
+   "customer_no": "10125",
+   "name": "Delta Diesel Repair",
+   "city": "Portland",
+   "state": "OR",
+   "email_domain": "deltadieselrepair.example",
+   "bill_to_no": null,
+   "price_group": "PERFORMANC"
+  },
+  {
+   "customer_no": "10143",
+   "name": "Piney Woods Muffler Shop",
+   "city": "Pueblo",
+   "state": "CO",
+   "email_domain": "pineywoodsmufflershop.example",
+   "bill_to_no": null,
+   "price_group": "DEALER"
+  },
+  {
+   "customer_no": "10146",
+   "name": "Canyon Parts Warehouse",
+   "city": "Greenville",
+   "state": "SC",
+   "email_domain": "canyonpartswarehouse.example",
+   "bill_to_no": null,
+   "price_group": "MASTER"
+  },
+  {
+   "customer_no": "10172",
+   "name": "Mileage Truck Centers - Kansas City",
+   "city": "Kansas City",
+   "state": "MO",
+   "email_domain": "mileagetruckcenters.example",
+   "bill_to_no": null,
+   "price_group": "PERFORMANC"
+  },
+  {
+   "customer_no": "10033",
+   "name": "Bulldog Truck Centers - Atlanta",
+   "city": "Atlanta",
+   "state": "GA",
+   "email_domain": "bulldogtruckcenters.example",
+   "bill_to_no": "21842",
+   "price_group": "MASTER"
+  },
+  {
+   "customer_no": "10169",
+   "name": "Bulldog Truck Centers - Tucson",
+   "city": "Tucson",
+   "state": "AZ",
+   "email_domain": "bulldogtruckcenters.example",
+   "bill_to_no": "21842",
+   "price_group": "MASTER"
+  },
+  {
+   "customer_no": "10176",
+   "name": "Bulldog Truck Centers - Detroit",
+   "city": "Detroit",
+   "state": "MI",
+   "email_domain": "bulldogtruckcenters.example",
+   "bill_to_no": "21842",
+   "price_group": "MASTER"
+  },
+  {
+   "customer_no": "10246",
+   "name": "Bulldog Truck Centers - Waco",
+   "city": "Waco",
+   "state": "TX",
+   "email_domain": "bulldogtruckcenters.example",
+   "bill_to_no": "21842",
+   "price_group": "MASTER"
+  },
+  {
+   "customer_no": "10257",
+   "name": "Bulldog Truck Centers - Portland",
+   "city": "Portland",
+   "state": "OR",
+   "email_domain": "bulldogtruckcenters.example",
+   "bill_to_no": "21842",
+   "price_group": "MASTER"
+  },
+  {
+   "customer_no": "10181",
+   "name": "Bulldog Parts - Buffalo",
+   "city": "Buffalo",
+   "state": "NY",
+   "email_domain": "bulldogparts.example",
+   "bill_to_no": "10005",
+   "price_group": "DEALER"
+  },
+  {
+   "customer_no": "10233",
+   "name": "Bulldog Parts - Oklahoma City",
+   "city": "Oklahoma City",
+   "state": "OK",
+   "email_domain": "bulldogparts.example",
+   "bill_to_no": "10005",
+   "price_group": "DEALER"
+  },
+  {
+   "customer_no": "10295",
+   "name": "Crossline Fleet Supply - Atlanta",
+   "city": "Atlanta",
+   "state": "GA",
+   "email_domain": "crosslinefleetsupply.example",
+   "bill_to_no": "12997",
+   "price_group": "DEALER"
+  }
+ ],
+ "contacts": [
+  {
+   "customer_no": "10012",
+   "full_name": "Micah Crowley",
+   "email": "micah.crowley@driftlessmachinefab.example"
+  },
+  {
+   "customer_no": "10017",
+   "full_name": "Taylor Ashworth",
+   "email": "taylor.ashworth@kennebeclubetire.example"
+  },
+  {
+   "customer_no": "10045",
+   "full_name": "Morgan Navarro",
+   "email": "morgan.navarro@truckworksheavyduty.example"
+  },
+  {
+   "customer_no": "10062",
+   "full_name": "Lee Ibarra",
+   "email": "lee.ibarra@heartlandagfleet.example"
+  },
+  {
+   "customer_no": "10072",
+   "full_name": "Cameron Kowalski",
+   "email": "cameron.kowalski@coastalpartsdepot.example"
+  },
+  {
+   "customer_no": "10091",
+   "full_name": "Kendall Alvarez",
+   "email": "kendall.alvarez@ironhorsefabshop.example"
+  },
+  {
+   "customer_no": "10106",
+   "full_name": "Micah Petrakis",
+   "email": "micah.petrakis@hilltoptruckrepair.example"
+  },
+  {
+   "customer_no": "10125",
+   "full_name": "Shawn Iverson",
+   "email": "shawn.iverson@deltadieselrepair.example"
+  },
+  {
+   "customer_no": "10143",
+   "full_name": "Alex Sorensen",
+   "email": "alex.sorensen@pineywoodsmufflershop.example"
+  },
+  {
+   "customer_no": "10146",
+   "full_name": "Parker Reyes",
+   "email": "parker.reyes@canyonpartswarehouse.example"
+  },
+  {
+   "customer_no": "10172",
+   "full_name": "Pat Sandoval",
+   "email": "pat.sandoval@mileagetruckcenters.example"
+  },
+  {
+   "customer_no": "10033",
+   "full_name": "Alex Brennan",
+   "email": "alex.brennan@bulldogtruckcenters.example"
+  },
+  {
+   "customer_no": "10169",
+   "full_name": "Riley Wexler",
+   "email": "riley.wexler@bulldogtruckcenters.example"
+  },
+  {
+   "customer_no": "10176",
+   "full_name": "Jesse Oyelaran",
+   "email": "jesse.oyelaran@bulldogtruckcenters.example"
+  },
+  {
+   "customer_no": "10233",
+   "full_name": "Sydney Navarro",
+   "email": "sydney.navarro@bulldogparts.example"
+  },
+  {
+   "customer_no": "10295",
+   "full_name": "Casey Castillo",
+   "email": "casey.castillo@crosslinefleetsupply.example"
+  }
+ ]
+}

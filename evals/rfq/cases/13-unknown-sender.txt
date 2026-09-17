@@ -1,0 +1,12 @@
+From: Buyer <buyer@roadrunnerfleet.example>
+To: Quotes <quotes@northline.example>
+Subject: stack quote
+Date: Tue, 15 Sep 2026 09:00:00 -0600
+
+Hello Northline,
+
+We are a new fleet in the area. Please quote 2 S7-36SS.
+
+Regards,
+Robin Hale
+Roadrunner Fleet Services

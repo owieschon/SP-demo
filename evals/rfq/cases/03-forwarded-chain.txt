@@ -1,0 +1,23 @@
+From: Dana Whitlock <dana.whitlock@northline.example>
+To: Order Desk <orders@northline.example>
+Subject: Fwd: stacks
+Date: Wed, 16 Sep 2026 09:05:00 -0500
+
+Morgan's request is below. Can you get this quoted today?
+
+Dana
+
+---------- Forwarded message ---------
+From: Morgan Navarro <morgan.navarro@truckworksheavyduty.example>
+Date: Tue, Sep 15, 2026 at 3:41 PM
+Subject: stacks
+To: Dana Whitlock <dana.whitlock@northline.example>
+
+Hi Dana,
+
+Please price 2 S7-144BC and 4 CL7BZ. Need them by Friday.
+
+Thanks,
+Morgan Navarro
+Truckworks Heavy Duty - Baton Rouge
+225-555-0199

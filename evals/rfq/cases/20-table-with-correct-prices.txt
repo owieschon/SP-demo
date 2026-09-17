@@ -1,0 +1,14 @@
+From: Cameron Kowalski <cameron.kowalski@coastalpartsdepot.example>
+To: Quotes <quotes@northline.example>
+Subject: confirm pricing
+Date: Thu, 17 Sep 2026 08:20:00 -0500
+
+Please confirm these prices and quote:
+
+Part | Qty | Unit Price | Ext
+S6-96BC | 2 | $183.41 | $366.82
+P8-96SP | 4 | $84.63 | $338.52
+
+Total $705.34
+
+Need these in hand by October 1st.

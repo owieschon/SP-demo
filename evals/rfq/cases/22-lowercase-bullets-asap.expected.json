@@ -1,0 +1,18 @@
+{
+  "sender": "morgan.navarro@truckworksheavyduty.example",
+  "customer_no": "10045",
+  "lines": [
+    {
+      "item_no": "L660-1018SC",
+      "quantity": 2
+    },
+    {
+      "item_no": "P6-60CX",
+      "quantity": 3
+    }
+  ],
+  "needed_by": null,
+  "needs_review": [
+    "needed_by"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "sender": "micah.crowley@driftlessmachinefab.example",
+  "customer_no": "10012",
+  "lines": [
+    {
+      "item_no": "S6-96BC",
+      "quantity": 4
+    },
+    {
+      "item_no": "CL6SZ",
+      "quantity": 8
+    },
+    {
+      "item_no": "P4-18CP",
+      "quantity": 6
+    }
+  ],
+  "needed_by": "2026-10-02",
+  "needs_review": []
+}

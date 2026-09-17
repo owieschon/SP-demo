@@ -1,0 +1,11 @@
+From: Lee Ibarra <lee.ibarra@heartlandagfleet.example>
+To: Quotes <quotes@northline.example>
+Subject: quote request
+Date: Wed, 16 Sep 2026 11:20:00 -0400
+
+Good morning,
+
+Please quote 3 S6-96BX and 2 FL6-36SS.
+
+Lee Ibarra
+Heartland Ag & Fleet

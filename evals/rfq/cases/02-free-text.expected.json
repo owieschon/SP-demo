@@ -1,0 +1,20 @@
+{
+  "sender": "taylor.ashworth@kennebeclubetire.example",
+  "customer_no": "10017",
+  "lines": [
+    {
+      "item_no": "L490-168B",
+      "quantity": 2
+    },
+    {
+      "item_no": "S5-96KC",
+      "quantity": 6
+    },
+    {
+      "item_no": "CL5UZ",
+      "quantity": 10
+    }
+  ],
+  "needed_by": "2026-09-30",
+  "needs_review": []
+}

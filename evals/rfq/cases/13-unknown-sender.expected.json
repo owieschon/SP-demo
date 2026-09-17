@@ -1,0 +1,14 @@
+{
+  "sender": "buyer@roadrunnerfleet.example",
+  "customer_no": null,
+  "lines": [
+    {
+      "item_no": "S7-36SS",
+      "quantity": 2
+    }
+  ],
+  "needed_by": null,
+  "needs_review": [
+    "customer"
+  ]
+}

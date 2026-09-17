@@ -1,0 +1,10 @@
+From: Lee Ibarra <lee.ibarra@heartlandagfleet.example>
+To: Quotes <quotes@northline.example>
+Subject: thanks
+Date: Tue, 15 Sep 2026 08:00:00 -0400
+
+Thanks for the delivery last week, everything arrived fine.
+
+Our accountant will mail the check this week. Also, please update our billing address to 400 Harbor Rd, Suite 12.
+
+Lee

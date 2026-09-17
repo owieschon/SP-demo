@@ -1,0 +1,8 @@
+From: Micah Petrakis <micah.petrakis@hilltoptruckrepair.example>
+To: Quotes <quotes@northline.example>
+Subject: Parts
+Date: Wed, 16 Sep 2026 13:30:00 -0400
+
+Need S8-36BS x2, HS8-36C x2, CL6VSS x4 and 1 M-4514 by 10/9.
+
+Micah
