@@ -1,4 +1,9 @@
 <script lang="ts">
+	// One commitment as a row inside its status column on the board.
+	// The whole row opens the commitment (the title link is stretched over
+	// it); the row action on the right appears on hover or focus, and is
+	// always shown on touch screens.
+	import ArrowRight from '@lucide/svelte/icons/arrow-right';
 	import { money, percent, windowRange } from '$lib/format';
 	import type { BoardCard } from '$lib/types';
 	import ProgressBar from './ProgressBar.svelte';
@@ -8,16 +13,16 @@
 	const open = $derived(!['kept', 'pushed', 'broken'].includes(card.status));
 </script>
 
-<a class="card" href="/commitments/{card.id}" class:attention={card.needsOutcome}>
+<article class="row" class:attention={card.needsOutcome}>
 	<div class="top">
-		<span class="title">{card.title}</span>
-		<span class="id faint mono">C-{card.id}</span>
+		<a class="title" href="/commitments/{card.id}">{card.title}</a>
+		<span class="id mono faint">C-{card.id}</span>
 	</div>
 	<div class="customer muted">{card.customerName}</div>
 
 	<div class="money">
-		<span class="num"><strong>{money(card.delivered)}</strong> of {money(card.committedValue)}</span>
-		<span class="faint num">{percent(card.deliveredRatio)}</span>
+		<span class="num"><span class="delivered">{money(card.delivered)}</span> <span class="faint">of</span> {money(card.committedValue)}</span>
+		<span class="num faint">{percent(card.deliveredRatio)}</span>
 	</div>
 	<ProgressBar
 		ratio={card.deliveredRatio}
@@ -29,110 +34,194 @@
 	<div class="meta">
 		<span>{windowRange(card.startsOn, card.endsOn, year)}</span>
 		{#if open}
-			<span title="The owner's confidence that the rest will arrive">{card.confidence}% confident</span>
+			<span title="The owner's confidence that the rest will arrive">{card.confidence}% conf.</span>
 		{/if}
 		{#if showOwner}
-			<span>{card.ownerName}</span>
+			<span class="owner">{card.ownerName}</span>
 		{/if}
 	</div>
 
 	{#if card.needsOutcome || !card.buyerName || card.outcomeSource === 'nightly'}
 		<div class="chips">
 			{#if card.needsOutcome}
-				<span class="chip warn">Closed short {card.daysSinceClose}d ago: needs an outcome</span>
+				<span class="chip warn">Closed short {card.daysSinceClose}d ago</span>
 			{/if}
 			{#if !card.buyerName}
-				<span class="chip">No buyer named</span>
+				<span class="chip">No buyer</span>
 			{/if}
 			{#if card.outcomeSource === 'nightly'}
-				<span class="chip">Pushed by the nightly job, with evidence</span>
+				<span class="chip" title="Pushed by the nightly job, with evidence">Nightly</span>
 			{/if}
 		</div>
 	{/if}
-</a>
+
+	<div class="actions">
+		{#if card.needsOutcome}
+			<a class="button action" href="/commitments/{card.id}#question">Answer</a>
+		{:else}
+			<a class="button icon action" href="/commitments/{card.id}" aria-label="Open C-{card.id}" tabindex="-1">
+				<ArrowRight size={13} strokeWidth={1.75} aria-hidden="true" />
+			</a>
+		{/if}
+	</div>
+</article>
 
 <style>
-	.card {
+	.row {
+		position: relative;
 		display: grid;
-		gap: 6px;
-		padding: var(--space-3);
-		border: 1px solid var(--hairline);
-		border-radius: var(--radius-lg);
-		background: var(--surface);
-		color: inherit;
-		transition:
-			border-color var(--speed) var(--ease),
-			box-shadow var(--speed) var(--ease),
-			transform var(--speed) var(--ease);
+		gap: 5px;
+		padding: 9px var(--space-3) 10px;
+		transition: background-color var(--speed) var(--ease);
 	}
 
-	.card:hover {
-		text-decoration: none;
-		border-color: var(--hairline-strong);
-		box-shadow: var(--shadow-pop);
+	.row + :global(.row) {
+		border-top: 1px solid var(--hairline);
 	}
 
-	.card:active {
-		transform: scale(0.995);
+	.row:hover {
+		background: var(--surface-hover);
 	}
 
-	.card.attention {
-		border-color: var(--warning);
+	.row:active {
+		background: var(--surface-press);
+	}
+
+	/* A closed-short row carries a thin amber edge, nothing louder. */
+	.row.attention {
+		box-shadow: inset 2px 0 0 var(--status-pushed);
 	}
 
 	.top {
 		display: flex;
 		justify-content: space-between;
+		align-items: baseline;
 		gap: var(--space-2);
+		min-width: 0;
 	}
 
 	.title {
-		font-weight: 600;
-		line-height: 1.25;
-	}
-
-	.id {
-		font-size: 0.75rem;
+		font-weight: 500;
+		line-height: 1.3;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
+	/* The title link covers the whole row. */
+	.title::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+	}
+
+	.title:focus-visible {
+		outline: none;
+	}
+
+	.title:focus-visible::after {
+		outline: 2px solid var(--focus);
+		outline-offset: -2px;
+		border-radius: var(--radius-sm);
+	}
+
+	.id {
+		flex: none;
+		font-size: 0.85rem;
+		transition: opacity var(--speed) var(--ease);
+	}
+
 	.customer {
-		font-size: 0.88rem;
 		margin-top: -4px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.money {
 		display: flex;
 		justify-content: space-between;
 		align-items: baseline;
-		font-size: 0.9rem;
-		margin-top: var(--space-1);
+		margin-top: 2px;
+	}
+
+	.delivered {
+		font-weight: 600;
 	}
 
 	.meta {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 2px var(--space-3);
-		font-size: 0.8rem;
+		gap: 0 var(--space-2);
+		font-size: 0.88rem;
 		color: var(--text-muted);
+	}
+
+	.meta > * + *::before {
+		content: '·';
+		margin-right: var(--space-2);
+		color: var(--text-faint);
 	}
 
 	.chips {
 		display: flex;
 		flex-wrap: wrap;
-		gap: var(--space-1);
+		gap: 4px;
 	}
 
-	.chip {
-		font-size: 0.75rem;
-		padding: 2px 8px;
-		border-radius: 999px;
-		background: var(--surface-sunken);
-		color: var(--text-muted);
+	/* Row action: hidden until the row is hovered or focused. */
+	.actions {
+		position: absolute;
+		top: 6px;
+		right: var(--space-2);
+		z-index: 1;
+		opacity: 0;
+		transform: translateX(2px);
+		transition:
+			opacity var(--speed) var(--ease),
+			transform var(--speed) var(--ease);
 	}
 
-	.chip.warn {
-		background: var(--warning-soft);
-		color: var(--warning);
+	.action {
+		height: 22px;
+		padding: 0 8px;
+		font-size: 0.88rem;
+		box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+	}
+
+	.action.icon {
+		width: 22px;
+		padding: 0;
+	}
+
+	.row:hover .actions,
+	.row:focus-within .actions {
+		opacity: 1;
+		transform: none;
+	}
+
+	.row:hover .id,
+	.row:focus-within .id {
+		opacity: 0;
+	}
+
+	/* Touch screens have no hover: keep the action visible. */
+	@media (hover: none) {
+		.actions {
+			position: static;
+			opacity: 1;
+			transform: none;
+			justify-self: start;
+		}
+
+		.row:hover .id,
+		.row:focus-within .id {
+			opacity: 1;
+		}
+
+		.action.icon {
+			display: none;
+		}
 	}
 </style>

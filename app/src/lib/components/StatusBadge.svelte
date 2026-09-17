@@ -11,17 +11,19 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
-		font-size: 0.78rem;
+		font-size: 0.92rem;
 		font-weight: 500;
-		color: var(--tone);
+		color: var(--text);
 		white-space: nowrap;
 	}
 
+	/* The color is on a small ring, not the text: calm, still easy to scan. */
 	.badge::before {
 		content: '';
-		width: 7px;
-		height: 7px;
+		width: 8px;
+		height: 8px;
 		border-radius: 50%;
-		background: var(--tone);
+		background: color-mix(in srgb, var(--tone) 30%, transparent);
+		box-shadow: inset 0 0 0 1.5px var(--tone);
 	}
 </style>

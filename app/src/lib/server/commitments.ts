@@ -92,6 +92,7 @@ export interface CommitmentDetail extends BoardCard {
 	buyerEmail: string | null;
 	customerCity: string;
 	customerState: string;
+	customerCountry: string;
 	canAnswer: boolean;
 	canEdit: boolean;
 	items: {
@@ -151,10 +152,11 @@ export async function getCommitment(db: Db, userId: number, id: number): Promise
 				buyer_email: string | null;
 				city: string;
 				state: string;
+				country: string;
 				is_admin: boolean;
 			}
 		>`
-			select p.id, p.title, p.customer_no, cu.name as customer_name, cu.city, cu.state,
+			select p.id, p.title, p.customer_no, cu.name as customer_name, cu.city, cu.state, cu.country,
 			       p.owner_id, u.full_name as owner_name, ct.full_name as buyer_name, ct.email as buyer_email,
 			       p.committed_value, p.delivered, p.delivered_ratio, p.expected_value, p.confidence,
 			       p.starts_on, p.ends_on, p.status, p.needs_outcome, p.days_since_close,
@@ -268,6 +270,7 @@ export async function getCommitment(db: Db, userId: number, id: number): Promise
 			buyerEmail: head.buyer_email,
 			customerCity: head.city,
 			customerState: head.state,
+			customerCountry: head.country,
 			canAnswer: mayChange && head.days_since_close !== null && !head.kept_by_measure,
 			canEdit: mayChange && !head.is_settled,
 			items: items.map((r) => ({

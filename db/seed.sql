@@ -572,10 +572,13 @@ begin
       (2, 'Kootenay Truck & Trailer', 'Cranbrook', 'BC', 'CA'),
       (3, 'Maple Diesel', 'Winnipeg', 'MB', 'CA'),
       (4, 'Ontario Heavy Duty', 'Mississauga', 'ON', 'CA'),
-      (5, 'Transportes del Norte Refacciones', 'Monterrey', 'NL', 'MX'),
-      (6, 'Refacciones Bajio', 'Leon', 'GT', 'MX'),
-      (7, 'Andina Camiones', 'Santiago', 'RM', 'CL'),
-      (8, 'Caribe Fleet Parts', 'Bogota', 'DC', 'CO')
+      -- Outside the US and Canada the state column stays blank: those
+      -- countries' regions are not two-letter postal codes, and the app shows
+      -- 'City, Country' for them.
+      (5, 'Transportes del Norte Refacciones', 'Monterrey', '', 'MX'),
+      (6, 'Refacciones Bajío', 'León', '', 'MX'),
+      (7, 'Andina Camiones', 'Santiago', '', 'CL'),
+      (8, 'Caribe Fleet Parts', 'Bogotá', '', 'CO')
     ) as t(n, name, city, state, country)
     where not v_small or t.n in (1, 5)
     order by t.n
