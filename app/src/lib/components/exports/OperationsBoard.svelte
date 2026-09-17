@@ -2,7 +2,14 @@
 	// The live open lines: four buckets, the lines that need attention, what
 	// changed since the last export, and the recent snapshots.
 	import { count, day, moment, money } from '$lib/format';
-	import { BUCKET_LABEL, type Bucket, type LineChange, type OperationsBoard, type SnapshotStatus } from './types';
+	import {
+		BUCKET_LABEL,
+		EXPORT_KIND_LABEL,
+		type Bucket,
+		type LineChange,
+		type OperationsBoard,
+		type SnapshotStatus
+	} from './types';
 
 	let { board, year }: { board: OperationsBoard; year: number } = $props();
 
@@ -100,6 +107,9 @@
 				{:else}
 					{count(board.riskLineCount)}
 				{/if}
+				<!-- This panel answers "is there stock today". The forecast answers
+				     "when will it ship, and because of which supply order". -->
+				<a class="link" href="/operations/forecast">When will these ship?</a>
 			</span>
 		</header>
 		{#if board.riskLines.length === 0}
@@ -221,6 +231,7 @@
 				<thead>
 					<tr>
 						<th>Snapshot</th>
+						<th>Report</th>
 						<th>Status</th>
 						<th class="num">Rows</th>
 						<th>Flags</th>
@@ -235,6 +246,7 @@
 								<a class="link mono" href="/operations?snapshot={h.id}">#{h.id}</a>
 								<span class="faint file">{h.fileName}</span>
 							</td>
+							<td class="nowrap">{EXPORT_KIND_LABEL[h.kind]}</td>
 							<td class="nowrap">
 								{STATUS_LABEL[h.status]}
 								{#if h.isCurrent}<span class="chip live">live</span>{/if}

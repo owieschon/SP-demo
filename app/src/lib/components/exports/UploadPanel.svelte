@@ -1,13 +1,14 @@
 <script lang="ts">
-	// The morning upload: pick the ERP's open sales lines CSV and send it for
-	// checking. A file that passes is staged (the page then opens it); a wrong
-	// report is refused on the spot; data already loaded is recognized.
-	// Sample files to try it with sit beside the form.
+	// The morning upload: pick one of the ERP's three open-order CSVs and send
+	// it for checking. The reader works out which report it is, so there is one
+	// form, not three. A file that passes is staged (the page then opens it); a
+	// file that is none of the three is refused on the spot; data already
+	// loaded is recognized. Sample files to try it with sit beside the form.
 	import { enhance } from '$app/forms';
 	import Download from '@lucide/svelte/icons/download';
 	import Upload from '@lucide/svelte/icons/upload';
 	import { day } from '$lib/format';
-	import type { SAMPLE_KINDS, UploadOutcome } from './types';
+	import { EXPORT_KIND_NAME, type SAMPLE_KINDS, type UploadOutcome } from './types';
 
 	let {
 		requestId,
@@ -30,7 +31,7 @@
 
 <section class="upload panel" aria-labelledby="upload-title">
 	<header class="panel-head">
-		<h2 id="upload-title">Load this morning's export</h2>
+		<h2 id="upload-title">Load a morning export</h2>
 		<span class="faint">Nothing is live until you apply it.</span>
 	</header>
 
@@ -57,7 +58,8 @@
 						{#if fileName}
 							<span class="mono">{fileName}</span>
 						{:else}
-							Choose the <strong>open sales lines</strong> CSV
+							Choose a <strong>sales lines</strong>, <strong>purchase lines</strong> or
+							<strong>production orders</strong> CSV
 						{/if}
 					</span>
 					<input
@@ -105,7 +107,7 @@
 			<div class="result notice warning" role="status">
 				<p>
 					<strong>Already loaded.</strong>
-					{outcome.fileName} holds the same data as snapshot
+					{outcome.fileName} is the {EXPORT_KIND_NAME[outcome.report]} and holds the same data as snapshot
 					<a class="link" href="/operations?snapshot={outcome.snapshotId}">#{outcome.snapshotId}</a>
 					({outcome.status}), loaded {day(outcome.stagedOn, year)} by {outcome.stagedBy}. Nothing new was written.
 				</p>
