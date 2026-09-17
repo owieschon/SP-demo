@@ -8,11 +8,18 @@
 
 	let {
 		detail,
-		message = null
+		message = null,
+		year
 	}: {
 		detail: RuleDetail;
 		/** The answer to the last "Run now". */
 		message?: { text: string; failed: boolean } | null;
+		/*
+		  The current year, so a due date in the next one says so. day()
+		  without it prints "Mar 3" and drops the year, and a rule that
+		  writes a next step due in January reads as one due last January.
+		*/
+		year: number;
 	} = $props();
 
 	let running = $state(false);
@@ -101,7 +108,7 @@
 								{/if}
 								{f.customerName ?? ''}
 								{#if f.assigneeName}· for {f.assigneeName}{/if}
-								{#if f.dueOn}· due {day(f.dueOn)}{/if}
+								{#if f.dueOn}· due {day(f.dueOn, year)}{/if}
 								· {moment(f.firedAt)}
 							</span>
 						</li>

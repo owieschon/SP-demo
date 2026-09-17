@@ -81,7 +81,7 @@
 						<summary>Every lookup it made</summary>
 						<table>
 							<thead>
-								<tr><th>Lookup</th><th class="num">Rows</th><th class="num">ms</th><th>Asked</th></tr>
+								<tr><th scope="col">Lookup</th><th scope="col" class="num">Rows</th><th scope="col" class="num">ms</th><th scope="col">Asked</th></tr>
 							</thead>
 							<tbody>
 								{#each run.lookups as lookup, i (i)}

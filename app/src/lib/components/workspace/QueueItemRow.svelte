@@ -137,10 +137,10 @@
 					<table class="lines">
 						<thead>
 							<tr>
-								<th>Part</th>
-								<th class="num">Quantity</th>
-								<th class="num">Each</th>
-								<th class="num">Amount</th>
+								<th scope="col">Part</th>
+								<th scope="col" class="num">Quantity</th>
+								<th scope="col" class="num">Each</th>
+								<th scope="col" class="num">Amount</th>
 							</tr>
 						</thead>
 						<tbody>

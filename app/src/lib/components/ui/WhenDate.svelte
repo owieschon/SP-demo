@@ -7,15 +7,15 @@
 	    <WhenDate iso={part.lastSoldOn} fallback="never" />
 
 	  Two rules. A date in a year other than `thisYear` prints its year, and
-	  a date with no `thisYear` given prints its year too: five dates on the
-	  ship-check screen used to render as a bare "Mar 3", so next March and
-	  this March looked the same on the one screen whose job is telling a
-	  customer when their parts arrive.
+	  a date with no `thisYear` given prints its year too, through dayFull:
+	  five dates on the ship-check screen used to render as a bare "Mar 3", so
+	  next March and this March looked the same on the one screen whose job is
+	  telling a customer when their parts arrive.
 
 	  It renders a real <time>, so the machine-readable date is in the DOM
 	  next to the human one.
 	*/
-	import { day } from '$lib/format';
+	import { day, dayFull } from '$lib/format';
 
 	let {
 		iso,
@@ -37,7 +37,7 @@
 </script>
 
 {#if iso}
-	<time datetime={iso} class:late>{day(iso, thisYear)}</time>{#if late}<span class="sr-only">
+	<time datetime={iso} class:late>{thisYear === undefined ? dayFull(iso) : day(iso, thisYear)}</time>{#if late}<span class="sr-only">
 			, late</span>{/if}{#if because}<span class="because">{because}</span>{/if}
 {:else}
 	<span class="muted">{fallback}</span>

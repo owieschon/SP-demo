@@ -34,16 +34,27 @@
 	} = $props();
 
 	let adding = $state(false);
-	let busy = $state(false);
+	/*
+	  Which step is being completed, or null. This used to be one boolean
+	  shared by "Add step" and every "Done" button, so submitting one step
+	  disabled all of them at once with nothing to say which was saving.
+	  Holding the id means only that row shows it.
+	*/
+	let busy = $state<number | null>(null);
+	let saving = $state(false);
 
 	const open = $derived(steps.filter((s) => !s.done));
 	const done = $derived(steps.filter((s) => s.done));
 
-	const submitting: SubmitFunction = () => {
-		busy = true;
+	const submitting: SubmitFunction = ({ formData }) => {
+		// The complete form carries a stepId; the add form does not.
+		const stepId = Number(formData.get('stepId'));
+		if (Number.isInteger(stepId) && stepId > 0) busy = stepId;
+		else saving = true;
 		return async ({ update, result }) => {
 			await update();
-			busy = false;
+			busy = null;
+			saving = false;
 			if (result.type === 'success') adding = false;
 		};
 	};
@@ -86,7 +97,9 @@
 			</label>
 			<div class="row-end">
 				<button class="button quiet" type="button" onclick={() => (adding = false)}>Cancel</button>
-				<button class="button primary" disabled={busy}>Add step</button>
+				<button class="button primary" disabled={saving} aria-busy={saving}>
+					{saving ? 'Adding' : 'Add step'}
+				</button>
 			</div>
 		</form>
 	{/if}
@@ -113,7 +126,12 @@
 							<input type="hidden" name="stepId" value={step.id} />
 							<input type="hidden" name="expectedUpdatedAt" value={step.updatedAt} />
 							<input type="hidden" name="requestId" value="{completeRequestId}-{step.id}" />
-							<button class="button small" disabled={busy}>
+							<button
+								class="button small"
+								disabled={busy !== null}
+								aria-busy={busy === step.id}
+								aria-label="Mark done: {step.title}"
+							>
 								<Check size={12} strokeWidth={2} aria-hidden="true" />
 								Done
 							</button>

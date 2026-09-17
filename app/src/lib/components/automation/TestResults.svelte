@@ -46,11 +46,11 @@
 			<table>
 				<thead>
 					<tr>
-						<th>Match</th>
+						<th scope="col">Match</th>
 						{#each columns as f (f.key)}
-							<th class="num">{f.label}</th>
+							<th scope="col" class="num">{f.label}</th>
 						{/each}
-						<th>It would write</th>
+						<th scope="col">It would write</th>
 					</tr>
 				</thead>
 				<tbody>

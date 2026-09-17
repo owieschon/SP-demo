@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { count, day, money, moneyExact, percent, percentFloor, place, windowRange } from './format';
+import {
+	count,
+	day,
+	dayFull,
+	money,
+	moneyExact,
+	percent,
+	percentFloor,
+	place,
+	windowRange
+} from './format';
 
 /*
   These four are what the Money, Qty and WhenDate components render, so the
@@ -55,11 +65,16 @@ describe('day', () => {
 		expect(day('2025-03-03', 2026)).toBe('Mar 3, 2025');
 	});
 
-	it('says the year when no year was given', () => {
-		// The bug this fixes: five dates on the ship-check screen printed as a
-		// bare "Mar 3", so next March looked exactly like this March.
-		expect(day('2027-03-03')).toBe('Mar 3, 2027');
-		expect(day('2026-03-03')).toBe('Mar 3, 2026');
+	it('drops the year when it was not told which year is current', () => {
+		// This is the trap behind the ship-check bug: five dates there printed
+		// as a bare "Mar 3", so next March looked exactly like this March. The
+		// call sites now pass the year; a date standing on its own uses dayFull.
+		expect(day('2027-03-03')).toBe('Mar 3');
+	});
+
+	it('always says the year for a date standing on its own', () => {
+		expect(dayFull('2027-03-03')).toBe('Mar 3, 2027');
+		expect(dayFull('2026-09-17')).toBe('Sep 17, 2026');
 	});
 
 	it('carries the same rule through a window', () => {

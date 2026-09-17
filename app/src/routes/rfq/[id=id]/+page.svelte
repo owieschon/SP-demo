@@ -28,7 +28,7 @@
 </script>
 
 <svelte:head>
-	<title>R-{d.id} · RFQ intake · Northline</title>
+	<title>R-{d.id} · Quote requests · Northline</title>
 </svelte:head>
 
 <main class="page">
@@ -52,9 +52,11 @@
 			</div>
 			{#if d.usage}
 				<div>
-					<dt>Tokens</dt>
-					<dd class="num">
-						{d.usage.input_tokens} in · {d.usage.output_tokens} out · {d.usage.cache_read_input_tokens} cached
+					<dt>Read by</dt>
+					<dd
+						title="{d.usage.input_tokens} tokens in, {d.usage.output_tokens} out, {d.usage.cache_read_input_tokens} from cache"
+					>
+						AI reading
 					</dd>
 				</div>
 			{/if}
@@ -287,7 +289,7 @@
 		<pre class="mono">{d.sourceText}</pre>
 	</details>
 
-	<p><a class="link" href="/rfq">Back to RFQ intake</a></p>
+	<p><a class="link" href="/rfq">Back to quote requests</a></p>
 </main>
 
 <style>

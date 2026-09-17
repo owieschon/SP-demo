@@ -904,6 +904,9 @@ describe('the accounts list', () => {
 		expect(orders.invoices.map((i) => i.invoiceNo)).toEqual(['TI-2', 'TI-1', 'TI-3']);
 		expect(orders.invoices[0].topParts).toEqual(['ZC-100']);
 		expect(orders.openLines).toEqual([]);
+		// No open lines means no total, not a total summed from nothing.
+		expect(orders.openLineCount).toBe(0);
+		expect(orders.openLineValue).toBe(0);
 
 		// A seeded account with quotes on file, to prove that query runs too.
 		const [withQuote] = await db.asSystem(
@@ -913,6 +916,42 @@ describe('the accounts list', () => {
 			const seeded = await getDeals(db, ADMIN, withQuote.customer_no);
 			expect(seeded.quotes.length).toBeGreaterThan(0);
 		}
+	});
+
+	it('counts every open line, not just the fifty it returns', async () => {
+		/*
+		  The page header used to sum the rows it had been handed, which SQL
+		  had capped at fifty, and present that as the account's open order
+		  value. This proves the figures come from the whole set: the count
+		  and the value are compared with a direct query over every line in
+		  the billing family, while the rows themselves stay capped.
+		*/
+		const [busiest] = await db.asSystem(
+			(tx) => tx.sql<{ customer_no: string }>`
+				select l.customer_no
+				from nl.open_line_allocation l
+				group by l.customer_no
+				order by count(*) desc
+				limit 1`
+		);
+		if (!busiest) return; // No applied export in this world.
+
+		const orders = await getOrders(db, DANA, busiest.customer_no);
+		const [direct] = await db.asSystem(
+			(tx) => tx.sql<{ lines: number; value: number }>`
+				select count(*)::int as lines, coalesce(sum(l.open_value), 0) as value
+				from nl.open_line_allocation l
+				where l.customer_no in (select customer_no from nl.customer_family(${busiest.customer_no}))`
+		);
+
+		expect(orders.openLineCount).toBe(direct.lines);
+		expect(orders.openLineValue).toBeCloseTo(direct.value, 2);
+		// The rows are capped even though the totals are not.
+		expect(orders.openLines.length).toBe(Math.min(direct.lines, 50));
+		// And the sum of the rows only equals the total while nothing was cut.
+		const shown = orders.openLines.reduce((sum, l) => sum + l.openValue, 0);
+		if (direct.lines <= 50) expect(shown).toBeCloseTo(orders.openLineValue, 2);
+		else expect(shown).toBeLessThan(orders.openLineValue);
 	});
 
 	it('lists current people before the ones who left', async () => {

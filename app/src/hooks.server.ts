@@ -21,6 +21,7 @@ const PUBLIC_PATHS = new Set([
 	'/signin',
 	'/gate',
 	'/robots.txt',
+	'/llms.txt',
 	'/api/cron/automations',
 	'/api/mcp',
 	'/api/mail/poll',

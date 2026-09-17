@@ -13,7 +13,15 @@ import {
 } from './commitments.ts';
 import { toAppError } from './errors.ts';
 
-export type FormFailure = { message: string; conflict?: boolean };
+/*
+  What a refused form sends back.
+
+  `code` is the database's own NL4xx SQLSTATE, which toAppError already
+  worked out and every caller then threw away, so the page and any agent
+  driving it saw an HTTP status and an English sentence and had to read the
+  sentence to tell a conflict from a permission problem.
+*/
+export type FormFailure = { message: string; code?: string; conflict?: boolean };
 
 async function run(
 	work: () => Promise<WriteResult>,
@@ -25,7 +33,11 @@ async function run(
 	} catch (error) {
 		const refusal = toAppError(error);
 		if (!refusal) throw error;
-		return fail(refusal.status, { message: refusal.message, conflict: refusal.status === 409 });
+		return fail(refusal.status, {
+			message: refusal.message,
+			code: refusal.code,
+			conflict: refusal.status === 409
+		});
 	}
 }
 

@@ -243,7 +243,12 @@ export interface InvoiceRow {
 }
 
 export interface Orders {
+	/** Up to fifty lines, oldest ship date first. */
 	openLines: OpenLine[];
+	/** How many open lines there really are, before the fifty-row limit. */
+	openLineCount: number;
+	/** What all of them are worth, not just the ones in `openLines`. */
+	openLineValue: number;
 	invoices: InvoiceRow[];
 }
 

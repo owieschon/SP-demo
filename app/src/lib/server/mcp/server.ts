@@ -163,7 +163,10 @@ function buildServer(deps: McpDeps, token: TokenIdentity, today: () => Promise<s
 				// A propose_* tool writes a proposal and nothing else, so it can
 				// never destroy anything and running it twice only asks twice.
 				destructiveHint: false,
-				idempotentHint: tool.readOnly
+				idempotentHint: tool.readOnly,
+				// Every tool reads or writes this database and nothing else:
+				// no web, no third-party call, no open set of resources.
+				openWorldHint: false
 			}
 		}))
 	}));
@@ -252,7 +255,12 @@ function buildServer(deps: McpDeps, token: TokenIdentity, today: () => Promise<s
 			});
 			if (refusal) {
 				return {
-					content: [{ type: 'text' as const, text: JSON.stringify({ error: refusal.message }) }],
+					content: [
+						{
+							type: 'text' as const,
+							text: JSON.stringify({ error: refusal.message, code: refusal.code })
+						}
+					],
 					isError: true
 				};
 			}

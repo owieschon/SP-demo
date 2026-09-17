@@ -15,7 +15,7 @@
 	  greyscale or to a screen reader, and `href` points at the screen that
 	  proves the number.
 	*/
-	import { day } from '$lib/format';
+	import { day, dayFull } from '$lib/format';
 
 	let {
 		label,
@@ -52,7 +52,7 @@
 	} = $props();
 
 	const note = $derived(
-		[compare, source ? `from ${source}` : null, asOf ? `as of ${day(asOf, thisYear)}` : null]
+		[compare, source ? `from ${source}` : null, asOf ? `as of ${thisYear === undefined ? dayFull(asOf) : day(asOf, thisYear)}` : null]
 			.filter(Boolean)
 			.join(' · ')
 	);
