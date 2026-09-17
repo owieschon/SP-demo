@@ -59,3 +59,33 @@ export function moment(value: Date | string): string {
 		minute: '2-digit'
 	});
 }
+
+// Country names in English, from the browser's or server's own data.
+const countryNames = new Intl.DisplayNames(['en'], { type: 'region' });
+
+/**
+ * Where a customer is.
+ *   US:    'Tulsa, OK'
+ *   CA:    'Regina, SK, Canada'
+ *   other: 'Monterrey, Mexico'
+ * Country is a two-letter code; a blank country is read as US.
+ */
+export function place(city: string | null, state: string | null, country: string | null): string {
+	const town = (city ?? '').trim();
+	const region = (state ?? '').trim();
+	const code = (country ?? '').trim().toUpperCase() || 'US';
+	const join = (...parts: string[]) => parts.filter(Boolean).join(', ');
+
+	if (code === 'US' || code === 'USA') return join(town, region);
+	if (code === 'CA' || code === 'CAN') return join(town, region, 'Canada');
+	return join(town, countryName(code));
+}
+
+function countryName(code: string): string {
+	// DisplayNames throws on anything that is not a region code; show it as is.
+	try {
+		return countryNames.of(code) ?? code;
+	} catch {
+		return code;
+	}
+}

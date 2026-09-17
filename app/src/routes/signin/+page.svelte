@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import ArrowRight from '@lucide/svelte/icons/arrow-right';
+	import Mark from '$lib/components/Mark.svelte';
 	import type { Role } from '$lib/types';
 	import type { PageProps } from './$types';
 
@@ -13,6 +15,17 @@
 		account_manager: 'Owns customers and their commitments.',
 		operations: 'Runs the order desk and the daily open-orders export.'
 	};
+
+	// "Pat Doe" -> "PD"
+	function initials(name: string) {
+		return name
+			.split(/\s+/)
+			.filter(Boolean)
+			.map((part) => part[0])
+			.slice(0, 2)
+			.join('')
+			.toUpperCase();
+	}
 </script>
 
 <svelte:head>
@@ -21,11 +34,11 @@
 
 <main class="signin">
 	<header>
-		<p class="mark" aria-hidden="true">N</p>
-		<h1>Northline</h1>
+		<Mark size={32} />
+		<h1>Sign in to Northline</h1>
 		<p class="muted">
-			A portfolio app on invented data. Pick someone to be; there are no passwords. Every
-			database call runs as the person you pick, and the database decides what they may change.
+			A portfolio app on invented data. Pick someone to be; there are no passwords. Every database
+			call runs as the person you pick, and the database decides what they may change.
 		</p>
 	</header>
 
@@ -36,7 +49,7 @@
 		<p class="notice error" role="alert">{form.message}</p>
 	{/if}
 
-	<ul class="people">
+	<ul class="people panel">
 		{#each data.users as user (user.id)}
 			<li>
 				<form
@@ -52,12 +65,23 @@
 					<input type="hidden" name="userId" value={user.id} />
 					<input type="hidden" name="next" value={data.next} />
 					<button class="person" disabled={!user.active || pending !== null} aria-busy={pending === user.id}>
-						<span class="name">{user.fullName}</span>
-						<span class="title muted">{user.title}</span>
-						<span class="role faint">
-							{user.active ? ROLE_NOTE[user.role] : 'Inactive: shows that the database refuses writes from former staff.'}
+						<span class="avatar" aria-hidden="true">{initials(user.fullName)}</span>
+						<span class="text">
+							<span class="line">
+								<span class="name">{user.fullName}</span>
+								<span class="title muted">{user.title}</span>
+							</span>
+							<span class="role faint">
+								{user.active ? ROLE_NOTE[user.role] : 'Inactive: shows that the database refuses writes from former staff.'}
+							</span>
 						</span>
-						<span class="go" aria-hidden="true">{pending === user.id ? '…' : '→'}</span>
+						<span class="go" aria-hidden="true">
+							{#if pending === user.id}
+								<span class="spinner"></span>
+							{:else}
+								<ArrowRight size={14} strokeWidth={1.75} />
+							{/if}
+						</span>
 					</button>
 				</form>
 			</li>
@@ -67,93 +91,143 @@
 
 <style>
 	.signin {
-		max-width: 560px;
+		max-width: 520px;
 		margin: 0 auto;
-		padding: var(--space-6) var(--space-4);
+		padding: 12vh var(--space-4) var(--space-6);
 		display: grid;
-		gap: var(--space-5);
+		gap: var(--space-4);
 	}
 
 	header {
 		display: grid;
 		gap: var(--space-2);
+		justify-items: start;
 	}
 
-	.mark {
-		width: 36px;
-		height: 36px;
-		border-radius: 8px;
-		display: grid;
-		place-items: center;
-		background: var(--accent);
-		color: var(--accent-text);
-		font-weight: 700;
+	header h1 {
+		margin-top: var(--space-2);
+		font-size: 1.25rem;
 	}
 
 	.people {
 		list-style: none;
 		margin: 0;
 		padding: 0;
+		overflow: hidden;
+	}
+
+	.people li + li {
 		border-top: 1px solid var(--hairline);
+	}
+
+	.people form {
+		margin: 0;
 	}
 
 	.person {
 		width: 100%;
-		display: grid;
-		grid-template-columns: 1fr auto;
-		grid-template-areas:
-			'name go'
-			'title go'
-			'role go';
-		gap: 2px var(--space-3);
-		padding: var(--space-3) var(--space-2);
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		padding: 10px var(--space-3);
 		border: 0;
-		border-bottom: 1px solid var(--hairline);
 		background: transparent;
 		color: inherit;
 		font: inherit;
 		text-align: left;
 		cursor: pointer;
-		transition: background var(--speed) var(--ease);
+		-webkit-tap-highlight-color: transparent;
+		transition:
+			background-color var(--speed) var(--ease),
+			transform var(--speed) var(--ease);
 	}
 
 	.person:hover:not(:disabled) {
-		background: var(--surface-sunken);
+		background: var(--surface-hover);
 	}
 
 	.person:active:not(:disabled) {
-		background: var(--hairline);
+		transform: scale(0.97);
+	}
+
+	.person:focus-visible {
+		outline-offset: -2px;
 	}
 
 	.person:disabled {
 		cursor: not-allowed;
-		opacity: 0.6;
+		opacity: 0.55;
+	}
+
+	.avatar {
+		flex: none;
+		width: 28px;
+		height: 28px;
+		border-radius: 50%;
+		display: grid;
+		place-items: center;
+		font-size: 0.8rem;
+		font-weight: 600;
+		background: var(--surface-press);
+		box-shadow: inset 0 0 0 1px var(--hairline-strong);
+	}
+
+	.text {
+		flex: 1;
+		min-width: 0;
+		display: grid;
+		gap: 1px;
+	}
+
+	.line {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-2);
+		flex-wrap: wrap;
 	}
 
 	.name {
-		grid-area: name;
-		font-weight: 600;
-	}
-
-	.title {
-		grid-area: title;
-		font-size: 0.9rem;
+		font-weight: 500;
 	}
 
 	.role {
-		grid-area: role;
-		font-size: 0.85rem;
+		font-size: 0.92rem;
 	}
 
 	.go {
-		grid-area: go;
-		align-self: center;
+		flex: none;
+		display: grid;
+		place-items: center;
+		width: 20px;
 		color: var(--text-faint);
-		transition: transform var(--speed) var(--ease);
+		transition:
+			transform var(--speed) var(--ease),
+			color var(--speed) var(--ease);
 	}
 
 	.person:hover:not(:disabled) .go {
-		transform: translateX(3px);
-		color: var(--accent);
+		transform: translateX(2px);
+		color: var(--text);
+	}
+
+	.spinner {
+		width: 12px;
+		height: 12px;
+		border-radius: 50%;
+		border: 1.5px solid var(--hairline-strong);
+		border-top-color: var(--text);
+		animation: spin 700ms linear infinite;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.person:active:not(:disabled) {
+			transform: none;
+		}
 	}
 </style>

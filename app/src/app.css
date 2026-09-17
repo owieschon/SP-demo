@@ -1,79 +1,103 @@
 /*
   Design tokens and base styles. Plain CSS, no component library.
-  Calm and clean: hairlines instead of heavy cards, clear focus and press
-  states, light and dark themes from the same tokens.
+
+  Dense, calm and precise: a 13px base, warm stone neutrals, hairlines inside
+  one quiet container per section, and color only where it carries meaning
+  (status). The brand color appears on the logo mark and nowhere else.
+
+  Themes: every color token is written once with light-dark(light, dark).
+  Which side wins is decided by `color-scheme` on <html>:
+    data-theme="light"  -> light only
+    data-theme="dark"   -> dark only
+    anything else       -> follow the operating system
+  The server writes data-theme from the theme cookie before the page is sent
+  (hooks.server.ts), so there is no flash of the wrong theme.
 */
 
 :root {
 	color-scheme: light dark;
 
-	--font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-	--font-mono: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace;
+	--font-sans: 'Geist Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	--font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
-	--bg: #fbfbfa;
-	--surface: #ffffff;
-	--surface-sunken: #f3f3f1;
-	--text: #1c1d1f;
-	--text-muted: #62656b;
-	--text-faint: #8d9096;
-	--hairline: #e4e4e0;
-	--hairline-strong: #cfcfca;
-	--accent: #1f5f8b;
-	--accent-soft: #e5eef5;
-	--accent-text: #ffffff;
-	--focus: #2b7bd6;
-	--danger: #b3261e;
-	--danger-soft: #fbeae8;
-	--warning: #8a5a00;
-	--warning-soft: #fdf2dc;
+	/* Warm stone neutrals. */
+	--bg: light-dark(#fafaf9, #111110);
+	--surface: light-dark(#ffffff, #181817);
+	--surface-hover: light-dark(#f5f5f4, #1f1f1d);
+	--surface-sunken: light-dark(#f2f1ef, #0c0c0b);
+	--surface-press: light-dark(#ecebe8, #262624);
+	--text: light-dark(#1c1917, #e9e7e4);
+	--text-muted: light-dark(#6b6661, #a29d97);
+	--text-faint: light-dark(#9a948e, #6f6a65);
+	--hairline: light-dark(#ebe9e6, #262523);
+	--hairline-strong: light-dark(#dcd9d5, #34322f);
+	--focus: light-dark(#3a6fb0, #7fa8dc);
+	/* light-dark() only takes colors, so the shadow picks its color with it. */
+	--overlay-shadow:
+		0 1px 2px light-dark(rgb(28 25 23 / 0.05), rgb(0 0 0 / 0.3)),
+		0 12px 32px light-dark(rgb(28 25 23 / 0.1), rgb(0 0 0 / 0.45));
 
-	/* One color per commitment status. */
-	--status-promised: #6b7280;
-	--status-quoted: #5b5bd6;
-	--status-delivering: #0f7b8a;
-	--status-kept: #2f7d32;
-	--status-pushed: #a86200;
-	--status-broken: #b3261e;
+	/* The brand: only on the logo mark. A deep ink teal, never red. */
+	--brand: #0d4a47;
+	--brand-ink: #e6f2f0;
 
+	/* Buttons that commit something use the text color, not a brand color. */
+	--primary: var(--text);
+	--primary-text: var(--bg);
+
+	/* Messages */
+	--danger: light-dark(#a3362c, #e58a80);
+	--danger-soft: light-dark(#fbefed, #2a1714);
+	--warning: light-dark(#8a5a12, #d9a75a);
+	--warning-soft: light-dark(#fbf4e6, #261e10);
+
+	/* One muted color per commitment status. */
+	--status-promised: light-dark(#8a847e, #8f8a84);
+	--status-quoted: light-dark(#5a5fb8, #9296e0);
+	--status-delivering: light-dark(#2d7c80, #5fb3b6);
+	--status-kept: light-dark(#3f7d45, #7dbb82);
+	--status-pushed: light-dark(#9a6a1c, #d4a459);
+	--status-broken: light-dark(#a3453b, #de8a80);
+
+	--radius-sm: 4px;
 	--radius: 6px;
-	--radius-lg: 10px;
+	--radius-lg: 8px;
 	--space-1: 4px;
 	--space-2: 8px;
 	--space-3: 12px;
 	--space-4: 16px;
 	--space-5: 24px;
 	--space-6: 32px;
-	--shadow-pop: 0 6px 24px rgb(0 0 0 / 0.08);
+	--control-h: 28px;
+	--rail-w: 52px;
+	--rail-open-w: 216px;
+	--topbar-h: 44px;
 	--ease: cubic-bezier(0.2, 0, 0, 1);
-	--speed: 140ms;
+	--speed: 120ms;
+	--speed-slow: 220ms;
 }
 
-@media (prefers-color-scheme: dark) {
-	:root {
-		--bg: #121314;
-		--surface: #18191b;
-		--surface-sunken: #0e0f10;
-		--text: #e8e8e6;
-		--text-muted: #a4a6ab;
-		--text-faint: #7b7e84;
-		--hairline: #2a2c2f;
-		--hairline-strong: #3a3d41;
-		--accent: #6aa8d8;
-		--accent-soft: #1b2a36;
-		--accent-text: #0b1620;
-		--focus: #7fb6ff;
-		--danger: #f08a80;
-		--danger-soft: #3a1d1b;
-		--warning: #e6b45c;
-		--warning-soft: #33280f;
-		--status-promised: #9aa0a8;
-		--status-quoted: #9d9df2;
-		--status-delivering: #4cc0cf;
-		--status-kept: #71c275;
-		--status-pushed: #e6a24a;
-		--status-broken: #f08a80;
-		--shadow-pop: 0 6px 24px rgb(0 0 0 / 0.4);
-	}
+:root[data-theme='light'] {
+	color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+	color-scheme: dark;
+}
+
+/*
+  While the theme changes, every color eases instead of snapping.
+  The class is added for a moment by ThemeToggle.svelte.
+*/
+:root.theme-changing,
+:root.theme-changing *,
+:root.theme-changing *::before,
+:root.theme-changing *::after {
+	transition:
+		background-color var(--speed-slow) var(--ease),
+		border-color var(--speed-slow) var(--ease),
+		color var(--speed-slow) var(--ease),
+		fill var(--speed-slow) var(--ease) !important;
 }
 
 *,
@@ -88,29 +112,33 @@ body {
 	background: var(--bg);
 	color: var(--text);
 	font-family: var(--font-sans);
-	font-size: 15px;
+	font-size: 13px;
 	line-height: 1.45;
+	font-feature-settings: 'cv11', 'ss01';
 	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	text-rendering: optimizeLegibility;
 }
 
 h1,
 h2,
 h3 {
-	line-height: 1.2;
+	line-height: 1.25;
 	margin: 0;
 	font-weight: 600;
+	letter-spacing: -0.01em;
 }
 
 h1 {
-	font-size: 1.45rem;
+	font-size: 1.35rem;
 }
 
 h2 {
-	font-size: 1.05rem;
+	font-size: 1rem;
 }
 
 h3 {
-	font-size: 0.95rem;
+	font-size: 0.92rem;
 }
 
 p {
@@ -118,17 +146,27 @@ p {
 }
 
 a {
-	color: var(--accent);
+	color: inherit;
 	text-decoration: none;
 }
 
-a:hover {
+/* Links inside running text are underlined quietly. */
+.link {
+	color: var(--text);
 	text-decoration: underline;
+	text-decoration-color: var(--hairline-strong);
+	text-underline-offset: 2px;
+	transition: text-decoration-color var(--speed) var(--ease);
+}
+
+.link:hover {
+	text-decoration-color: currentColor;
 }
 
 /* Numbers line up in columns. */
 .num,
-table td.num {
+table td.num,
+table th.num {
 	font-variant-numeric: tabular-nums;
 	text-align: right;
 	white-space: nowrap;
@@ -144,73 +182,148 @@ table td.num {
 
 .mono {
 	font-family: var(--font-mono);
-	font-size: 0.9em;
+	font-size: 0.92em;
+	letter-spacing: -0.01em;
+}
+
+/* Small uppercase label above a figure or section. */
+.eyebrow {
+	font-size: 0.75rem;
+	font-weight: 500;
+	color: var(--text-muted);
 }
 
 /* Keyboard focus is always visible. */
 :focus-visible {
 	outline: 2px solid var(--focus);
 	outline-offset: 2px;
-	border-radius: var(--radius);
+	border-radius: var(--radius-sm);
 }
 
-/* Buttons */
+/* ------------------------------------------------------------------ */
+/* Buttons                                                              */
+/* ------------------------------------------------------------------ */
+
 .button {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	gap: var(--space-2);
-	min-height: 36px;
-	padding: 0 var(--space-4);
+	gap: 6px;
+	height: var(--control-h);
+	padding: 0 10px;
 	border: 1px solid var(--hairline-strong);
 	border-radius: var(--radius);
 	background: var(--surface);
 	color: var(--text);
 	font: inherit;
 	font-weight: 500;
+	white-space: nowrap;
 	cursor: pointer;
-	text-decoration: none;
+	user-select: none;
+	-webkit-tap-highlight-color: transparent;
 	transition:
-		background var(--speed) var(--ease),
-		transform var(--speed) var(--ease),
-		border-color var(--speed) var(--ease);
+		background-color var(--speed) var(--ease),
+		border-color var(--speed) var(--ease),
+		color var(--speed) var(--ease),
+		transform var(--speed) var(--ease);
 }
 
 .button:hover {
-	background: var(--surface-sunken);
-	text-decoration: none;
+	background: var(--surface-hover);
 }
 
-.button:active {
-	transform: scale(0.98);
+/* The press state every control shares. */
+.button:active:not(:disabled),
+.pressable:active {
+	transform: scale(0.97);
 }
 
 .button:disabled {
-	opacity: 0.55;
+	opacity: 0.5;
 	cursor: not-allowed;
-	transform: none;
 }
 
 .button.primary {
-	background: var(--accent);
-	border-color: var(--accent);
-	color: var(--accent-text);
+	background: var(--primary);
+	border-color: var(--primary);
+	color: var(--primary-text);
 }
 
-.button.primary:hover {
-	filter: brightness(1.08);
+.button.primary:hover:not(:disabled) {
+	opacity: 0.88;
 }
 
 .button.quiet {
 	border-color: transparent;
 	background: transparent;
+	color: var(--text-muted);
 }
 
 .button.quiet:hover {
-	background: var(--surface-sunken);
+	background: var(--surface-hover);
+	color: var(--text);
 }
 
-/* Form fields */
+.button.icon {
+	width: var(--control-h);
+	padding: 0;
+}
+
+/* A row of joined options (Mine / Everyone, theme). */
+.segmented {
+	display: inline-flex;
+	padding: 2px;
+	gap: 2px;
+	border-radius: var(--radius);
+	background: var(--surface-sunken);
+	box-shadow: inset 0 0 0 1px var(--hairline);
+}
+
+.segmented > * {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 5px;
+	height: 22px;
+	min-width: 22px;
+	padding: 0 8px;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--text-muted);
+	font: inherit;
+	font-size: 0.92rem;
+	font-weight: 500;
+	cursor: pointer;
+	-webkit-tap-highlight-color: transparent;
+	transition:
+		background-color var(--speed) var(--ease),
+		color var(--speed) var(--ease),
+		box-shadow var(--speed) var(--ease),
+		transform var(--speed) var(--ease);
+}
+
+.segmented > *:hover {
+	color: var(--text);
+}
+
+.segmented > *:active {
+	transform: scale(0.97);
+}
+
+.segmented > [aria-current='true'],
+.segmented > [aria-pressed='true'] {
+	background: var(--surface);
+	color: var(--text);
+	box-shadow:
+		0 0 0 1px var(--hairline-strong),
+		0 1px 2px rgb(0 0 0 / 0.05);
+}
+
+/* ------------------------------------------------------------------ */
+/* Form fields                                                          */
+/* ------------------------------------------------------------------ */
+
 input,
 select,
 textarea {
@@ -219,7 +332,29 @@ textarea {
 	background: var(--surface);
 	border: 1px solid var(--hairline-strong);
 	border-radius: var(--radius);
-	padding: 7px 10px;
+	padding: 5px 8px;
+	transition:
+		border-color var(--speed) var(--ease),
+		box-shadow var(--speed) var(--ease);
+}
+
+select {
+	height: var(--control-h);
+	padding: 0 6px;
+}
+
+input:hover,
+select:hover,
+textarea:hover {
+	border-color: var(--text-faint);
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+	outline: none;
+	border-color: var(--focus);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 22%, transparent);
 }
 
 textarea {
@@ -227,14 +362,42 @@ textarea {
 	resize: vertical;
 }
 
+::placeholder {
+	color: var(--text-faint);
+}
+
 label {
 	display: grid;
 	gap: var(--space-1);
-	font-size: 0.9rem;
+	font-size: 0.92rem;
 	color: var(--text-muted);
 }
 
-/* Tables with hairlines */
+/* ------------------------------------------------------------------ */
+/* Quiet containers and tables                                          */
+/* ------------------------------------------------------------------ */
+
+/* One container per section; what is inside is split by hairlines. */
+.panel {
+	border: 1px solid var(--hairline);
+	border-radius: var(--radius-lg);
+	background: var(--surface);
+}
+
+.panel-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-2);
+	min-height: 36px;
+	padding: 6px var(--space-3);
+	border-bottom: 1px solid var(--hairline);
+}
+
+.panel-head h2 {
+	font-size: 0.92rem;
+}
+
 table {
 	width: 100%;
 	border-collapse: collapse;
@@ -243,46 +406,102 @@ table {
 th {
 	text-align: left;
 	font-weight: 500;
-	font-size: 0.8rem;
+	font-size: 0.85rem;
 	color: var(--text-muted);
-	text-transform: uppercase;
-	letter-spacing: 0.03em;
-	padding: var(--space-2) var(--space-3);
-	border-bottom: 1px solid var(--hairline-strong);
+	padding: 6px var(--space-3);
+	border-bottom: 1px solid var(--hairline);
+	white-space: nowrap;
 }
 
 td {
-	padding: var(--space-2) var(--space-3);
+	height: 32px;
+	padding: 4px var(--space-3);
 	border-bottom: 1px solid var(--hairline);
-	vertical-align: top;
+	vertical-align: middle;
 }
 
-/* Messages */
+tbody tr:last-child td {
+	border-bottom: 0;
+}
+
+tbody tr {
+	transition: background-color var(--speed) var(--ease);
+}
+
+tbody tr:hover {
+	background: var(--surface-hover);
+}
+
+/* ------------------------------------------------------------------ */
+/* Messages and chips                                                   */
+/* ------------------------------------------------------------------ */
+
 .notice {
-	padding: var(--space-3) var(--space-4);
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	padding: 6px var(--space-3);
 	border-radius: var(--radius);
 	border: 1px solid var(--hairline);
 	background: var(--surface);
+	animation: fade-in var(--speed-slow) var(--ease);
 }
 
 .notice.error {
-	border-color: var(--danger);
+	border-color: color-mix(in srgb, var(--danger) 35%, transparent);
 	background: var(--danger-soft);
 	color: var(--danger);
 }
 
 .notice.warning {
-	border-color: var(--warning);
+	border-color: color-mix(in srgb, var(--warning) 35%, transparent);
 	background: var(--warning-soft);
 	color: var(--warning);
 }
 
-/* Loading placeholder */
+.chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	height: 18px;
+	padding: 0 6px;
+	border-radius: var(--radius-sm);
+	font-size: 0.82rem;
+	font-weight: 500;
+	white-space: nowrap;
+	background: var(--surface-sunken);
+	color: var(--text-muted);
+	box-shadow: inset 0 0 0 1px var(--hairline);
+}
+
+.chip.warn {
+	background: var(--warning-soft);
+	color: var(--warning);
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning) 25%, transparent);
+}
+
+@keyframes fade-in {
+	from {
+		opacity: 0;
+		transform: translateY(2px);
+	}
+}
+
+/* ------------------------------------------------------------------ */
+/* Loading placeholders (never "Loading..." text)                       */
+/* ------------------------------------------------------------------ */
+
 .skeleton {
-	border-radius: var(--radius);
-	background: linear-gradient(90deg, var(--surface-sunken), var(--hairline), var(--surface-sunken));
+	display: block;
+	border-radius: var(--radius-sm);
+	background: linear-gradient(
+		90deg,
+		var(--surface-sunken) 0%,
+		var(--surface-press) 50%,
+		var(--surface-sunken) 100%
+	);
 	background-size: 200% 100%;
-	animation: shimmer 1.2s infinite linear;
+	animation: shimmer 1.4s infinite linear;
 }
 
 @keyframes shimmer {
@@ -315,5 +534,11 @@ td {
 		animation-iteration-count: 1 !important;
 		transition-duration: 0.01ms !important;
 		scroll-behavior: auto !important;
+	}
+
+	.button:active:not(:disabled),
+	.pressable:active,
+	.segmented > *:active {
+		transform: none;
 	}
 }

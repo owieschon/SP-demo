@@ -18,6 +18,9 @@ export default defineConfig({
 			}
 		})
 	],
+	// The icon package ships .svelte files, so the server must compile it
+	// instead of handing it to Node.
+	ssr: { noExternal: ['@lucide/svelte'] },
 	// 5173 and 5174 belong to other projects on the development machine.
 	server: { port: 5180, strictPort: true },
 	preview: { port: 5181, strictPort: true },

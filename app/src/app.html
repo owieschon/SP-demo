@@ -1,8 +1,13 @@
 <!doctype html>
-<html lang="en">
+<!--
+	data-theme is filled in by hooks.server.ts from the theme cookie
+	(light, dark or system) before the page is sent, so the first paint
+	already has the right colors.
+-->
+<html lang="en" data-theme="%theme%">
 	<head>
 		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 		<meta name="text-scale" content="scale" />
 		%sveltekit.head%
 	</head>
