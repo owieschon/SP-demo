@@ -5,6 +5,25 @@
 
 export type SnapshotStatus = 'staged' | 'held' | 'applied' | 'discarded';
 
+/** The three ERP reports the morning import knows (nl.export_snapshots.kind). */
+export type ExportKind = 'open_sales_lines' | 'open_purchase_lines' | 'open_production_orders';
+
+export const EXPORT_KINDS: ExportKind[] = ['open_sales_lines', 'open_purchase_lines', 'open_production_orders'];
+
+/** Short names for the reports, for tables and chips. */
+export const EXPORT_KIND_LABEL: Record<ExportKind, string> = {
+	open_sales_lines: 'Sales lines',
+	open_purchase_lines: 'Purchase lines',
+	open_production_orders: 'Production orders'
+};
+
+/** What each report is, in a sentence, for the upload form and the review panel. */
+export const EXPORT_KIND_NAME: Record<ExportKind, string> = {
+	open_sales_lines: 'open sales lines export',
+	open_purchase_lines: 'open purchase lines export',
+	open_production_orders: 'open production orders export'
+};
+
 export type Bucket = 'past_due' | 'at_risk' | 'on_pace' | 'later';
 
 export const BUCKET_ORDER: Bucket[] = ['past_due', 'at_risk', 'on_pace', 'later'];
@@ -44,8 +63,10 @@ export type UploadOutcome =
 			stagedOn: string;
 			stagedBy: string;
 			status: SnapshotStatus;
+			/** Which report the file turned out to be. */
+			report: ExportKind;
 	  }
-	| { kind: 'staged'; snapshotId: number; status: SnapshotStatus; replayed: boolean };
+	| { kind: 'staged'; snapshotId: number; status: SnapshotStatus; replayed: boolean; report: ExportKind };
 
 export interface RowProblemView {
 	rowNo: number;
@@ -57,6 +78,8 @@ export interface RowProblemView {
 /** A staged (or decided) snapshot, as the review panel shows it. */
 export interface SnapshotReview {
 	id: number;
+	/** Which of the three reports this file is. */
+	kind: ExportKind;
 	fileName: string;
 	status: SnapshotStatus;
 	isCurrent: boolean;
@@ -121,6 +144,7 @@ export interface ChangeLineView {
 
 export interface SnapshotHistoryRow {
 	id: number;
+	kind: ExportKind;
 	fileName: string;
 	status: SnapshotStatus;
 	isCurrent: boolean;
@@ -153,14 +177,32 @@ export interface OperationsBoard {
 	history: SnapshotHistoryRow[];
 }
 
-/** The sample files anyone can download from the operations page. */
-export type SampleKind = 'yesterday' | 'today' | 'wrong-report' | 'partial' | 'stale' | 'messy';
+/**
+ * The sample files anyone can download from the operations page. The world is
+ * seeded with yesterday's three exports already applied, so today's three are
+ * the ones to upload; the rest show what the checks do.
+ */
+export type SampleKind =
+	| 'yesterday'
+	| 'today'
+	| 'wrong-report'
+	| 'partial'
+	| 'stale'
+	| 'messy'
+	| 'purchase-yesterday'
+	| 'purchase-today'
+	| 'production-yesterday'
+	| 'production-today';
 
-export const SAMPLE_KINDS: { kind: SampleKind; label: string; hint: string }[] = [
-	{ kind: 'yesterday', label: "Yesterday's export", hint: 'Apply this first.' },
-	{ kind: 'today', label: "Today's export", hint: 'A day later: some shipped, some new, a few changed.' },
-	{ kind: 'messy', label: 'Messy copy of today', hint: 'Same data after a spreadsheet saved it.' },
-	{ kind: 'partial', label: 'Partial export', hint: 'Cut short: held.' },
-	{ kind: 'stale', label: 'Stale export', hint: 'Every ship date has passed: held.' },
-	{ kind: 'wrong-report', label: 'Wrong report', hint: 'Posted invoices: refused.' }
+export const SAMPLE_KINDS: { kind: SampleKind; label: string; hint: string; report: ExportKind }[] = [
+	{ kind: 'today', label: "Today's sales lines", hint: 'The one to upload: yesterday is already applied.', report: 'open_sales_lines' },
+	{ kind: 'purchase-today', label: "Today's purchase lines", hint: 'What vendors owe us.', report: 'open_purchase_lines' },
+	{ kind: 'production-today', label: "Today's production orders", hint: 'What the shop floor owes us.', report: 'open_production_orders' },
+	{ kind: 'yesterday', label: "Yesterday's sales lines", hint: 'Already applied: recognized as loaded.', report: 'open_sales_lines' },
+	{ kind: 'purchase-yesterday', label: "Yesterday's purchase lines", hint: 'Already applied.', report: 'open_purchase_lines' },
+	{ kind: 'production-yesterday', label: "Yesterday's production orders", hint: 'Already applied.', report: 'open_production_orders' },
+	{ kind: 'messy', label: 'Messy copy of today', hint: 'Same data after a spreadsheet saved it.', report: 'open_sales_lines' },
+	{ kind: 'partial', label: 'Partial export', hint: 'Cut short: held.', report: 'open_sales_lines' },
+	{ kind: 'stale', label: 'Stale export', hint: 'Every ship date has passed: held.', report: 'open_sales_lines' },
+	{ kind: 'wrong-report', label: 'Wrong report', hint: 'Posted invoices: refused.', report: 'open_sales_lines' }
 ];

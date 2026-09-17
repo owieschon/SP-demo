@@ -42,26 +42,80 @@ export interface ReadFile {
 
 export type ReadResult = { ok: true; file: ReadFile } | { ok: false; refusal: Refusal };
 
-/**
- * Read an export. Refuses the file (nothing will be written) when it is
- * empty, has no data rows, or lacks a required column. Otherwise splits the
- * rows into good rows and problems.
- */
-export function readExport(profile: SourceProfile, fileName: string, text: string): ReadResult {
-	const fieldNames = Object.keys(profile.fields);
-	const [header = [], ...records] = parseCsv(text);
-	const headers = header.map((h) => h.trim()).filter(Boolean);
+/** Which column holds each of a profile's fields, and which of them are missing. */
+interface HeaderMatch {
+	/** Field name to column index. The first matching header wins. */
+	columnOf: Map<string, number>;
+	/** Required fields with no column, by field name. */
+	missing: string[];
+}
 
-	// Which column holds each field. The first matching header wins.
+function matchHeaders(profile: SourceProfile, header: string[]): HeaderMatch {
+	const fieldNames = Object.keys(profile.fields);
 	const columnOf = new Map<string, number>();
 	header.forEach((name, index) => {
 		const key = headerKey(name);
 		const field = fieldNames.find((f) => !columnOf.has(f) && profile.fields[f].aliases.includes(key));
 		if (field) columnOf.set(field, index);
 	});
-	const usedColumns = new Set(columnOf.values());
+	return { columnOf, missing: fieldNames.filter((f) => profile.fields[f].required && !columnOf.has(f)) };
+}
 
-	const missing = fieldNames.filter((f) => profile.fields[f].required && !columnOf.has(f));
+/**
+ * Which report an uploaded file is. A profile is a candidate when every
+ * column it needs is there; with more than one candidate (they do not
+ * overlap today, but a future report might), the one that recognizes the
+ * most columns wins. When nothing matches, the closest profile is the one
+ * missing the fewest columns, and its refusal is what the person sees.
+ */
+export function detectReport(
+	profiles: SourceProfile[],
+	fileName: string,
+	text: string
+): { ok: true; profile: SourceProfile; file: ReadFile } | { ok: false; refusal: Refusal } {
+	const [header = [], ...records] = parseCsv(text);
+	const headers = header.map((h) => h.trim()).filter(Boolean);
+	const matches = profiles.map((profile) => ({ profile, ...matchHeaders(profile, header) }));
+
+	const candidates = matches
+		.filter((m) => m.missing.length === 0)
+		.sort((a, b) => b.columnOf.size - a.columnOf.size);
+	const chosen = candidates[0];
+	if (headers.length > 0 && chosen) {
+		const result = readRows(chosen.profile, fileName, chosen.columnOf, headers, header, records);
+		return result.ok ? { ok: true, profile: chosen.profile, file: result.file } : result;
+	}
+
+	// Nothing matched: say what the file is closest to and what it lacks.
+	const closest = [...matches].sort((a, b) => a.missing.length - b.missing.length)[0];
+	const labels = closest.missing.map((f) => closest.profile.fields[f].label);
+	return {
+		ok: false,
+		refusal: {
+			fileName,
+			message:
+				headers.length === 0
+					? 'The file is empty.'
+					: `This is not the ${closest.profile.name}: it has no ${labels.join(', ')} column${labels.length > 1 ? 's' : ''}.`,
+			missing: headers.length === 0 ? headersOf(closest.profile) : labels,
+			headers,
+			// The guess is about the file, so it looks through what every
+			// profile knows people upload by mistake, not only the closest one.
+			looksLike: profiles.map((p) => guessReport(p, headers)).find((name) => name !== null) ?? null
+		}
+	};
+}
+
+/**
+ * Read an export that is known to be of one report. Refuses the file
+ * (nothing will be written) when it is empty, has no data rows, or lacks a
+ * required column. Otherwise splits the rows into good rows and problems.
+ */
+export function readExport(profile: SourceProfile, fileName: string, text: string): ReadResult {
+	const [header = [], ...records] = parseCsv(text);
+	const headers = header.map((h) => h.trim()).filter(Boolean);
+	const { columnOf, missing } = matchHeaders(profile, header);
+
 	if (headers.length === 0 || missing.length > 0) {
 		const labels = missing.map((f) => profile.fields[f].label);
 		return {
@@ -78,6 +132,21 @@ export function readExport(profile: SourceProfile, fileName: string, text: strin
 			}
 		};
 	}
+	return readRows(profile, fileName, columnOf, headers, header, records);
+}
+
+/** The rows of a file whose report is known and whose columns are all there. */
+function readRows(
+	profile: SourceProfile,
+	fileName: string,
+	columnOf: Map<string, number>,
+	headers: string[],
+	header: string[],
+	records: string[][]
+): ReadResult {
+	const fieldNames = Object.keys(profile.fields);
+	const usedColumns = new Set(columnOf.values());
+
 	if (records.length === 0) {
 		return {
 			ok: false,

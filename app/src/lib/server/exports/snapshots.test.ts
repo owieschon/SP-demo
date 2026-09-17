@@ -54,7 +54,12 @@ afterAll(async () => {
 beforeEach(async () => {
 	await setToday(TODAY);
 	await db.asSystem(async (tx) => {
+		// The live tables point at the snapshot they came from, so they go first.
+		// The world is seeded with two days of all three exports (db/seed.d/40_supply.sql);
+		// these tests start from nothing so their numbers are their own.
 		await tx.sql`delete from nl.open_order_lines`;
+		await tx.sql`delete from nl.open_purchase_lines`;
+		await tx.sql`delete from nl.open_production_orders`;
 		await tx.sql`delete from nl.export_snapshots`;
 	});
 });

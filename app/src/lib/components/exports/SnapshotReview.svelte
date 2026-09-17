@@ -12,7 +12,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import { count, moment, money } from '$lib/format';
-	import type { SnapshotReview, SnapshotStatus } from './types';
+	import { EXPORT_KIND_NAME, type SnapshotReview, type SnapshotStatus } from './types';
 
 	let {
 		review,
@@ -80,7 +80,7 @@
 
 	<div class="body facts">
 		<p>
-			<span class="muted">Layout:</span> open sales lines export
+			<span class="muted">Layout:</span> {EXPORT_KIND_NAME[r.kind]}
 			{#if r.ignoredColumns.length > 0}
 				<span class="faint">
 					· ignored {r.ignoredColumns.length === 1 ? 'column' : 'columns'}

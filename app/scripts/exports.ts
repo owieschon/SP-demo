@@ -12,7 +12,18 @@ import type { SampleKind } from '../src/lib/components/exports/types.ts';
 
 const today = process.argv[2] ?? '2026-09-17';
 const outDir = resolve(process.cwd(), '..', 'fixtures', 'exports');
-const kinds: SampleKind[] = ['yesterday', 'today', 'messy', 'partial', 'stale', 'wrong-report'];
+const kinds: SampleKind[] = [
+	'yesterday',
+	'today',
+	'purchase-yesterday',
+	'purchase-today',
+	'production-yesterday',
+	'production-today',
+	'messy',
+	'partial',
+	'stale',
+	'wrong-report'
+];
 
 const db = await createTestDb({ size: 'small', today });
 mkdirSync(outDir, { recursive: true });

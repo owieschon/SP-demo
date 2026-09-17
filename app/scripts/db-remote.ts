@@ -4,6 +4,7 @@
 //   node --env-file=.env scripts/db-remote.ts status     what is applied, what is pending
 //   node --env-file=.env scripts/db-remote.ts migrate    apply pending migrations, in order
 //   node --env-file=.env scripts/db-remote.ts migrate 0011   ... up to and including 0011
+//   node --env-file=.env scripts/db-remote.ts migrate 0017,0019   only those numbers (skipping work in progress)
 //   node --env-file=.env scripts/db-remote.ts seed       load db/seed.sql and db/seed.d (functions only)
 //   node --env-file=.env scripts/db-remote.ts rebuild    reset and build the full world, step by step
 //   node --env-file=.env scripts/db-remote.ts nightly    run the nightly job once, as pg_cron would
@@ -74,11 +75,16 @@ async function status() {
 	}
 }
 
-async function migrate(until: string | undefined) {
+async function migrate(which: string | undefined) {
+	// "0011" means up to and including 0011; "0017,0019" means only those.
+	const only = which && which.includes(',') ? new Set(which.split(',').map((n) => n.trim())) : null;
+	const until = only ? undefined : which;
 	const done = await applied();
 	for (const file of allMigrations()) {
 		const name = historyName(file.name);
-		if (until && file.name.slice(0, 4) > until) break;
+		const number = file.name.slice(0, 4);
+		if (only && !only.has(number)) continue;
+		if (until && number > until) break;
 		if (done.has(name)) continue;
 		const started = Date.now();
 		await sql.begin(async (tx) => {

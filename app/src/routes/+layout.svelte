@@ -5,6 +5,7 @@
 	import '@fontsource-variable/geist';
 	import '@fontsource-variable/geist-mono';
 	import '../app.css';
+	import Boxes from '@lucide/svelte/icons/boxes';
 	import Building2 from '@lucide/svelte/icons/building-2';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Inbox from '@lucide/svelte/icons/inbox';
@@ -39,6 +40,7 @@
 		{ href: '/parts', label: 'Parts', icon: Package },
 		{ href: '/vendors', label: 'Vendors', icon: Truck },
 		{ href: '/operations', label: 'Operations', icon: Warehouse },
+		{ href: '/warehouse', label: 'Warehouse', icon: Boxes },
 		{ href: '/automations', label: 'Automations', icon: Workflow }
 	];
 
@@ -123,6 +125,7 @@
 			];
 		}
 		if (route.startsWith('/operations')) return [{ label: 'Operations', href: null }];
+		if (route.startsWith('/warehouse')) return [{ label: 'Warehouse', href: null }];
 		if (page.error) return [{ label: page.status === 404 ? 'Not found' : 'Error', href: null }];
 		return [];
 	});
