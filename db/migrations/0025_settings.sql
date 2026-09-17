@@ -35,7 +35,9 @@
 --      secret is rotated: the stored secrets become unreadable and have to be
 --      pasted again.
 --
--- Depends on 0001 (users, audit log, request ids, nl.now_ms).
+-- Depends on 0001 (users, audit log, request ids, nl.now_ms), and the health
+-- checks read 0008 (nl.delivery_drift) and 0018 (nl.item_cost_timeline).
+-- 0019's nl.warehouse_drift() is optional: the check looks for it first.
 
 create schema if not exists nl_config;
 revoke all on schema nl_config from public;
