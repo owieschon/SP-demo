@@ -81,15 +81,16 @@
 			<a class="button" href="/settings?checks=exact#health">Run the exact checks</a>
 			<p class="faint note">
 				The delivered figures and stock on hand are exact by design: they recount every commitment and every
-				stock movement, which takes a few seconds on the full world. The line above samples the ledger
-				instead, so the page does not wait.
+				stock movement, which takes several seconds on the full world. The line above samples the ledger
+				instead, so the page does not wait. The database gives up on a run after thirty seconds, and the
+				hosting platform may cut the request off sooner, in which case this says so rather than hanging.
 			</p>
 		{/if}
 	</div>
 
 	<div class="grids">
 		<div class="block">
-			<h3 class="eyebrow">Rows, estimated</h3>
+			<h3 class="eyebrow">Rows, {health.countsMeasured ? 'counted' : 'estimated'}</h3>
 			<table>
 				<tbody>
 					{#each health.counts as row (row.table)}
@@ -101,8 +102,13 @@
 				</tbody>
 			</table>
 			<p class="faint note">
-				From the statistics Postgres keeps for the planner, so no table is read to draw this. They are
-				estimates and can be a little out after a rebuild.
+				{#if health.countsMeasured}
+					Postgres had no statistics for at least one of these yet, which happens on a server that has just
+					come up, so those were counted properly instead of shown as zero.
+				{:else}
+					From the statistics Postgres keeps for the planner, so no table is read to draw this. They are
+					estimates and can be a little out after a rebuild.
+				{/if}
 			</p>
 		</div>
 

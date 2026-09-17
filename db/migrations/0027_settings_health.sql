@@ -36,34 +36,59 @@ drop function nl.diagnostic_drift();
 -- The planner keeps a row estimate per table (pg_class.reltuples) and the
 -- statistics collector keeps a live count (pg_stat_all_tables.n_live_tup).
 -- Neither is reliable on its own here: reltuples is -1 until a table has been
--- analyzed once and is reset by the TRUNCATE in nl.reset(), and n_live_tup is
--- lost if the statistics are reset. Whichever of the two is larger is the one
--- that has seen the world as it is now, so that is what this returns.
+-- analyzed once and is reset by the TRUNCATE in nl.reset(), and n_live_tup
+-- starts empty on a server that has just come up, which is every PGlite
+-- process. Whichever of the two is larger is the one that has seen the world
+-- as it is now.
 --
--- These are estimates, and the page says so. Nothing on this page needs an
--- exact row count; what it needs is "is the world there, and roughly the size
--- it should be".
+-- When both say nothing, this counts that one table instead. Measured: the
+-- first version of this function reported zero rows for every table in a
+-- fresh process, on a world with 450,000 ledger lines in it. A health page
+-- that says the world is empty when it is not is worse than a slow one, and
+-- counting is only the cost of the case where the statistics have not caught
+-- up yet.
+--
+-- Returns {"rows": {...}, "counted": bool}. `counted` is true when at least
+-- one figure had to be counted, so the page can say whether it is showing
+-- estimates or counts.
 create function nl.diagnostic_row_estimates() returns jsonb
-language sql stable security definer
+language plpgsql stable security definer
 set search_path = ''
 as $$
-  select coalesce(jsonb_object_agg(t.name, t.rows), '{}'::jsonb)
-  from (
-    select c.relname as name,
-           greatest(
+declare
+  v_names text[] := array[
+    'users', 'customers', 'contacts', 'items',
+    'commitments', 'invoices', 'invoice_lines', 'audit_log'];
+  v_name     text;
+  v_rows     jsonb := '{}'::jsonb;
+  v_estimate bigint;
+  v_exact    bigint;
+  v_counted  boolean := false;
+begin
+  foreach v_name in array v_names loop
+    select greatest(
              case when c.reltuples < 0 then 0 else c.reltuples end,
-             coalesce(s.n_live_tup, 0)
-           )::bigint as rows
+             coalesce(s.n_live_tup, 0))::bigint
+      into v_estimate
     from pg_class c
     join pg_namespace n on n.oid = c.relnamespace
     left join pg_stat_all_tables s on s.relid = c.oid
-    where n.nspname = 'nl'
-      and c.relkind = 'r'
-      and c.relname in (
-        'users', 'customers', 'contacts', 'items',
-        'commitments', 'invoices', 'invoice_lines', 'audit_log')
-  ) t
-$$;
+    where n.nspname = 'nl' and c.relkind = 'r' and c.relname = v_name;
+
+    if coalesce(v_estimate, 0) = 0 then
+      -- The table name comes from the fixed array above, never from a caller.
+      execute format('select count(*) from nl.%I', v_name) into v_exact;
+      v_estimate := coalesce(v_exact, 0);
+      if v_estimate > 0 then
+        v_counted := true;
+      end if;
+    end if;
+
+    v_rows := v_rows || jsonb_build_object(v_name, v_estimate);
+  end loop;
+
+  return jsonb_build_object('rows', v_rows, 'counted', v_counted);
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- Is the ledger's cost in step with the cost history?

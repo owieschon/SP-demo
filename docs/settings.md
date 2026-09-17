@@ -208,11 +208,20 @@ somebody is waiting for. So migration 0027 split them.
   sample finds it at once. The line on the page says it is a sample;
 - the last nightly run: pg_cron's `cron.job_run_details` where pg_cron exists,
   otherwise the newest audit row the nightly job left;
-- the size of the database;
+- the size of the database, on Supabase. In PGlite `pg_database_size` walks a
+  folder inside the WebAssembly filesystem, which measured about a second on
+  the full world and tells a developer nothing, so locally the line says it is
+  a local folder and no figure is read;
 - **estimated** row counts for the main tables, from `pg_class.reltuples` and
   the statistics collector's live count, whichever has seen the world as it is
   now (`nl.diagnostic_row_estimates`). No table is read. The page says they are
-  estimates, because after a rebuild they can be a little out;
+  estimates, because after a rebuild they can be a little out. When both
+  sources say nothing, which is every freshly started PGlite process and any
+  database rebuilt but not yet analyzed, that one table is counted properly
+  instead: the first version of this reported zero rows for a world with
+  450,000 ledger lines in it, and a health page that says the world is empty
+  when it is not is worse than a slow one. The heading then says "counted"
+  rather than "estimated";
 - which environment variables are set, as set or not set, never as values,
   except for a few that are not secrets (the model name, `ASSISTANT_MOCK`, the
   commit);
@@ -235,6 +244,29 @@ database.
 The page itself waits for three small reads (who owns the instance, what is
 set, the row version per key), in parallel, and nothing else.
 
+### Measured, on the full world
+
+One throwaway full world built locally on PGlite: 450,522 ledger lines,
+164,839 cost revisions, 19,528 stock movements, 2,644 commitments. Each figure
+is the same machine before and after, with the queries run one after another
+because PGlite has a single connection. Supabase is several times quicker and
+runs them in parallel, so treat these as an upper bound and a ratio rather
+than as what the deployment does.
+
+| | Before | After |
+|---|---|---|
+| What the page waits for | 168 ms | 16 ms |
+| Health | 58,246 ms | 91 ms, or 606 ms when the statistics are empty and the counts are taken properly |
+| The exact drift checks | on every page load | 57,697 ms, only when asked for |
+
+The 58 seconds was: stock on hand 44,208 ms, the exact cost check 11,594 ms,
+exact row counts 676 ms, and `pg_database_size` 1,527 ms.
+
+A caveat worth knowing: the statement timeout on
+`nl.diagnostic_drift_exact()` is enforced by Supabase but not by PGlite, which
+is single threaded and cannot interrupt itself while it is busy. Locally the
+exact run takes as long as it takes.
+
 Each line is green, red or a plain figure, and a red one carries the sentence
 that says what to do.
 
@@ -253,7 +285,7 @@ this on the page, and Health shows when the last run was.
 ## The tests that prove each guarantee
 
 `app/src/lib/server/settings/admin.test.ts` (12 tests, no database) and
-`app/src/lib/server/settings/settings.test.ts` (39 tests, PGlite, today pinned
+`app/src/lib/server/settings/settings.test.ts` (40 tests, PGlite, today pinned
 to 2026-09-17).
 
 | Claim | Test |
@@ -276,6 +308,7 @@ to 2026-09-17).
 | A red check says what to do | `the health checks on the page > say what to do when something is red` |
 | Nothing on the page reads a whole table | `the health checks on the page > leave the checks that read whole tables to the button` |
 | Row counts come from the planner statistics | `the health checks on the page > count rows from the planner statistics, not by reading the tables` |
+| An empty statistics table never reads as an empty world | `the health checks on the page > never report an empty world when the statistics are the thing that is empty` |
 | The page's checks stay quick | `the health checks on the page > take a fraction of a second on this world` |
 | The exact checks recount everything and report how long they took | `the exact checks, behind the button > recount everything and say how long it took` |
 | The exact checks catch drift the sample would miss | `the exact checks, behind the button > notice drift that the sample on the page would miss` |
