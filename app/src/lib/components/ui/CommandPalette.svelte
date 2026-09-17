@@ -17,12 +17,17 @@
 
 	  It is a native modal <dialog> (see Drawer), so focus is trapped, Escape
 	  closes it and focus goes back to where it was, all from the platform.
+
+	  Render it exactly once, in the layout. The buttons that open it are
+	  PaletteButton, as many as the shell needs, sharing one piece of state:
+	  two copies of this component meant two dialogs and two key listeners.
 	*/
 	import { tick } from 'svelte';
 	import { goto } from '$app/navigation';
 	import CornerDownLeft from '@lucide/svelte/icons/corner-down-left';
 	import Search from '@lucide/svelte/icons/search';
 	import Drawer from './Drawer.svelte';
+	import { palette } from './palette.svelte';
 	import {
 		KIND_LABEL,
 		STATIC_ENTRIES,
@@ -32,7 +37,6 @@
 	} from './palette';
 	import { moveHighlight } from './dialog';
 
-	let open = $state(false);
 	let query = $state('');
 	let highlight = $state(0);
 	let records = $state<PaletteEntry[]>([]);
@@ -46,24 +50,14 @@
 	const groups = $derived(groupEntries(shown));
 
 	/*
-	  Ctrl+K and Cmd+K. The global search box in the top bar already owns "/",
-	  so this takes the shortcut every other application of this kind uses and
-	  leaves that one alone.
+	  Ctrl+K and Cmd+K, the shortcut every application of this kind uses. The
+	  old global search box owned "/" and is gone: this replaced it.
 	*/
 	function onkeydown(event: KeyboardEvent) {
 		if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
 			event.preventDefault();
-			void show();
+			palette.open = true;
 		}
-	}
-
-	async function show() {
-		open = true;
-		query = '';
-		records = [];
-		highlight = 0;
-		await tick();
-		input?.focus();
 	}
 
 	async function lookUp(text: string) {
@@ -91,7 +85,7 @@
 
 	async function choose(entry: PaletteEntry | undefined) {
 		if (!entry) return;
-		open = false;
+		palette.open = false;
 		await goto(entry.href);
 	}
 
@@ -108,6 +102,19 @@
 		}
 	}
 
+	/*
+	  Opening it starts from a clean box with the keyboard in it. The flag can
+	  be set from the shortcut above or from any PaletteButton in the shell,
+	  so this is the one place that knows what opening means.
+	*/
+	$effect(() => {
+		if (!palette.open) return;
+		query = '';
+		records = [];
+		highlight = 0;
+		void tick().then(() => input?.focus());
+	});
+
 	/** Where an entry sits in the flat list, which is what the arrows move through. */
 	function indexOf(entry: PaletteEntry): number {
 		return shown.indexOf(entry);
@@ -116,17 +123,7 @@
 
 <svelte:window {onkeydown} />
 
-<!--
-	The visible way in, for anyone who does not know the shortcut. A palette
-	only a keyboard can reach is a palette most people never find.
--->
-<button type="button" class="opener" onclick={show}>
-	<Search size={14} strokeWidth={1.75} aria-hidden="true" />
-	<span class="opener-label">Search or jump to</span>
-	<kbd>Ctrl K</kbd>
-</button>
-
-<Drawer bind:open title="Search or jump to" placement="center" bare>
+<Drawer bind:open={palette.open} title="Search or jump to" placement="center" bare>
 	<div class="palette">
 		<div class="box">
 			<Search size={15} strokeWidth={1.75} aria-hidden="true" />
@@ -190,45 +187,6 @@
 </Drawer>
 
 <style>
-	/* ------------------------------------------------------------ opener */
-
-	.opener {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		height: var(--control-h);
-		padding: 0 8px;
-		border: 1px solid var(--hairline-strong);
-		border-radius: var(--radius);
-		background: var(--surface);
-		color: var(--text-muted);
-		font: inherit;
-		cursor: pointer;
-		transition:
-			background-color var(--speed) var(--ease),
-			color var(--speed) var(--ease),
-			transform var(--speed) var(--ease);
-	}
-
-	.opener:hover {
-		background: var(--surface-hover);
-		color: var(--text);
-	}
-
-	.opener:active {
-		transform: scale(0.97);
-	}
-
-	kbd {
-		font-family: inherit;
-		font-size: var(--fs-meta);
-		color: var(--text-muted);
-		padding: 0 4px;
-		border-radius: var(--radius-sm);
-		background: var(--surface-sunken);
-		box-shadow: inset 0 0 0 1px var(--hairline);
-	}
-
 	/* ----------------------------------------------------------- palette */
 
 	.palette {
@@ -320,18 +278,4 @@
 		border-top: 1px solid var(--hairline);
 	}
 
-	/* On a phone the label goes and the icon is the button. Typing on a
-	   phone is not how anyone uses a palette, but finding it should work. */
-	@media (max-width: 720px) {
-		.opener-label,
-		kbd {
-			display: none;
-		}
-
-		.opener {
-			width: var(--control-h);
-			padding: 0;
-			justify-content: center;
-		}
-	}
 </style>

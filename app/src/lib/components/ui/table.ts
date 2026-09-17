@@ -15,6 +15,21 @@ export interface ColumnSort {
 	desc?: string;
 }
 
+/** One column of a DataTable. The cells themselves are the caller's snippet. */
+export interface Column {
+	/** Unique within the table; the key for the header cells. */
+	key: string;
+	header: string;
+	/** Figures go right. Anything a person reads goes left. */
+	align?: 'left' | 'right';
+	/** A CSS width, when one column should take the room. */
+	width?: string;
+	/** Makes the header a link that sorts, through the URL. */
+	sort?: ColumnSort;
+	/** Hide the header text but keep it for a screen reader (action columns). */
+	hideHeader?: boolean;
+}
+
 /**
  * The query string for a sort, keeping every other parameter and going back
  * to page one. A person who re-sorts a list wants the top of the new order,
