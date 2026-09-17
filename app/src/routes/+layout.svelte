@@ -17,6 +17,7 @@
 	import Workflow from '@lucide/svelte/icons/workflow';
 	import { navigating, page } from '$app/state';
 	import Mark from '$lib/components/Mark.svelte';
+	import Sparkles from '@lucide/svelte/icons/sparkles';
 	import SearchBox from '$lib/components/SearchBox.svelte';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import type { LayoutProps } from './$types';
@@ -31,6 +32,7 @@
 		);
 
 	const NAV = [
+		{ href: '/ask', label: 'Ask', icon: Sparkles },
 		{ href: '/commitments', label: 'Commitments', icon: ListChecks },
 		{ href: '/accounts', label: 'Accounts', icon: Building2 },
 		{ href: '/rfq', label: 'RFQ intake', icon: Inbox },
@@ -76,6 +78,13 @@
 			return [
 				{ label: 'RFQ intake', href: '/rfq' },
 				{ label: `R-${page.params.id}`, href: null }
+			];
+		}
+		if (route === '/ask') return [{ label: 'Ask', href: null }];
+		if (route === '/ask/[id=id]') {
+			return [
+				{ label: 'Ask', href: '/ask' },
+				{ label: `Conversation ${page.params.id}`, href: null }
 			];
 		}
 		if (route === '/accounts') return [{ label: 'Accounts', href: null }];
