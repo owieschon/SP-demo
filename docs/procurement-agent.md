@@ -500,6 +500,35 @@ Counts scale with `nl_seed.settings.scale` and never drop below two, so the
 small world used by the tests still has a list. Every draw is keyed
 (`nl_seed.u`, `nl_seed.ri`), so Supabase and PGlite build the same world.
 
+### Steps 1 to 4 stand aside when the supply forecast is here
+
+`db/seed.d/40_supply.sql` runs before this file, and its own comment says what
+it does: it plans the supply in its sample export files **against demand**,
+which reads the reorder policy and nets against stock on hand, and then stores
+each file's fingerprint so that re-uploading it says "already loaded" instead
+of loading it twice.
+
+So anything that fills in a reorder policy, or takes stock off a shelf, after
+40_supply has stamped those fingerprints changes what the same generator would
+now produce, and the stamps stop matching. Measured on a small world: filling
+in the reorder policy alone took the sample production orders from 42 lines to
+68 and failed two of 0016's own tests.
+
+The four steps that shape the world therefore run only when
+`nl.open_production_orders` is not there. On a world with the forecast, its
+own reorder-point-aware planning already leaves the desk plenty to look at,
+and this file keeps its hands off the item master and the stock. Steps 5 to 8
+(the part with no cost, the cost revisions, the commitment, the late purchase
+order) run either way, because none of them touches an input those generators
+read.
+
+That is a workaround, not the right answer. The policy fill belongs **before**
+anything that plans against it, which means a `seed.d` file numbered below 40
+or a few more lines in `20_catalog_depth.sql`. The alternative is for
+40_supply to stamp its fingerprints at the end of `nl_seed.finish_build()`,
+after every extra has run, which would make it immune to this and to the next
+file that shapes the world. Either is a better home for it than a guard here.
+
 Step 8 needs a word. Before 0016 lands, the ERP's own purchase orders are only a
 quantity on the item card with no date on it, so a late purchase order can only
 come from an order this desk raised. One is seeded for that reason. Once 0016 is

@@ -60,27 +60,45 @@ begin
   -- give those a small policy, sized the same way 0015 sizes the busy ones
   -- (sales during the lead time, plus two weeks of cover).
   -- Made-to-order, custom, proprietary and blocked parts are left alone.
+  --
+  -- ONLY WHEN THE SUPPLY FORECAST IS NOT HERE. db/seed.d/40_supply.sql plans
+  -- the supply in its sample export files against demand, which reads the
+  -- reorder policy, and then stores each file's fingerprint so that
+  -- re-uploading it says "already loaded". It runs before this file, so
+  -- filling in a policy afterwards changes what those files would hold and
+  -- the stored fingerprints stop matching. Measured on a small world: the
+  -- sample production orders went from 42 lines to 68, and two of 0016's own
+  -- tests failed.
+  --
+  -- The policy fill genuinely belongs BEFORE anything that plans against it,
+  -- which means a seed.d file numbered below 40 rather than this one. Until
+  -- somebody moves it there, it runs on a world without the forecast (where
+  -- the desk needs it, because nothing else fills these in) and stands aside
+  -- on a world with one (where 40_supply's own reorder-point-aware planning
+  -- has already given the desk plenty to look at).
   -- -------------------------------------------------------------------------
-  update nl.items i
-     set safety_stock = r.safety,
-         reorder_point = r.safety + greatest(1, ceil(r.weekly * r.lead_weeks)::int)
-    from (
-      select
-        it.item_no,
-        u.units_365d / 52.0 as weekly,
-        greatest(1, ceil(u.units_365d / 52.0 * 2)::int) as safety,
-        nl.item_lead_time_days(it.item_no) / 7.0 as lead_weeks
-      from nl.items it
-      join nl.part_usage u on u.item_no = it.item_no
-      where it.reorder_point is null
-        and it.safety_stock is null
-        and not it.made_to_order
-        and not it.proprietary
-        and not it.blocked
-        and it.family not in ('custom')
-        and u.units_365d between 1 and 11
-    ) r
-   where i.item_no = r.item_no;
+  if to_regclass('nl.open_production_orders') is null then
+    update nl.items i
+       set safety_stock = r.safety,
+           reorder_point = r.safety + greatest(1, ceil(r.weekly * r.lead_weeks)::int)
+      from (
+        select
+          it.item_no,
+          u.units_365d / 52.0 as weekly,
+          greatest(1, ceil(u.units_365d / 52.0 * 2)::int) as safety,
+          nl.item_lead_time_days(it.item_no) / 7.0 as lead_weeks
+        from nl.items it
+        join nl.part_usage u on u.item_no = it.item_no
+        where it.reorder_point is null
+          and it.safety_stock is null
+          and not it.made_to_order
+          and not it.proprietary
+          and not it.blocked
+          and it.family not in ('custom')
+          and u.units_365d between 1 and 11
+      ) r
+     where i.item_no = r.item_no;
+  end if;
 
   -- -------------------------------------------------------------------------
   -- 2. A handful of parts deliberately under their reorder point.
@@ -90,6 +108,7 @@ begin
   -- are the steady sellers with a vendor and a policy, so the suggestion the
   -- desk sees is one a buyer would actually place.
   -- -------------------------------------------------------------------------
+  if to_regclass('nl.open_production_orders') is null then
   update nl.stock s
      set on_hand = greatest(0, pick.floor_qty)
     from (
@@ -118,6 +137,7 @@ begin
       limit v_short
     ) pick
    where s.item_no = pick.item_no;
+  end if;
 
   -- -------------------------------------------------------------------------
   -- 3. One vendor whose short parts do not reach its minimum order.
@@ -141,6 +161,7 @@ begin
 
   if v_vendor is not null then
     -- Empty the shelf for that vendor's three cheapest policy parts.
+    if to_regclass('nl.open_production_orders') is null then
     update nl.stock s
        set on_hand = 0
       from (
@@ -156,6 +177,7 @@ begin
         limit 3
       ) pick
      where s.item_no = pick.item_no;
+    end if;
 
     -- Then set a minimum this vendor's short parts cannot reach on their own.
     -- Twice the subtotal plus $500 leaves room for the cost revisions further
@@ -188,16 +210,20 @@ begin
   select r.item_no into v_item
   from nl.part_replenishment r
   join nl.items i on i.item_no = r.item_no
+  join nl.stock st on st.item_no = r.item_no
   where r.needs_buying
     and i.replenishment = 'Purchase'
     and i.vendor_no is not null
     and i.lead_time ~ '^[0-9]+[DWMY]$'
     and r.vendor_no <> coalesce(v_vendor, '')
-    -- Nothing on the way, so this part is not one db/seed.d/40_supply.sql
-    -- drew a sample purchase order from (that sample joins the item to its
-    -- vendor, and taking the vendor away would change the file it already
-    -- stored a fingerprint for).
-    and r.on_order_total = 0
+    -- db/seed.d/40_supply.sql draws its sample purchase orders from the
+    -- parts where nl.stock.on_purchase_order is above zero, joining each one
+    -- to its vendor, and stores the fingerprint of the file it wrote. Taking
+    -- the vendor off such a part would change that file. This has to test
+    -- the column itself and not r.on_order_total, because once the supply
+    -- forecast is applied on_order_total comes from ITS tables and says
+    -- nothing about what the item master still holds.
+    and coalesce(st.on_purchase_order, 0) = 0
   order by nl_seed.u('procure.novendor|' || r.item_no)
   limit 1;
 
@@ -205,7 +231,9 @@ begin
     update nl.items set vendor_no = null where item_no = v_item;
     -- And empty the shelf, so it stays on the list whatever the arithmetic
     -- does either side of this change.
-    update nl.stock set on_hand = 0 where item_no = v_item;
+    if to_regclass('nl.open_production_orders') is null then
+      update nl.stock set on_hand = 0 where item_no = v_item;
+    end if;
   end if;
 
   -- -------------------------------------------------------------------------
