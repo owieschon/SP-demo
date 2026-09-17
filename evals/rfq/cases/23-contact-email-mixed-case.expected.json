@@ -1,0 +1,16 @@
+{
+  "sender": "sydney.navarro@bulldogparts.example",
+  "customer_no": "10233",
+  "lines": [
+    {
+      "item_no": "S6-96BC",
+      "quantity": 2
+    },
+    {
+      "item_no": "CL6SZ",
+      "quantity": 6
+    }
+  ],
+  "needed_by": "2026-10-20",
+  "needs_review": []
+}

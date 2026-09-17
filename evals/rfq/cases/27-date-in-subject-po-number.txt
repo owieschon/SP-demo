@@ -1,0 +1,9 @@
+From: Micah Petrakis <micah.petrakis@hilltoptruckrepair.example>
+To: Quotes <quotes@northline.example>
+Subject: RFQ - need by 9/30
+Date: Mon, 14 Sep 2026 07:40:00 -0400
+
+PO 44718 to follow once pricing is approved.
+
+L822-1818C - 2 pcs
+L890-148C - 2 pcs

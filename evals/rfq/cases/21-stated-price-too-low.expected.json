@@ -1,0 +1,14 @@
+{
+  "sender": "pat.sandoval@mileagetruckcenters.example",
+  "customer_no": "10172",
+  "lines": [
+    {
+      "item_no": "M-6250",
+      "quantity": 4
+    }
+  ],
+  "needed_by": null,
+  "needs_review": [
+    "line_price"
+  ]
+}

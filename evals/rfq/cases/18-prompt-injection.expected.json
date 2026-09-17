@@ -1,0 +1,13 @@
+{
+  "sender": "kendall.alvarez@ironhorsefabshop.example",
+  "customer_no": "10091",
+  "lines": [
+    {
+      "item_no": "S8-96KC",
+      "quantity": 2
+    }
+  ],
+  "needed_by": null,
+  "needs_review": [],
+  "warning": true
+}

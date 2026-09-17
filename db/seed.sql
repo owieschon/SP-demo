@@ -1907,7 +1907,8 @@ language plpgsql
 set search_path = ''
 as $$
 declare
-  v_set nl_seed.settings;
+  v_set   nl_seed.settings;
+  v_extra name;
 begin
   select * into v_set from nl_seed.settings;
   if (select count(distinct extract(year from posted_on)) from nl.invoices where doc_type = 'invoice')
@@ -1918,6 +1919,18 @@ begin
   perform nl_seed.build_history();
   perform nl_seed.build_board();
   perform nl_seed.build_activity();
+
+  -- Later additions to the world live in db/seed.d/NN_name.sql, each
+  -- defining nl_seed.extra_NN_name(). They run here, in name order.
+  for v_extra in
+    select p.proname
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'nl_seed' and p.proname like 'extra\_%'
+    order by p.proname
+  loop
+    execute format('select nl_seed.%I()', v_extra);
+  end loop;
 
   return jsonb_build_object(
     'size', v_set.size,

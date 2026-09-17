@@ -1,0 +1,16 @@
+From: Micah Crowley <micah.crowley@driftlessmachinefab.example>
+To: Quotes <quotes@northline.example>
+Subject: RFQ
+Date: Wed, 16 Sep 2026 16:30:00 -0400
+
+Our purchasing system changed, so the request looks different now.
+
+QTY   PART NUMBER   DESCRIPTION                   UOM
+2     S6-96BC       6X96 BULL HAULER CHROME       EA
+12    CL6SZ         6 SADDLE CLAMP                EA
+1     K-2363        DUAL KIT 8                    EA
+
+Ship date: 10/5/26
+
+Micah Crowley
+Driftless Machine & Fab

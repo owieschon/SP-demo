@@ -1,0 +1,10 @@
+From: Service Desk <service@bulldogtruckcenters.example>
+To: Quotes <quotes@northline.example>
+Subject: clamps
+Date: Thu, 17 Sep 2026 07:30:00 -0500
+
+Please send a quote for 4 CL6WSS.
+
+Thank you,
+Service Desk
+Bulldog Truck Centers

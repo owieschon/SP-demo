@@ -1,0 +1,14 @@
+{
+  "sender": "service@bulldogtruckcenters.example",
+  "customer_no": null,
+  "lines": [
+    {
+      "item_no": "CL6WSS",
+      "quantity": 4
+    }
+  ],
+  "needed_by": null,
+  "needs_review": [
+    "customer"
+  ]
+}

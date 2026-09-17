@@ -1,0 +1,12 @@
+{
+  "sender": "casey.castillo@crosslinefleetsupply.example",
+  "customer_no": "10295",
+  "lines": [
+    {
+      "item_no": "S6-42SS",
+      "quantity": 3
+    }
+  ],
+  "needed_by": "2026-10-15",
+  "needs_review": []
+}

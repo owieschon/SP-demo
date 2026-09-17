@@ -1,0 +1,23 @@
+{
+  "sender": "parker.reyes@canyonpartswarehouse.example",
+  "customer_no": "10146",
+  "lines": [
+    {
+      "item_no": "S6-96BC",
+      "quantity": 4
+    },
+    {
+      "item_no": "CL6SZ",
+      "quantity": 10
+    },
+    {
+      "item_no": "FL6-36SS",
+      "quantity": 2
+    }
+  ],
+  "needed_by": null,
+  "needs_review": [
+    "line_price",
+    "subtotal"
+  ]
+}

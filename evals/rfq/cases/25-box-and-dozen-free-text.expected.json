@@ -1,0 +1,20 @@
+{
+  "sender": "taylor.ashworth@kennebeclubetire.example",
+  "customer_no": "10017",
+  "lines": [
+    {
+      "item_no": "CL3SZ",
+      "quantity": 10
+    },
+    {
+      "item_no": "CL4WZ",
+      "quantity": 6
+    },
+    {
+      "item_no": "RBMB4S3",
+      "quantity": 12
+    }
+  ],
+  "needed_by": null,
+  "needs_review": []
+}

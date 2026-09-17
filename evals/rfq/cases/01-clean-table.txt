@@ -1,0 +1,20 @@
+From: Micah Crowley <micah.crowley@driftlessmachinefab.example>
+To: Quotes <quotes@northline.example>
+Subject: RFQ stacks and clamps
+Date: Mon, 14 Sep 2026 08:12:00 -0500
+
+Hi,
+
+Please quote the following:
+
+| Part # | Description | Qty |
+|---|---|---|
+| S6-96BC | 6x96 bull hauler stack, chrome | 4 |
+| CL6SZ | 6 in saddle clamp | 8 |
+| P4-18CP | 4x18 chrome pipe | 6 |
+
+Needed by Oct 2.
+
+Thanks,
+Micah Crowley
+Driftless Machine & Fab

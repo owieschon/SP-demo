@@ -1,0 +1,15 @@
+{
+  "about": "The rules extractor's scores on this set, recorded 2026-09-17. evals.test.ts fails if a change makes any of them worse. Raise them when the extractor improves; never lower them to make a test pass.",
+  "extractor": "rules",
+  "cases": 28,
+  "passed": 26,
+  "f1": {
+    "sender": 1,
+    "customer": 1,
+    "lines": 0.963,
+    "needed_by": 1,
+    "needs_review": 0.923
+  },
+  "suggestion_hits": 2,
+  "warning_hits": 1
+}

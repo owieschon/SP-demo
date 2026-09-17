@@ -1,0 +1,16 @@
+{
+  "sender": "jordan.mills@bulldogtruckcenters.example",
+  "customer_no": "10246",
+  "lines": [
+    {
+      "item_no": "S6-48BC",
+      "quantity": 3
+    },
+    {
+      "item_no": "L630-818C",
+      "quantity": 2
+    }
+  ],
+  "needed_by": null,
+  "needs_review": []
+}

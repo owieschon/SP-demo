@@ -1,0 +1,8 @@
+From: Parker Reyes <parker.reyes@canyonpartswarehouse.example>
+To: Quotes <quotes@northline.example>
+Subject: pricing question
+Date: Thu, 17 Sep 2026 09:10:00 -0400
+
+Can you send pricing on the PR-7011 Y-pipe and the CU-41545 custom stack? Not sure on quantities yet.
+
+Parker
