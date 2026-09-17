@@ -16,32 +16,57 @@ const cents = new Intl.NumberFormat('en-US', {
 
 const whole = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 
+/*
+  Every one of these snaps a value that rounds to zero to a real zero first.
+  Intl keeps the sign, so -0.4 formatted in whole dollars came out as "-$0",
+  which on a sales screen reads as a credit that is not there, and count(-0)
+  came out as "-0".
+*/
+
 /** $12,003 */
 export function money(value: number): string {
-	return dollars.format(value);
+	return dollars.format(Math.abs(value) < 0.5 ? 0 : value);
 }
 
 /** $12,003.40 */
 export function moneyExact(value: number): string {
-	return cents.format(value);
+	return cents.format(Math.abs(value) < 0.005 ? 0 : value);
 }
 
 export function count(value: number): string {
-	return whole.format(value);
+	return whole.format(Math.abs(value) < 0.5 ? 0 : value);
 }
 
 /** 0.7412 -> 74% */
 export function percent(ratio: number): string {
-	return `${Math.round(ratio * 100)}%`;
+	const rounded = Math.abs(ratio) < 0.005 ? 0 : ratio;
+	return `${Math.round(rounded * 100)}%`;
+}
+
+/**
+ * 0.9461 -> 94%. Rounds down, for a figure being compared with a threshold.
+ * percent() rounds, so 94.61% printed as "95%" next to a status that was not
+ * yet kept and a bar sitting left of the 95% line.
+ */
+export function percentFloor(ratio: number): string {
+	const floored = Math.abs(ratio) < 0.005 ? 0 : ratio;
+	return `${Math.floor(floored * 100)}%`;
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-/** '2026-09-17' -> 'Sep 17' (or 'Sep 17, 2025' when the year differs from thisYear) */
+/**
+ * '2026-09-17' -> 'Sep 17' when the year is thisYear, 'Sep 17, 2025' otherwise.
+ *
+ * Leaving thisYear out prints the year, always. It used to mean the opposite,
+ * which is how five dates on the ship-check screen and a rule's due date came
+ * to render as a bare "Mar 3": on the one screen whose job is telling a
+ * customer a date, next March looked exactly like this March.
+ */
 export function day(iso: string, thisYear?: number): string {
 	const [y, m, d] = iso.split('-').map(Number);
 	const base = `${MONTHS[m - 1]} ${d}`;
-	return thisYear === undefined || y === thisYear ? base : `${base}, ${y}`;
+	return y === thisYear ? base : `${base}, ${y}`;
 }
 
 /** 'Aug 1 to Oct 15' */

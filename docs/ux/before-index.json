@@ -1,0 +1,940 @@
+[
+	{
+		"view": "today",
+		"width": "375",
+		"theme": "light",
+		"file": "before-today-375-light.png",
+		"path": "/"
+	},
+	{
+		"view": "commitments",
+		"width": "375",
+		"theme": "light",
+		"file": "before-commitments-375-light.png",
+		"path": "/commitments"
+	},
+	{
+		"view": "commitments-answer",
+		"width": "375",
+		"theme": "light",
+		"file": "before-commitments-answer-375-light.png",
+		"path": "/commitments/answer"
+	},
+	{
+		"view": "accounts",
+		"width": "375",
+		"theme": "light",
+		"file": "before-accounts-375-light.png",
+		"path": "/accounts"
+	},
+	{
+		"view": "parts",
+		"width": "375",
+		"theme": "light",
+		"file": "before-parts-375-light.png",
+		"path": "/parts"
+	},
+	{
+		"view": "vendors",
+		"width": "375",
+		"theme": "light",
+		"file": "before-vendors-375-light.png",
+		"path": "/vendors"
+	},
+	{
+		"view": "operations",
+		"width": "375",
+		"theme": "light",
+		"file": "before-operations-375-light.png",
+		"path": "/operations"
+	},
+	{
+		"view": "operations-forecast",
+		"width": "375",
+		"theme": "light",
+		"file": "before-operations-forecast-375-light.png",
+		"path": "/operations/forecast"
+	},
+	{
+		"view": "warehouse",
+		"width": "375",
+		"theme": "light",
+		"file": "before-warehouse-375-light.png",
+		"path": "/warehouse"
+	},
+	{
+		"view": "automations",
+		"width": "375",
+		"theme": "light",
+		"file": "before-automations-375-light.png",
+		"path": "/automations"
+	},
+	{
+		"view": "automations-new",
+		"width": "375",
+		"theme": "light",
+		"file": "before-automations-new-375-light.png",
+		"path": "/automations/new"
+	},
+	{
+		"view": "rfq",
+		"width": "375",
+		"theme": "light",
+		"file": "before-rfq-375-light.png",
+		"path": "/rfq"
+	},
+	{
+		"view": "ask",
+		"width": "375",
+		"theme": "light",
+		"file": "before-ask-375-light.png",
+		"path": "/ask"
+	},
+	{
+		"view": "desk",
+		"width": "375",
+		"theme": "light",
+		"file": "before-desk-375-light.png",
+		"path": "/desk"
+	},
+	{
+		"view": "workspace",
+		"width": "375",
+		"theme": "light",
+		"file": "before-workspace-375-light.png",
+		"path": "/workspace"
+	},
+	{
+		"view": "search",
+		"width": "375",
+		"theme": "light",
+		"file": "before-search-375-light.png",
+		"path": "/search?q=chrome"
+	},
+	{
+		"view": "settings",
+		"width": "375",
+		"theme": "light",
+		"file": "before-settings-375-light.png",
+		"path": "/settings"
+	},
+	{
+		"view": "settings-mcp",
+		"width": "375",
+		"theme": "light",
+		"file": "before-settings-mcp-375-light.png",
+		"path": "/settings/mcp"
+	},
+	{
+		"view": "signin",
+		"width": "375",
+		"theme": "light",
+		"file": "before-signin-375-light.png",
+		"path": "/signin"
+	},
+	{
+		"view": "commitment",
+		"width": "375",
+		"theme": "light",
+		"file": "before-commitment-375-light.png",
+		"path": "/commitments/3184"
+	},
+	{
+		"view": "account",
+		"width": "375",
+		"theme": "light",
+		"file": "before-account-375-light.png",
+		"path": "/accounts/3404"
+	},
+	{
+		"view": "part",
+		"width": "375",
+		"theme": "light",
+		"file": "before-part-375-light.png",
+		"path": "/parts/M-4514"
+	},
+	{
+		"view": "vendor",
+		"width": "375",
+		"theme": "light",
+		"file": "before-vendor-375-light.png",
+		"path": "/vendors/V10010"
+	},
+	{
+		"view": "automation",
+		"width": "375",
+		"theme": "light",
+		"file": "before-automation-375-light.png",
+		"path": "/automations/102"
+	},
+	{
+		"view": "today",
+		"width": "768",
+		"theme": "light",
+		"file": "before-today-768-light.png",
+		"path": "/"
+	},
+	{
+		"view": "commitments",
+		"width": "768",
+		"theme": "light",
+		"file": "before-commitments-768-light.png",
+		"path": "/commitments"
+	},
+	{
+		"view": "commitments-answer",
+		"width": "768",
+		"theme": "light",
+		"file": "before-commitments-answer-768-light.png",
+		"path": "/commitments/answer"
+	},
+	{
+		"view": "accounts",
+		"width": "768",
+		"theme": "light",
+		"file": "before-accounts-768-light.png",
+		"path": "/accounts"
+	},
+	{
+		"view": "parts",
+		"width": "768",
+		"theme": "light",
+		"file": "before-parts-768-light.png",
+		"path": "/parts"
+	},
+	{
+		"view": "vendors",
+		"width": "768",
+		"theme": "light",
+		"file": "before-vendors-768-light.png",
+		"path": "/vendors"
+	},
+	{
+		"view": "operations",
+		"width": "768",
+		"theme": "light",
+		"file": "before-operations-768-light.png",
+		"path": "/operations"
+	},
+	{
+		"view": "operations-forecast",
+		"width": "768",
+		"theme": "light",
+		"file": "before-operations-forecast-768-light.png",
+		"path": "/operations/forecast"
+	},
+	{
+		"view": "warehouse",
+		"width": "768",
+		"theme": "light",
+		"file": "before-warehouse-768-light.png",
+		"path": "/warehouse"
+	},
+	{
+		"view": "automations",
+		"width": "768",
+		"theme": "light",
+		"file": "before-automations-768-light.png",
+		"path": "/automations"
+	},
+	{
+		"view": "automations-new",
+		"width": "768",
+		"theme": "light",
+		"file": "before-automations-new-768-light.png",
+		"path": "/automations/new"
+	},
+	{
+		"view": "rfq",
+		"width": "768",
+		"theme": "light",
+		"file": "before-rfq-768-light.png",
+		"path": "/rfq"
+	},
+	{
+		"view": "ask",
+		"width": "768",
+		"theme": "light",
+		"file": "before-ask-768-light.png",
+		"path": "/ask"
+	},
+	{
+		"view": "desk",
+		"width": "768",
+		"theme": "light",
+		"file": "before-desk-768-light.png",
+		"path": "/desk"
+	},
+	{
+		"view": "workspace",
+		"width": "768",
+		"theme": "light",
+		"file": "before-workspace-768-light.png",
+		"path": "/workspace"
+	},
+	{
+		"view": "search",
+		"width": "768",
+		"theme": "light",
+		"file": "before-search-768-light.png",
+		"path": "/search?q=chrome"
+	},
+	{
+		"view": "settings",
+		"width": "768",
+		"theme": "light",
+		"file": "before-settings-768-light.png",
+		"path": "/settings"
+	},
+	{
+		"view": "settings-mcp",
+		"width": "768",
+		"theme": "light",
+		"file": "before-settings-mcp-768-light.png",
+		"path": "/settings/mcp"
+	},
+	{
+		"view": "signin",
+		"width": "768",
+		"theme": "light",
+		"file": "before-signin-768-light.png",
+		"path": "/signin"
+	},
+	{
+		"view": "commitment",
+		"width": "768",
+		"theme": "light",
+		"file": "before-commitment-768-light.png",
+		"path": "/commitments/3184"
+	},
+	{
+		"view": "account",
+		"width": "768",
+		"theme": "light",
+		"file": "before-account-768-light.png",
+		"path": "/accounts/3404"
+	},
+	{
+		"view": "part",
+		"width": "768",
+		"theme": "light",
+		"file": "before-part-768-light.png",
+		"path": "/parts/M-4514"
+	},
+	{
+		"view": "vendor",
+		"width": "768",
+		"theme": "light",
+		"file": "before-vendor-768-light.png",
+		"path": "/vendors/V10010"
+	},
+	{
+		"view": "automation",
+		"width": "768",
+		"theme": "light",
+		"file": "before-automation-768-light.png",
+		"path": "/automations/102"
+	},
+	{
+		"view": "today",
+		"width": "1440",
+		"theme": "light",
+		"file": "before-today-1440-light.png",
+		"path": "/"
+	},
+	{
+		"view": "commitments",
+		"width": "1440",
+		"theme": "light",
+		"file": "before-commitments-1440-light.png",
+		"path": "/commitments"
+	},
+	{
+		"view": "commitments-answer",
+		"width": "1440",
+		"theme": "light",
+		"file": "before-commitments-answer-1440-light.png",
+		"path": "/commitments/answer"
+	},
+	{
+		"view": "accounts",
+		"width": "1440",
+		"theme": "light",
+		"file": "before-accounts-1440-light.png",
+		"path": "/accounts"
+	},
+	{
+		"view": "parts",
+		"width": "1440",
+		"theme": "light",
+		"file": "before-parts-1440-light.png",
+		"path": "/parts"
+	},
+	{
+		"view": "vendors",
+		"width": "1440",
+		"theme": "light",
+		"file": "before-vendors-1440-light.png",
+		"path": "/vendors"
+	},
+	{
+		"view": "operations",
+		"width": "1440",
+		"theme": "light",
+		"file": "before-operations-1440-light.png",
+		"path": "/operations"
+	},
+	{
+		"view": "operations-forecast",
+		"width": "1440",
+		"theme": "light",
+		"file": "before-operations-forecast-1440-light.png",
+		"path": "/operations/forecast"
+	},
+	{
+		"view": "warehouse",
+		"width": "1440",
+		"theme": "light",
+		"file": "before-warehouse-1440-light.png",
+		"path": "/warehouse"
+	},
+	{
+		"view": "automations",
+		"width": "1440",
+		"theme": "light",
+		"file": "before-automations-1440-light.png",
+		"path": "/automations"
+	},
+	{
+		"view": "automations-new",
+		"width": "1440",
+		"theme": "light",
+		"file": "before-automations-new-1440-light.png",
+		"path": "/automations/new"
+	},
+	{
+		"view": "rfq",
+		"width": "1440",
+		"theme": "light",
+		"file": "before-rfq-1440-light.png",
+		"path": "/rfq"
+	},
+	{
+		"view": "ask",
+		"width": "1440",
+		"theme": "light",
+		"file": "before-ask-1440-light.png",
+		"path": "/ask"
+	},
+	{
+		"view": "desk",
+		"width": "1440",
+		"theme": "light",
+		"file": "before-desk-1440-light.png",
+		"path": "/desk"
+	},
+	{
+		"view": "workspace",
+		"width": "1440",
+		"theme": "light",
+		"file": "before-workspace-1440-light.png",
+		"path": "/workspace"
+	},
+	{
+		"view": "search",
+		"width": "1440",
+		"theme": "light",
+		"file": "before-search-1440-light.png",
+		"path": "/search?q=chrome"
+	},
+	{
+		"view": "settings",
+		"width": "1440",
+		"theme": "light",
+		"file": "before-settings-1440-light.png",
+		"path": "/settings"
+	},
+	{
+		"view": "settings-mcp",
+		"width": "1440",
+		"theme": "light",
+		"file": "before-settings-mcp-1440-light.png",
+		"path": "/settings/mcp"
+	},
+	{
+		"view": "signin",
+		"width": "1440",
+		"theme": "light",
+		"file": "before-signin-1440-light.png",
+		"path": "/signin"
+	},
+	{
+		"view": "commitment",
+		"width": "1440",
+		"theme": "light",
+		"file": "before-commitment-1440-light.png",
+		"path": "/commitments/3184"
+	},
+	{
+		"view": "account",
+		"width": "1440",
+		"theme": "light",
+		"file": "before-account-1440-light.png",
+		"path": "/accounts/3404"
+	},
+	{
+		"view": "part",
+		"width": "1440",
+		"theme": "light",
+		"file": "before-part-1440-light.png",
+		"path": "/parts/M-4514"
+	},
+	{
+		"view": "vendor",
+		"width": "1440",
+		"theme": "light",
+		"file": "before-vendor-1440-light.png",
+		"path": "/vendors/V10010"
+	},
+	{
+		"view": "automation",
+		"width": "1440",
+		"theme": "light",
+		"file": "before-automation-1440-light.png",
+		"path": "/automations/102"
+	},
+	{
+		"view": "today",
+		"width": "375",
+		"theme": "dark",
+		"file": "before-today-375-dark.png",
+		"path": "/"
+	},
+	{
+		"view": "commitments",
+		"width": "375",
+		"theme": "dark",
+		"file": "before-commitments-375-dark.png",
+		"path": "/commitments"
+	},
+	{
+		"view": "commitments-answer",
+		"width": "375",
+		"theme": "dark",
+		"file": "before-commitments-answer-375-dark.png",
+		"path": "/commitments/answer"
+	},
+	{
+		"view": "accounts",
+		"width": "375",
+		"theme": "dark",
+		"file": "before-accounts-375-dark.png",
+		"path": "/accounts"
+	},
+	{
+		"view": "parts",
+		"width": "375",
+		"theme": "dark",
+		"file": "before-parts-375-dark.png",
+		"path": "/parts"
+	},
+	{
+		"view": "vendors",
+		"width": "375",
+		"theme": "dark",
+		"file": "before-vendors-375-dark.png",
+		"path": "/vendors"
+	},
+	{
+		"view": "operations",
+		"width": "375",
+		"theme": "dark",
+		"file": "before-operations-375-dark.png",
+		"path": "/operations"
+	},
+	{
+		"view": "operations-forecast",
+		"width": "375",
+		"theme": "dark",
+		"file": "before-operations-forecast-375-dark.png",
+		"path": "/operations/forecast"
+	},
+	{
+		"view": "warehouse",
+		"width": "375",
+		"theme": "dark",
+		"file": "before-warehouse-375-dark.png",
+		"path": "/warehouse"
+	},
+	{
+		"view": "automations",
+		"width": "375",
+		"theme": "dark",
+		"file": "before-automations-375-dark.png",
+		"path": "/automations"
+	},
+	{
+		"view": "automations-new",
+		"width": "375",
+		"theme": "dark",
+		"file": "before-automations-new-375-dark.png",
+		"path": "/automations/new"
+	},
+	{
+		"view": "rfq",
+		"width": "375",
+		"theme": "dark",
+		"file": "before-rfq-375-dark.png",
+		"path": "/rfq"
+	},
+	{
+		"view": "ask",
+		"width": "375",
+		"theme": "dark",
+		"file": "before-ask-375-dark.png",
+		"path": "/ask"
+	},
+	{
+		"view": "desk",
+		"width": "375",
+		"theme": "dark",
+		"file": "before-desk-375-dark.png",
+		"path": "/desk"
+	},
+	{
+		"view": "workspace",
+		"width": "375",
+		"theme": "dark",
+		"file": "before-workspace-375-dark.png",
+		"path": "/workspace"
+	},
+	{
+		"view": "search",
+		"width": "375",
+		"theme": "dark",
+		"file": "before-search-375-dark.png",
+		"path": "/search?q=chrome"
+	},
+	{
+		"view": "settings",
+		"width": "375",
+		"theme": "dark",
+		"file": "before-settings-375-dark.png",
+		"path": "/settings"
+	},
+	{
+		"view": "settings-mcp",
+		"width": "375",
+		"theme": "dark",
+		"file": "before-settings-mcp-375-dark.png",
+		"path": "/settings/mcp"
+	},
+	{
+		"view": "signin",
+		"width": "375",
+		"theme": "dark",
+		"file": "before-signin-375-dark.png",
+		"path": "/signin"
+	},
+	{
+		"view": "commitment",
+		"width": "375",
+		"theme": "dark",
+		"file": "before-commitment-375-dark.png",
+		"path": "/commitments/3184"
+	},
+	{
+		"view": "account",
+		"width": "375",
+		"theme": "dark",
+		"file": "before-account-375-dark.png",
+		"path": "/accounts/3404"
+	},
+	{
+		"view": "part",
+		"width": "375",
+		"theme": "dark",
+		"file": "before-part-375-dark.png",
+		"path": "/parts/M-4514"
+	},
+	{
+		"view": "vendor",
+		"width": "375",
+		"theme": "dark",
+		"file": "before-vendor-375-dark.png",
+		"path": "/vendors/V10010"
+	},
+	{
+		"view": "automation",
+		"width": "375",
+		"theme": "dark",
+		"file": "before-automation-375-dark.png",
+		"path": "/automations/102"
+	},
+	{
+		"view": "today",
+		"width": "768",
+		"theme": "dark",
+		"file": "before-today-768-dark.png",
+		"path": "/"
+	},
+	{
+		"view": "commitments",
+		"width": "768",
+		"theme": "dark",
+		"file": "before-commitments-768-dark.png",
+		"path": "/commitments"
+	},
+	{
+		"view": "commitments-answer",
+		"width": "768",
+		"theme": "dark",
+		"file": "before-commitments-answer-768-dark.png",
+		"path": "/commitments/answer"
+	},
+	{
+		"view": "accounts",
+		"width": "768",
+		"theme": "dark",
+		"file": "before-accounts-768-dark.png",
+		"path": "/accounts"
+	},
+	{
+		"view": "parts",
+		"width": "768",
+		"theme": "dark",
+		"file": "before-parts-768-dark.png",
+		"path": "/parts"
+	},
+	{
+		"view": "vendors",
+		"width": "768",
+		"theme": "dark",
+		"file": "before-vendors-768-dark.png",
+		"path": "/vendors"
+	},
+	{
+		"view": "operations",
+		"width": "768",
+		"theme": "dark",
+		"file": "before-operations-768-dark.png",
+		"path": "/operations"
+	},
+	{
+		"view": "operations-forecast",
+		"width": "768",
+		"theme": "dark",
+		"file": "before-operations-forecast-768-dark.png",
+		"path": "/operations/forecast"
+	},
+	{
+		"view": "warehouse",
+		"width": "768",
+		"theme": "dark",
+		"file": "before-warehouse-768-dark.png",
+		"path": "/warehouse"
+	},
+	{
+		"view": "automations",
+		"width": "768",
+		"theme": "dark",
+		"file": "before-automations-768-dark.png",
+		"path": "/automations"
+	},
+	{
+		"view": "automations-new",
+		"width": "768",
+		"theme": "dark",
+		"file": "before-automations-new-768-dark.png",
+		"path": "/automations/new"
+	},
+	{
+		"view": "rfq",
+		"width": "768",
+		"theme": "dark",
+		"file": "before-rfq-768-dark.png",
+		"path": "/rfq"
+	},
+	{
+		"view": "ask",
+		"width": "768",
+		"theme": "dark",
+		"file": "before-ask-768-dark.png",
+		"path": "/ask"
+	},
+	{
+		"view": "desk",
+		"width": "768",
+		"theme": "dark",
+		"file": "before-desk-768-dark.png",
+		"path": "/desk"
+	},
+	{
+		"view": "workspace",
+		"width": "768",
+		"theme": "dark",
+		"file": "before-workspace-768-dark.png",
+		"path": "/workspace"
+	},
+	{
+		"view": "settings",
+		"width": "768",
+		"theme": "dark",
+		"file": "before-settings-768-dark.png",
+		"path": "/settings"
+	},
+	{
+		"view": "settings-mcp",
+		"width": "768",
+		"theme": "dark",
+		"file": "before-settings-mcp-768-dark.png",
+		"path": "/settings/mcp"
+	},
+	{
+		"view": "signin",
+		"width": "768",
+		"theme": "dark",
+		"file": "before-signin-768-dark.png",
+		"path": "/signin"
+	},
+	{
+		"view": "commitment",
+		"width": "768",
+		"theme": "dark",
+		"file": "before-commitment-768-dark.png",
+		"path": "/commitments/3184"
+	},
+	{
+		"view": "account",
+		"width": "768",
+		"theme": "dark",
+		"file": "before-account-768-dark.png",
+		"path": "/accounts/3404"
+	},
+	{
+		"view": "part",
+		"width": "768",
+		"theme": "dark",
+		"file": "before-part-768-dark.png",
+		"path": "/parts/M-4514"
+	},
+	{
+		"view": "vendor",
+		"width": "768",
+		"theme": "dark",
+		"file": "before-vendor-768-dark.png",
+		"path": "/vendors/V10010"
+	},
+	{
+		"view": "automation",
+		"width": "768",
+		"theme": "dark",
+		"file": "before-automation-768-dark.png",
+		"path": "/automations/102"
+	},
+	{
+		"view": "today",
+		"width": "1440",
+		"theme": "dark",
+		"file": "before-today-1440-dark.png",
+		"path": "/"
+	},
+	{
+		"view": "commitments-answer",
+		"width": "1440",
+		"theme": "dark",
+		"file": "before-commitments-answer-1440-dark.png",
+		"path": "/commitments/answer"
+	},
+	{
+		"view": "accounts",
+		"width": "1440",
+		"theme": "dark",
+		"file": "before-accounts-1440-dark.png",
+		"path": "/accounts"
+	},
+	{
+		"view": "parts",
+		"width": "1440",
+		"theme": "dark",
+		"file": "before-parts-1440-dark.png",
+		"path": "/parts"
+	},
+	{
+		"view": "vendors",
+		"width": "1440",
+		"theme": "dark",
+		"file": "before-vendors-1440-dark.png",
+		"path": "/vendors"
+	},
+	{
+		"view": "operations",
+		"width": "1440",
+		"theme": "dark",
+		"file": "before-operations-1440-dark.png",
+		"path": "/operations"
+	},
+	{
+		"view": "operations-forecast",
+		"width": "1440",
+		"theme": "dark",
+		"file": "before-operations-forecast-1440-dark.png",
+		"path": "/operations/forecast"
+	},
+	{
+		"view": "warehouse",
+		"width": "1440",
+		"theme": "dark",
+		"file": "before-warehouse-1440-dark.png",
+		"path": "/warehouse"
+	},
+	{
+		"view": "automations",
+		"width": "1440",
+		"theme": "dark",
+		"file": "before-automations-1440-dark.png",
+		"path": "/automations"
+	},
+	{
+		"view": "signin",
+		"width": "1440",
+		"theme": "dark",
+		"file": "before-signin-1440-dark.png",
+		"path": "/signin"
+	},
+	{
+		"view": "commitment",
+		"width": "1440",
+		"theme": "dark",
+		"file": "before-commitment-1440-dark.png",
+		"path": "/commitments/3184"
+	},
+	{
+		"view": "account",
+		"width": "1440",
+		"theme": "dark",
+		"file": "before-account-1440-dark.png",
+		"path": "/accounts/3404"
+	},
+	{
+		"view": "part",
+		"width": "1440",
+		"theme": "dark",
+		"file": "before-part-1440-dark.png",
+		"path": "/parts/M-4514"
+	},
+	{
+		"view": "vendor",
+		"width": "1440",
+		"theme": "dark",
+		"file": "before-vendor-1440-dark.png",
+		"path": "/vendors/V10010"
+	},
+	{
+		"view": "automation",
+		"width": "1440",
+		"theme": "dark",
+		"file": "before-automation-1440-dark.png",
+		"path": "/automations/102"
+	}
+]
