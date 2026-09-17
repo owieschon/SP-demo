@@ -23,6 +23,10 @@ export const GATE_DAYS = 30;
 const EXEMPT = [
 	'/gate',
 	'/robots.txt',
+	// The map of the app for an agent. It names routes and query parameters
+	// and nothing else, so it is safe to answer before the password, and it
+	// is useless behind it.
+	'/llms.txt',
 	'/api/mcp',
 	'/api/cron/automations',
 	'/api/mail/poll',

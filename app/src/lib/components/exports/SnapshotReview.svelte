@@ -138,10 +138,10 @@
 			<table>
 				<thead>
 					<tr>
-						<th class="num">Row</th>
-						<th>Document</th>
-						<th class="num">Line</th>
-						<th>Problem</th>
+						<th scope="col" class="num">Row</th>
+						<th scope="col">Document</th>
+						<th scope="col" class="num">Line</th>
+						<th scope="col">Problem</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -407,16 +407,6 @@
 		flex-wrap: wrap;
 		align-items: center;
 		gap: var(--space-2);
-	}
-
-	.button.danger {
-		border-color: var(--danger);
-		background: var(--danger);
-		color: var(--bg);
-	}
-
-	.button.danger:hover:not(:disabled) {
-		opacity: 0.88;
 	}
 
 	@media (max-width: 720px) {

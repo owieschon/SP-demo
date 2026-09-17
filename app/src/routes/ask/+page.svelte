@@ -4,7 +4,7 @@
 	import MessagesSquare from '@lucide/svelte/icons/messages-square';
 	import AskBox from '$lib/components/assistant/AskBox.svelte';
 	import ModeBadge from '$lib/components/assistant/ModeBadge.svelte';
-	import DraftListSkeleton from '$lib/components/rfq/DraftListSkeleton.svelte';
+	import SkeletonRows from '$lib/components/ui/SkeletonRows.svelte';
 	import { STARTERS } from '$lib/assistant/types';
 	import { moment } from '$lib/format';
 	import type { PageProps } from './$types';
@@ -67,7 +67,7 @@
 			<h2 id="recent-title">Your conversations</h2>
 		</header>
 		{#await data.conversations}
-			<DraftListSkeleton />
+			<SkeletonRows rows={6} cols={4} height={42} label="Loading your conversations" />
 		{:then conversations}
 			{#if conversations.length === 0}
 				<p class="body muted">Nothing yet. Ask a question above, or pick one of the four.</p>
