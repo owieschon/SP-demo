@@ -233,7 +233,9 @@ export async function runTool(ctx: ToolContext, call: ModelToolCall, options: Ga
 		if (!refusal) throw error;
 		return {
 			lookup: lookupOf(call, tool.risk, 'failed', ctx.round, since(), refusal.message),
-			payload: { error: refusal.message },
+			// The code as well as the sentence: NL403 and NL409 need different
+			// answers, and telling them apart from prose is guesswork.
+			payload: { error: refusal.message, code: refusal.code },
 			proposal: null
 		};
 	}

@@ -1,8 +1,8 @@
 // Reading the workspace queue.
 //
-// Everything here is a read. One view, nl.agent_queue (migration 0023), puts
-// every waiting agent request into one row shape; this file turns those rows
-// into the shape the page uses and loads the detail behind each one.
+// Everything here is a read. One view, nl.agent_queue (migrations 0023 and
+// 0026), puts every waiting agent request into one row shape; this file turns
+// those rows into the shape the page uses and loads the detail behind each one.
 //
 // Reads run as the signed-in person, so row-level security decides what is in
 // the queue at all: an unapproved quote request belongs to the person who made
@@ -128,7 +128,7 @@ function key(source: QueueSource, id: number): string {
 }
 
 function emptyDetail(): QueueDetail {
-	return { facts: [], lines: [], options: [], neededBy: null, subject: null, body: null };
+	return { facts: [], lines: [], options: [], neededBy: null, subject: null, body: null, href: null };
 }
 
 /**
@@ -150,7 +150,8 @@ async function loadDetails(tx: Tx, rows: QueueRow[]): Promise<Map<string, QueueD
 		if (!ids || ids.length === 0) continue;
 		if (source === 'rfq') await rfqDetails(tx, ids, out);
 		if (source === 'assistant') await assistantDetails(tx, ids, out);
-		if (source === 'mail' || source === 'purchase') await genericDetails(tx, source, ids, out);
+		if (source === 'mail') await mailDetails(tx, ids, out);
+		if (source === 'purchase') await genericDetails(tx, source, ids, out);
 	}
 	return out;
 }
@@ -204,7 +205,8 @@ async function rfqDetails(tx: Tx, ids: number[], out: Map<string, QueueDetail>):
 			options: [],
 			neededBy: v?.needed_by?.date ?? null,
 			subject: null,
-			body: null
+			body: null,
+			href: null
 		});
 	}
 }
@@ -245,24 +247,94 @@ async function assistantDetails(tx: Tx, ids: number[], out: Map<string, QueueDet
 			options,
 			neededBy: null,
 			subject: null,
-			body: null
+			body: null,
+			href: null
 		});
 	}
 }
 
 /**
- * Mail drafts and purchase requests. Their tables belong to other parts of the
- * project, so this takes only the columns it can see and says nothing about
- * the ones it cannot. Whatever is missing simply does not appear.
+ * Mail drafts (migration 0021). The whole team may read these tables, so the
+ * facts are the ones a reviewer needs: who it goes to, what the agent decided
+ * the message was about, and every fact the body rests on, which is the list
+ * the desk's own disclosure check ran over.
+ */
+async function mailDetails(tx: Tx, ids: number[], out: Map<string, QueueDetail>): Promise<void> {
+	const rows = await tx.sql<{
+		id: number;
+		mailbox: string;
+		subject: string;
+		body: string;
+		intent: string;
+		to_addresses: string[];
+		cc_addresses: string[];
+		blocked_reason: string;
+		in_reply_to_id: number | null;
+		message_subject: string | null;
+		facts: { kind?: string; subject?: string; text?: string }[];
+		attachments: { name?: string; kind?: string }[];
+	}>`
+		select d.id, mb.label as mailbox, d.subject, d.body, d.intent, d.to_addresses, d.cc_addresses,
+		       d.blocked_reason, d.in_reply_to_id, m.subject as message_subject, d.facts, d.attachments
+		from nl.mail_drafts d
+		join nl.mailboxes mb on mb.id = d.mailbox_id
+		left join nl.mail_messages m on m.id = d.in_reply_to_id
+		where d.id in (select (value #>> '{}')::bigint from jsonb_array_elements(${JSON.stringify(ids)}::jsonb))`;
+
+	const INTENT_LABEL: Record<string, string> = {
+		rfq: 'a request for a quote',
+		purchase_order: 'a purchase order',
+		price_question: 'a question about price',
+		stock_question: 'a question about stock',
+		order_status: 'a question about an order',
+		other: 'something else'
+	};
+
+	for (const row of rows) {
+		const facts: QueueFactList = [
+			{ label: 'Desk', value: row.mailbox },
+			{ label: 'To', value: row.to_addresses.join(', ') },
+			{ label: 'About', value: INTENT_LABEL[row.intent] ?? row.intent }
+		];
+		if (row.cc_addresses.length > 0) facts.push({ label: 'Copied to', value: row.cc_addresses.join(', ') });
+		if (row.message_subject) facts.push({ label: 'In reply to', value: row.message_subject });
+		if (row.blocked_reason) facts.push({ label: 'The agent held this', value: row.blocked_reason });
+		for (const attachment of row.attachments ?? []) {
+			if (attachment.name) facts.push({ label: 'Attached', value: attachment.name });
+		}
+		// Every claim the reply makes, with what it was taken from.
+		for (const fact of row.facts ?? []) {
+			if (fact.text) facts.push({ label: `Rests on ${fact.kind ?? 'a fact'}`, value: fact.text });
+		}
+
+		out.set(key('mail', row.id), {
+			facts,
+			lines: [],
+			options: [],
+			neededBy: null,
+			subject: row.subject,
+			body: row.body,
+			// The desk page lists a draft under the message it answers.
+			href: row.in_reply_to_id === null ? '/desk' : `/desk/${row.in_reply_to_id}`
+		});
+	}
+}
+
+/**
+ * Purchase requests (migration 0022), which is not in this database yet. Its
+ * table belongs to another part of the project, so this takes only the columns
+ * it can see and says nothing about the ones it cannot. Whatever is missing
+ * simply does not appear. When that work lands, write this out the way
+ * mailDetails above was once migration 0021 arrived.
  */
 async function genericDetails(
 	tx: Tx,
-	source: 'mail' | 'purchase',
+	source: 'purchase',
 	ids: number[],
 	out: Map<string, QueueDetail>
 ): Promise<void> {
 	const [table] = await tx.sql<{ name: string | null }>`
-		select nl.agent_queue_table(${source === 'mail' ? '{mail_drafts}' : '{purchase_requests,purchase_request_drafts}'}::text[]) as name`;
+		select nl.agent_queue_table('{purchase_requests,purchase_request_drafts}'::text[]) as name`;
 	if (!table?.name) return;
 
 	// The columns worth showing, if the table has them.
@@ -310,7 +382,8 @@ async function genericDetails(
 			options: [],
 			neededBy: null,
 			subject: typeof row.subject === 'string' ? row.subject : null,
-			body: typeof row.body === 'string' ? row.body : null
+			body: typeof row.body === 'string' ? row.body : null,
+			href: null
 		});
 	}
 }

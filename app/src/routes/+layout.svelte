@@ -20,6 +20,7 @@
 	import Workflow from '@lucide/svelte/icons/workflow';
 	import { navigating, page } from '$app/state';
 	import Mark from '$lib/components/Mark.svelte';
+	import Settings from '@lucide/svelte/icons/settings';
 	import Sparkles from '@lucide/svelte/icons/sparkles';
 	import SearchBox from '$lib/components/SearchBox.svelte';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
@@ -38,6 +39,7 @@
 		{ href: '/ask', label: 'Ask', icon: Sparkles },
 		{ href: '/workspace', label: 'Workspace', icon: ClipboardCheck },
 		{ href: '/desk', label: 'Desk', icon: Mails },
+		{ href: '/settings', label: 'Settings', icon: Settings },
 		{ href: '/commitments', label: 'Commitments', icon: ListChecks },
 		{ href: '/accounts', label: 'Accounts', icon: Building2 },
 		{ href: '/rfq', label: 'Quote requests', icon: Inbox },
@@ -94,6 +96,7 @@
 				{ label: 'Message', href: null }
 			];
 		}
+		if (route === '/settings') return [{ label: 'Settings', href: null }];
 		if (route === '/settings/mcp') {
 			return [
 				{ label: 'Settings', href: null },
