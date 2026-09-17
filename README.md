@@ -1,3 +1,14 @@
+# Northline
+
+Work in progress: a full-stack portfolio app (SvelteKit, TypeScript, Postgres)
+for Northline Exhaust Co., an invented maker of heavy-duty truck exhaust
+parts. All data is invented. See `app/README.md` to run it, `db/README.md` for
+the database, and `DECISIONS.md` for the choices behind it.
+
+The demo tooling below predates Northline and is unchanged.
+
+---
+
 # grcrm-demo
 
 Tooling for demonstrating GRCRM on an invented dataset, in a Supabase
