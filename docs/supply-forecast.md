@@ -63,6 +63,51 @@ it twice. The sample rows come from the database
 `nl.sample_open_production_orders`), so the seed and the download links can
 never disagree.
 
+## Where the invented supply comes from
+
+The first version of the supply generators (migration 0016) worked from the
+item master: a part got an order if it happened to carry a figure in
+`nl.stock.on_purchase_order` or `on_production_order`, and those figures were
+drawn without looking at what customers had ordered. At full scale that left
+57% of open sales lines with nothing on order at all, which is not how a parts
+maker of this size runs, and it took the point out of the page: a late line
+could not name the order it was waiting for.
+
+Migration 0022 turns it around. `nl.sample_supply_plan()` starts from demand:
+
+1. today's open sales lines, part by part, netted against what is on the
+   shelf, in the same order the projection hands stock out;
+2. every line the shelf does not reach is a **requirement**: the pieces that
+   are missing and the day they are missing by;
+3. a keyed draw per part decides whether it is **covered** at all, less often
+   the longer its lead time is (a part with a ten-week lead time is the honest
+   candidate for "nobody has ordered this yet");
+4. a covered part gets one purchase order line (bought) or one production
+   order (made) per requirement, for exactly those pieces: 55% due before the
+   day they are needed, 40% after it (this is what makes a customer line
+   late), 5% already past due, and a part needed inside three days is usually
+   one whose order is already past due, because that is the situation a buyer
+   recognizes;
+5. stocked parts nobody is waiting for are bought or made back up to their
+   reorder point now and then, so the supply book is not purely
+   demand-driven.
+
+One order per requirement, rather than one to three per part, is what keeps
+the mix steady at any size: the shares inside the covered group no longer
+depend on how many lines an average part happens to carry.
+
+The item master is then the derived side. `db/seed.d/40_supply.sql` sets
+`on_purchase_order` and `on_production_order` from the quantities today's
+files hold, part by part, which is the direction a real ERP works in (those
+fields are a sum of a part's open orders) and keeps the invariant the tests
+check. There is no circle: the generators read `on_hand` and demand, never
+those two columns.
+
+The cost is that a supply file cannot be written without netting demand
+first, so generating one runs the sales generator too. Building the small
+world in PGlite went from about 13 to about 23 seconds. The projection itself
+is unaffected: it reads the live tables, never a generator.
+
 ## The projection
 
 `nl.open_line_projection`: one row per open sales line. Time-phased netting,
@@ -199,6 +244,36 @@ select nl.available_to_promise('L3515-630SC', 25, '2026-10-15');
 The primary keys of `nl.stock`, `nl.items`, `nl.vendors` and `nl.customers`
 carry the rest of the joins.
 
+## The mix it produces
+
+The status mix is the quickest way to see whether the invented world behaves
+like an order book. On the small world the tests run against (128 open lines):
+
+| Status | Lines | Share |
+|---|---:|---:|
+| `on_time` | 70 | 54.7% |
+| `late_waiting_supply` | 22 | 17.2% |
+| `no_supply` | 17 | 13.3% |
+| `past_due` | 17 | 13.3% |
+| `late_supply_overdue` | 2 | 1.6% |
+
+63 of the 128 lines name a supply order, and 28 of the 52 lines that will
+miss their promised date name the order they are waiting for.
+
+At full scale (about 1,450 open sales lines) the same generator should land
+close to this: `on_time` in the low fifties, `late_waiting_supply` around 20%,
+`no_supply` and `past_due` around 12% each, `late_supply_overdue` 2 to 3%.
+Two things move with size. The shelf covers a smaller share of a bigger
+book, which moves lines from `on_time` into the covered group, and there are
+more lines shipping in the next two days, which is the only place
+`late_supply_overdue` can come from (a supply order that is past due still
+counts `nl.overdue_supply_days()` from today, so it only makes a line late
+when that line ships almost immediately).
+
+`app/src/lib/server/supply/seed.test.ts` asserts each share inside a band, so
+a change to the generators that pushes the world out of shape fails a test
+instead of quietly making the demo unbelievable.
+
 ## Numbers
 
 The other measurements in `docs/sql.md` were taken on Supabase. These were
@@ -285,10 +360,16 @@ Checks worth running after a change:
 select status, count(*) from nl.open_line_projection group by 1;
 select count(*) from nl.open_line_projection where days_late < 0;
 
--- the supply the seed generates matches the item master, part by part
+-- the item master agrees with the supply the generators produce for today,
+-- part by part, in both directions (it is set from them in the seed)
 select count(*)
 from nl.stock s
 left join (select item_no, sum(quantity) as q
            from nl.sample_open_purchase_lines(nl.today()) group by 1) p on p.item_no = s.item_no
-where s.on_purchase_order > 0 and coalesce(p.q, 0) <> s.on_purchase_order;
+where coalesce(p.q, 0) <> s.on_purchase_order;
+
+-- what the plan decided: requirements, and how many are covered
+select count(*) as requirements, count(distinct item_no) as parts,
+       count(*) filter (where covered) as covered, sum(quantity) as pieces
+from nl.sample_supply_plan();
 ```
