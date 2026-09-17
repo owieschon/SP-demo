@@ -32,9 +32,10 @@ Each real choice, the options considered, and why. Newest at the bottom.
 - Chosen: repeat them, and hold them to the header with a composite foreign key on `(invoice_no, customer_no, posted_on)`.
 - Why: the ERP's line export repeats those fields, and delivery measurement filters lines by exactly those columns. The composite key makes disagreement between a line and its header impossible.
 
-## 6. Line history is shorter than invoice history
+## 6. Line history covers the whole invoice history
 
-- Chosen: invoices reach back to January three years ago, invoice lines to January of the year before last (like the ERP exports the world is modeled on). Invoices carry a `subtotal` so revenue history does not depend on lines that are not loaded.
+- First version: invoice lines reached back two years, invoices three (like the ERP exports), with a `subtotal` on each invoice so revenue history did not depend on missing lines.
+- Revised: the full world loads lines for all seven years, because performance numbers only mean something at production volume (about half a million lines). `subtotal` stays: revenue history reads it instead of summing lines.
 
 ## 7. Commitment status rules
 
@@ -59,3 +60,10 @@ Each real choice, the options considered, and why. Newest at the bottom.
 
 - The Supabase security advisor flags functions without a pinned `search_path`. All app functions have `set search_path = ''`.
 - The ten tiny immutable helpers in `nl_seed` (`u`, `ri`, `chance`, `pick`, `gauss`, `person`, `phone`, `slug`, `agency_for`, `owner_for`) do not: a function with a `SET` clause cannot be inlined, and pinning them made the full build 2.5 to 4.5 times slower (6 s to 17 to 29 s, measured). They are only called from `nl.build()`, which pins its own `search_path`, so their inlined bodies are resolved under it. The advisor still lists those ten; that is expected.
+
+## 11. Three world sizes, tuned to real shapes
+
+- Options: a small hand-shaped world; a world at production scale.
+- Chosen: `nl.build('full')` (about 4,500 customers, 11,400 parts, seven years, half a million invoice lines) on Supabase; `'demo'` (700 customers, three years) for local development; `'small'` (90 customers, two years) for tests.
+- Why: comparing this stack with others is only honest at production volume. The generator's distributions (revenue per customer, parts per customer, lines per invoice, seasonality, discounts, margins, freight, credit memos, customer life stages, chains) were tuned against summary statistics of a real business of this kind. No names, records or exact figures were copied; dollars are rescaled.
+- The build runs in steps (`nl_seed.begin_build`, one `nl_seed.build_year` per year, `nl_seed.finish_build`) so a small server never runs one very long statement. The board caps its settled columns because the full world holds about 2,500 kept commitments.

@@ -3,20 +3,27 @@
 	// banner, the totals strip, and one quiet column per status.
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
 	import { count, money } from '$lib/format';
-	import { STATUS_ORDER, type BoardCard, type CommitmentStatus } from '$lib/types';
+	import { STATUS_ORDER, type BoardCard, type BoardData, type CommitmentStatus } from '$lib/types';
 	import CommitmentCard from './CommitmentCard.svelte';
 	import StatusBadge from './StatusBadge.svelte';
 
-	let { cards, who, year }: { cards: BoardCard[]; who: 'mine' | 'all'; year: number } = $props();
+	let { board, who, year }: { board: BoardData; who: 'mine' | 'all'; year: number } = $props();
+
+	const cards = $derived(board.cards);
 
 	// One column per status, in the order a commitment moves through them.
+	// A settled column holds only its newest cards; its count and total
+	// come from the server.
 	const columns = $derived(
 		STATUS_ORDER.map((status) => {
 			const inColumn = cards.filter((c) => c.status === status);
+			const whole = isSettledStatus(status) ? board.settled[status] : null;
 			return {
 				status,
 				cards: inColumn,
-				committed: sum(inColumn, (c) => c.committedValue),
+				count: whole ? whole.count : inColumn.length,
+				hidden: whole ? whole.count - inColumn.length : 0,
+				committed: whole ? whole.committed : sum(inColumn, (c) => c.committedValue),
 				expected: sum(inColumn, (c) => c.expectedValue)
 			};
 		})
@@ -36,6 +43,10 @@
 
 	function isSettled(status: CommitmentStatus) {
 		return status === 'kept' || status === 'pushed' || status === 'broken';
+	}
+
+	function isSettledStatus(status: CommitmentStatus): status is keyof BoardData['settled'] {
+		return isSettled(status);
 	}
 </script>
 
@@ -76,7 +87,7 @@
 		<section class="column panel" aria-labelledby="col-{column.status}">
 			<header class="column-head">
 				<h2 id="col-{column.status}"><StatusBadge status={column.status} /></h2>
-				<span class="faint num">{column.cards.length}</span>
+				<span class="faint num">{count(column.count)}</span>
 			</header>
 			<p class="column-total faint num">
 				{#if isSettled(column.status)}
@@ -91,6 +102,9 @@
 				{:else}
 					<p class="empty faint">Nothing here</p>
 				{/each}
+				{#if column.hidden > 0}
+					<p class="more faint num">and {count(column.hidden)} more</p>
+				{/if}
 			</div>
 		</section>
 	{/each}
@@ -205,8 +219,14 @@
 		border-bottom: 1px solid var(--hairline);
 	}
 
-	.empty {
+	.empty,
+	.more {
 		padding: 10px var(--space-3);
+	}
+
+	.more {
+		border-top: 1px solid var(--hairline);
+		font-size: 0.85rem;
 	}
 
 	/* On a phone, the columns stack. */

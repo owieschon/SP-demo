@@ -7,7 +7,14 @@
 import { z } from 'zod';
 import type { Db } from './db/types.ts';
 import { guarded } from './errors.ts';
-import type { BoardCard, CommitmentStatus, Outcome } from '$lib/types';
+import {
+	SETTLED_CARD_LIMIT,
+	type BoardCard,
+	type BoardData,
+	type CommitmentStatus,
+	type Outcome,
+	type SettledStatus
+} from '$lib/types';
 
 interface ProgressRow {
 	id: number;
@@ -60,26 +67,52 @@ function toCard(row: ProgressRow): BoardCard {
 
 /**
  * The board: open commitments, plus the ones settled in the last 90 days.
+ * A settled column only sends its most recent cards (a big book settles
+ * dozens a quarter); its full count and total come along separately.
  * ownerId null means everyone's.
  */
-export async function listBoard(db: Db, userId: number, ownerId: number | null): Promise<BoardCard[]> {
+export async function listBoard(db: Db, userId: number, ownerId: number | null): Promise<BoardData> {
 	const rows = await db.asUser(userId, (tx) =>
-		tx.sql<ProgressRow>`
-			select p.id, p.title, p.customer_no, cu.name as customer_name,
-			       p.owner_id, u.full_name as owner_name, ct.full_name as buyer_name,
-			       p.committed_value, p.delivered, p.delivered_ratio, p.expected_value, p.confidence,
-			       p.starts_on, p.ends_on, p.status, p.needs_outcome, p.days_since_close,
-			       p.window_elapsed_ratio, p.outcome_source, p.updated_at
-			from nl.commitment_progress p
-			join nl.customers cu on cu.customer_no = p.customer_no
-			join nl.users u on u.id = p.owner_id
-			left join nl.contacts ct on ct.id = p.buyer_contact_id
-			where (${ownerId}::int is null or p.owner_id = ${ownerId}::int)
-			  and (not p.is_settled
-			       or coalesce(p.answered_at::date, p.ends_on) >= nl.today() - 90)
-			order by p.needs_outcome desc, p.ends_on, p.id`
+		tx.sql<ProgressRow & { is_settled: boolean; column_count: number; column_committed: number }>`
+			with board as (
+				select p.*,
+				       -- Newest settled first, so the cap keeps the recent ones.
+				       row_number() over (
+				         partition by p.status
+				         order by coalesce(p.answered_at::date, p.ends_on) desc, p.id desc
+				       ) as settled_rank,
+				       count(*) over (partition by p.status) as column_count,
+				       sum(p.committed_value) over (partition by p.status) as column_committed
+				from nl.commitment_progress p
+				where (${ownerId}::int is null or p.owner_id = ${ownerId}::int)
+				  and (not p.is_settled
+				       or coalesce(p.answered_at::date, p.ends_on) >= nl.today() - 90)
+			)
+			select b.id, b.title, b.customer_no, cu.name as customer_name,
+			       b.owner_id, u.full_name as owner_name, ct.full_name as buyer_name,
+			       b.committed_value, b.delivered, b.delivered_ratio, b.expected_value, b.confidence,
+			       b.starts_on, b.ends_on, b.status, b.needs_outcome, b.days_since_close,
+			       b.window_elapsed_ratio, b.outcome_source, b.updated_at,
+			       b.is_settled, b.column_count::int as column_count, b.column_committed
+			from board b
+			join nl.customers cu on cu.customer_no = b.customer_no
+			join nl.users u on u.id = b.owner_id
+			left join nl.contacts ct on ct.id = b.buyer_contact_id
+			where not b.is_settled or b.settled_rank <= ${SETTLED_CARD_LIMIT}
+			order by b.needs_outcome desc, b.ends_on, b.id`
 	);
-	return rows.map(toCard);
+
+	const settled: BoardData['settled'] = {
+		kept: { count: 0, committed: 0 },
+		pushed: { count: 0, committed: 0 },
+		broken: { count: 0, committed: 0 }
+	};
+	for (const row of rows) {
+		if (row.is_settled) {
+			settled[row.status as SettledStatus] = { count: row.column_count, committed: row.column_committed };
+		}
+	}
+	return { cards: rows.map(toCard), settled };
 }
 
 export interface CommitmentDetail extends BoardCard {
