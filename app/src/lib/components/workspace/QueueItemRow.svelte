@@ -218,8 +218,9 @@
 
 				{#if blocked}
 					<p class="notice warning" role="status">
-						This one still has a field that needs a person. Open it on its own page to settle that
-						first.
+						Something on this one has to be settled before it can be approved, so its own write
+						function would refuse it. The facts above say what. Reject it here, or open it on its
+						own page to settle it.
 					</p>
 				{/if}
 
@@ -232,7 +233,7 @@
 						<X size={13} aria-hidden="true" />
 						Reject
 					</button>
-					<a class="button quiet" href={SOURCE_HREF[item.source](item.sourceId)}>
+					<a class="button quiet" href={item.detail.href ?? SOURCE_HREF[item.source](item.sourceId)}>
 						<ExternalLink size={13} aria-hidden="true" />
 						Open it
 					</a>

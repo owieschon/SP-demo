@@ -3,8 +3,8 @@
 // Four features put things in front of a person: quote requests read out of
 // customer email (migration 0011), the assistant's proposals (0017), the order
 // desk's mail drafts (0021) and the procurement desk's purchase requests
-// (0022). The last two are built elsewhere and may not be in the database at
-// all; the queue then simply has no rows from them.
+// (0022). The last one is built elsewhere and may not be in the database at
+// all; the queue then simply has no rows from it.
 
 export type QueueSource = 'rfq' | 'assistant' | 'mail' | 'purchase';
 
@@ -18,11 +18,17 @@ export const SOURCE_LABEL: Record<QueueSource, string> = {
 	purchase: 'Purchase request'
 };
 
-/** Where a person goes to see the whole record, with all of its history. */
+/**
+ * Where a person goes to see the whole record, with all of its history. This
+ * is the fallback: a row whose detail knows a better address (a mail draft
+ * links to the message it replies to) carries its own `href`.
+ */
 export const SOURCE_HREF: Record<QueueSource, (id: number) => string> = {
 	rfq: (id) => `/rfq/${id}`,
 	assistant: (id) => `/ask?proposal=${id}`,
-	mail: (id) => `/desk/${id}`,
+	// The desk page lists drafts under the message they answer, so a draft id
+	// is not an address there.
+	mail: () => '/desk',
 	purchase: (id) => `/procurement/${id}`
 };
 
@@ -35,7 +41,7 @@ export const SOURCE_EDIT: Record<QueueSource, string | null> = {
 	rfq: 'Quantities and the needed-by date can be corrected here. The change goes through the same revise step the quote request page uses, and it is checked again before you approve.',
 	assistant:
 		'An assistant proposal cannot be edited. It is a fixed option with a fixed input, which is what makes approving it safe. Reject it and ask for a different one.',
-	mail: 'The subject and the body can be corrected here before the mail is approved.',
+	mail: 'The subject and the body can be corrected here before the reply is approved. Approving with either one changed stores the change and marks the draft edited. Nothing is sent by approving; the send happens after, and only then is it recorded as sent.',
 	purchase: 'A purchase request cannot be edited here. Open it to change what it asks for.'
 };
 
@@ -97,6 +103,8 @@ export interface QueueDetail {
 	/** Text a correction can change (a mail draft's subject and body). */
 	subject: string | null;
 	body: string | null;
+	/** Where to open the whole record, when the row knows better than the source. */
+	href: string | null;
 }
 
 /** One row of the queue: the same fields whichever source it came from. */
