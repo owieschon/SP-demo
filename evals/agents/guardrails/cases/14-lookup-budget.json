@@ -1,0 +1,16 @@
+{
+  "about": "One message gets a fixed number of lookups, and the rest waits for a person.",
+  "check": "lookup_budget",
+  "refuses": {
+    "used": 8,
+    "limit": 8
+  },
+  "expect": {
+    "verdict": "needs_person",
+    "reason_contains": "lookups"
+  },
+  "passes": {
+    "used": 2,
+    "limit": 8
+  }
+}

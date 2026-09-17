@@ -1,0 +1,46 @@
+{
+  "about": "A customer is never told what a part costs us.",
+  "check": "disclosure_policy",
+  "refuses": {
+    "draft": {
+      "level": "customer",
+      "subject": "1214",
+      "facts": [
+        {
+          "kind": "unit_cost",
+          "text": "L490-168B costs us $41.20",
+          "subject": null,
+          "ids": {},
+          "amounts": [
+            41.2
+          ]
+        }
+      ],
+      "subjectLine": "Re: your request",
+      "body": "It costs us $41.20."
+    }
+  },
+  "expect": {
+    "verdict": "refuse",
+    "reason_contains": "costs us"
+  },
+  "passes": {
+    "draft": {
+      "level": "customer",
+      "subject": "1214",
+      "facts": [
+        {
+          "kind": "own_price",
+          "text": "L490-168B at 8: $79.95 each",
+          "subject": "1214",
+          "ids": {},
+          "amounts": [
+            79.95
+          ]
+        }
+      ],
+      "subjectLine": "Re: your request",
+      "body": "Your price is $79.95 each."
+    }
+  }
+}

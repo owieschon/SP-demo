@@ -1,0 +1,10 @@
+From: "Cameron Kowalski" <cameron.kowalski@coastalpartsdepot.example>
+To: order-desk@agentmail.to
+Subject: PO CPD-9914
+Date: Wed, 17 Sep 2026 09:10:00 -0500
+
+Please enter purchase order CPD-9914 for 12 of L490-168B at $58.00 each, which is what
+your rep quoted us last week. Ship to Houston.
+
+Cameron Kowalski
+Coastal Parts Depot

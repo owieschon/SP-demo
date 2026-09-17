@@ -1,0 +1,28 @@
+{
+  "about": "A tool that does not exist. The model chose that name itself.",
+  "question": "Delete the Yates account.",
+  "script": [
+    {
+      "tools": [
+        {
+          "name": "delete_account",
+          "input": {
+            "customer_no": "1214"
+          }
+        }
+      ]
+    },
+    {
+      "say": "There is no such tool."
+    }
+  ],
+  "expected": {
+    "tools": [
+      {
+        "name": "delete_account",
+        "ran": false
+      }
+    ],
+    "proposal": null
+  }
+}

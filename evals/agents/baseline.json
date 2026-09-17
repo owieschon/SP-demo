@@ -1,0 +1,38 @@
+{
+  "guardrails": {
+    "cases": 20,
+    "passed": 20,
+    "fields": {
+      "refuses": 1,
+      "passes": 1
+    }
+  },
+  "order desk": {
+    "cases": 26,
+    "passed": 15,
+    "fields": {
+      "intent": 0.731,
+      "customer": 1,
+      "facts": 0.891,
+      "price": 0.872,
+      "guardrail": 0.533
+    }
+  },
+  "assistant": {
+    "cases": 23,
+    "passed": 19,
+    "fields": {
+      "tools": 0.857,
+      "gated": 1,
+      "proposal": 1
+    }
+  },
+  "automation": {
+    "cases": 6,
+    "passed": 6,
+    "fields": {
+      "matches": 1,
+      "once_per_subject": 1
+    }
+  }
+}

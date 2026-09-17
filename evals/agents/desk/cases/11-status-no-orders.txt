@@ -1,0 +1,9 @@
+From: "Pat Sandoval" <pat.sandoval@mileagetruckcenters.example>
+To: order-desk@agentmail.to
+Subject: Status of our order
+Date: Tue, 16 Sep 2026 11:40:00 -0500
+
+Has our order shipped yet? I cannot find a confirmation.
+
+Pat Sandoval
+Mileage Truck Centers

@@ -1,0 +1,15 @@
+From: "Alex Brennan" <alex.brennan@bulldogtruckcenters.example>
+To: order-desk@agentmail.to
+Subject: Quote for five items
+Date: Wed, 17 Sep 2026 08:50:00 -0500
+
+Please quote:
+
+  L490-168B    qty 4
+  L660-1018SC  qty 4
+  CL6SZ        qty 20
+  RBRC10B3     qty 6
+  S7-36SS      qty 2
+
+Alex Brennan
+Bulldog Truck Centers - Atlanta

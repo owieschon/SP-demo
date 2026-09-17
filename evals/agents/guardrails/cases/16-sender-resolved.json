@@ -1,0 +1,20 @@
+{
+  "about": "A reply with prices on it goes to an account we matched, or it asks.",
+  "check": "sender_resolved",
+  "refuses": {
+    "match": {
+      "customerNo": null,
+      "vendorNo": null
+    }
+  },
+  "expect": {
+    "verdict": "needs_person",
+    "reason_contains": "not on file"
+  },
+  "passes": {
+    "match": {
+      "customerNo": "1214",
+      "vendorNo": null
+    }
+  }
+}
