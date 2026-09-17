@@ -86,5 +86,23 @@ export const SOURCES: Record<TriggerKey, Source> = {
 			join nl.customers cu on cu.customer_no = a.customer_no
 			where a.bucket in ('at_risk', 'past_due')`,
 		orderBy: 'days_to_ship, line_value desc, subject_key'
+	},
+	// The late-order forecast (migration 0016). The projected ship date is part
+	// of the subject, so a line whose date slips again fires again.
+	order_line_projected_late: {
+		sql: `
+			select 'projected:' || p.document_no || ':' || p.line_no || ':' || p.projected_ship_date as subject_key,
+			       p.customer_no, cu.name as customer_name, null::bigint as commitment_id,
+			       cu.owner_id as record_owner_id,
+			       p.document_no || ' line ' || p.line_no || ', ' || p.item_no
+			         || coalesce(' waiting on ' || p.supply_document, ' with nothing on order') as headline,
+			       p.days_late, p.open_value as line_value,
+			       case when p.status = 'no_supply' then 1 else 0 end as no_supply,
+			       case when p.supply_overdue then 1 else 0 end as supply_overdue,
+			       cu.owner_id
+			from nl.open_line_projection p
+			join nl.customers cu on cu.customer_no = p.customer_no
+			where p.days_late > 0`,
+		orderBy: 'line_value desc, days_late desc, subject_key'
 	}
 };
