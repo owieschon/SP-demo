@@ -426,15 +426,36 @@ describe('the health checks on the page', () => {
 	});
 
 	it('count rows from the planner statistics, not by reading the tables', async () => {
-		const [row] = await db.asUser(ADMIN, (tx) => tx.sql<{ counts: Record<string, number> }>`
-			select nl.diagnostic_row_estimates() as counts`);
-		// Eight tables, and the estimates are in the right order of magnitude
-		// for the small world (90 customers, a couple of years of invoices).
-		expect(Object.keys(row.counts).sort()).toEqual(
+		const [row] = await db.asUser(ADMIN, (tx) => tx.sql<{
+			result: { rows: Record<string, number>; counted: boolean };
+		}>`select nl.diagnostic_row_estimates() as result`);
+		// Eight tables, in the right order of magnitude for the small world
+		// (90 customers, a couple of years of invoices).
+		expect(Object.keys(row.result.rows).sort()).toEqual(
 			['audit_log', 'commitments', 'contacts', 'customers', 'invoice_lines', 'invoices', 'items', 'users'].sort()
 		);
-		expect(Number(row.counts.customers)).toBeGreaterThan(50);
-		expect(Number(row.counts.invoice_lines)).toBeGreaterThan(Number(row.counts.invoices));
+		expect(Number(row.result.rows.customers)).toBeGreaterThan(50);
+		expect(Number(row.result.rows.invoice_lines)).toBeGreaterThan(Number(row.result.rows.invoices));
+	});
+
+	it('never report an empty world when the statistics are the thing that is empty', async () => {
+		// This is the bug the first version of this shipped with. A server that
+		// has just come up has no live counts yet, and TRUNCATE leaves
+		// reltuples at zero, so every figure read as zero on a world with
+		// hundreds of thousands of rows in it. Wiping the statistics here
+		// reproduces exactly that.
+		await db.asSystem((tx) => tx.sql`select pg_stat_reset()`);
+		const [row] = await db.asUser(ADMIN, (tx) => tx.sql<{
+			result: { rows: Record<string, number>; counted: boolean };
+		}>`select nl.diagnostic_row_estimates() as result`);
+		expect(Number(row.result.rows.customers)).toBeGreaterThan(50);
+		expect(Number(row.result.rows.invoice_lines)).toBeGreaterThan(0);
+		// And it says the figures were counted rather than estimated.
+		expect(row.result.counted).toBe(true);
+
+		const health = await readHealth(db, ADMIN, env);
+		expect(health.countsMeasured).toBe(true);
+		expect(health.counts.find((count) => count.table === 'customers')?.rows).toBeGreaterThan(50);
 	});
 
 	it('say what to do when something is red', async () => {

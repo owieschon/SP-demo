@@ -53,8 +53,10 @@ export interface Diagnostics {
 	/** How long these checks took, in milliseconds. Shown on the page. */
 	ms: number;
 	checks: HealthCheck[];
-	/** Estimates, not counts. See migration 0027. */
+	/** Estimates, unless the statistics had nothing to say. See migration 0027. */
 	counts: TableCount[];
+	/** True when a figure above had to be counted because no statistics existed yet. */
+	countsMeasured: boolean;
 	/** Environment variables the app reads, and whether they are set. Never their values. */
 	environment: EnvFlag[];
 }
@@ -102,6 +104,10 @@ interface NightlyRow {
 	result: { source: 'cron' | 'audit' | 'none'; at?: string; status?: string; detail?: string };
 }
 
+interface EstimateRow {
+	result: { rows: Record<string, number>; counted: boolean };
+}
+
 /** The delivered figures against a fresh count. Exact, and slow on the full world. */
 function deliveryCheck(count: number): HealthCheck {
 	return {
@@ -146,11 +152,17 @@ export async function readHealth(db: Db, userId: number, env: SettingsEnv = curr
 		attempt(() => loadSettings(db, env)),
 		attempt(() => db.asUser(userId, (tx) => tx.sql<CostRow>`select nl.diagnostic_cost_drift() as result`)),
 		attempt(() => db.asUser(userId, (tx) => tx.sql<NightlyRow>`select nl.diagnostic_last_nightly() as result`)),
-		attempt(() => db.asUser(userId, (tx) => tx.sql<{ size: number }>`select nl.diagnostic_db_size() as size`)),
+		// Only worth asking on a real Postgres. In PGlite, pg_database_size
+		// walks a folder inside the WebAssembly filesystem, which measured
+		// around a second on the full world and says nothing a developer needs:
+		// there is no hosting quota behind it.
+		db.kind === 'postgres'
+			? attempt(() => db.asUser(userId, (tx) => tx.sql<{ size: number }>`select nl.diagnostic_db_size() as size`))
+			: Promise.resolve(null),
 		attempt(() =>
 			db.asUser(
 				userId,
-				(tx) => tx.sql<{ counts: Record<string, number> }>`select nl.diagnostic_row_estimates() as counts`
+				(tx) => tx.sql<EstimateRow>`select nl.diagnostic_row_estimates() as result`
 			)
 		)
 	]);
@@ -279,13 +291,17 @@ export async function readHealth(db: Db, userId: number, env: SettingsEnv = curr
 		id: 'db_size',
 		label: 'Database size',
 		state: 'neutral',
-		detail: bytes ? size(Number(bytes[0].size)) : 'could not be read',
+		detail: bytes
+			? size(Number(bytes[0].size))
+			: db.kind === 'pglite'
+				? 'a local PGlite folder, not measured'
+				: 'could not be read',
 		advice: ''
 	});
 
-	// --- how big the world is, estimated ------------------------------------
+	// --- how big the world is ------------------------------------------------
 	const counts: TableCount[] = estimates
-		? Object.entries(estimates[0].counts).map(([table, rows]) => ({ table, rows: Number(rows) }))
+		? Object.entries(estimates[0].result.rows).map(([table, rows]) => ({ table, rows: Number(rows) }))
 		: [];
 	counts.sort((a, b) => b.rows - a.rows);
 
@@ -317,6 +333,7 @@ export async function readHealth(db: Db, userId: number, env: SettingsEnv = curr
 		ms: Date.now() - started,
 		checks,
 		counts,
+		countsMeasured: estimates?.[0].result.counted ?? false,
 		environment
 	};
 }

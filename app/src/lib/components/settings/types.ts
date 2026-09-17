@@ -31,8 +31,9 @@ export interface DiagnosticsView {
 	/** How long the checks took, so the page can be honest about it. */
 	ms: number;
 	checks: HealthCheckView[];
-	/** Estimates from the planner's own statistics, not counts. */
+	/** From the planner's own statistics, or counted when it had none. */
 	counts: { table: string; rows: number }[];
+	countsMeasured: boolean;
 	environment: { name: string; set: boolean; shown: string }[];
 }
 
