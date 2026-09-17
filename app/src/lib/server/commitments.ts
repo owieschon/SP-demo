@@ -86,7 +86,7 @@ export async function listBoard(db: Db, userId: number, ownerId: number | null):
 				from nl.commitment_progress p
 				where (${ownerId}::int is null or p.owner_id = ${ownerId}::int)
 				  and (not p.is_settled
-				       or coalesce(p.answered_at::date, p.ends_on) >= nl.today() - 90)
+				       or coalesce(p.answered_at::date, p.ends_on) >= (select nl.today()) - 90)
 			)
 			select b.id, b.title, b.customer_no, cu.name as customer_name,
 			       b.owner_id, u.full_name as owner_name, ct.full_name as buyer_name,
