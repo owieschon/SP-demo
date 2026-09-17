@@ -349,6 +349,9 @@ begin
   update public.bc_customers bc set lifetime_sales = cu.lifetime from demo.customers cu where cu.customer_no = bc.customer_no;
 
   -- Deals -------------------------------------------------------------------
+  -- Reseed here: the ship-line loop above draws a calendar-dependent number of
+  -- random values, and which accounts get which deals must not move with the date.
+  perform setseed(p_seed + 0.11);
   -- Delivering: window open, parts shipping, more expected.
   for acct in select rec.id, rec.data, cu.customer_no, cu.tier from public.records rec join demo.customers cu on cu.account_id = rec.id and cu.branch_of is null
               where rec.data ->> 'category' = 'Account Management' and cu.lifecycle in ('steady','new','growing','slipping') and cu.blocked = '' and cu.size <> 'D' order by random() limit 6 loop
@@ -435,6 +438,7 @@ begin
   end loop;
 
   -- The Jet open order book ---------------------------------------------------
+  perform setseed(p_seed + 0.22);
   -- 134 orders. Yesterday: the six lowest-numbered had not shipped yet; the six highest did not exist. 128 orders each day.
   k := 481200;
   for i in 1..134 loop
