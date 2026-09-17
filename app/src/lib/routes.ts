@@ -1,45 +1,59 @@
 /*
   Every address in the app, in one place.
 
-  Before this, each page and each component built its own hrefs by hand, and
-  one of them (the warehouse pick queue) forgot to encode a customer number.
-  A single registry means a page, a search result and the command palette
-  cannot disagree about where a record lives.
+  Before this, a URL was built wherever it was needed: nineteen anchors
+  across the pages, two helpers in the catalog components, and nothing at
+  all on the assistant's side, so a tool could return an account number but
+  never a link to it. One of the customer links was also the only one that
+  forgot encodeURIComponent.
+
+  Two rules. A page builds its hrefs from here, and so does anything that
+  returns a row to an agent, so a person and an agent are always given the
+  same address for the same record. The rail (nav.ts) and the command
+  palette build theirs from here too.
 */
 
-const enc = encodeURIComponent;
+/** A record id that goes in a path segment, escaped once, here. */
+const seg = (value: string | number): string => encodeURIComponent(String(value));
 
 export const routes = {
+	/** The exception queue: what needs a person right now. */
 	today: () => '/',
+	account: (customerNo: string) => `/accounts/${seg(customerNo)}`,
+	accounts: () => '/accounts',
+	commitment: (id: number) => `/commitments/${seg(id)}`,
 	commitments: (who?: 'mine' | 'all') => (who ? `/commitments?who=${who}` : '/commitments'),
-	commitment: (id: number) => `/commitments/${id}`,
+	/** The closed-short question on one commitment. */
+	commitmentAnswer: (id: number) => `/commitments/${seg(id)}#question`,
+	/** The next closed-short question, whichever commitment it is on. */
 	commitmentsAnswer: (who?: 'mine' | 'all') =>
 		who ? `/commitments/answer?who=${who}` : '/commitments/answer',
-	accounts: () => '/accounts',
-	account: (customerNo: string) => `/accounts/${enc(customerNo)}`,
+	part: (itemNo: string) => `/parts/${seg(itemNo)}`,
 	parts: () => '/parts',
-	part: (itemNo: string) => `/parts/${enc(itemNo)}`,
+	vendor: (vendorNo: string) => `/vendors/${seg(vendorNo)}`,
 	vendors: () => '/vendors',
-	vendor: (vendorNo: string) => `/vendors/${enc(vendorNo)}`,
-	search: (q?: string) => (q ? `/search?q=${enc(q)}` : '/search'),
-	operations: () => '/operations',
-	forecast: () => '/operations/forecast',
-	warehouse: (itemNo?: string) => (itemNo ? `/warehouse?part=${enc(itemNo)}` : '/warehouse'),
-	automations: () => '/automations',
-	automationNew: () => '/automations/new',
-	automation: (id: number) => `/automations/${id}`,
-	rfq: () => '/rfq',
-	rfqDraft: (id: number) => `/rfq/${id}`,
-	quote: (id: number) => `/quotes/${id}`,
+	/** A quote request read out of a customer's email. */
+	quoteRequest: (id: number) => `/rfq/${seg(id)}`,
+	/** Where emailed requests arrive. */
+	quoteRequests: () => '/rfq',
+	quote: (id: number) => `/quotes/${seg(id)}`,
+	rule: (id: number) => `/automations/${seg(id)}`,
+	rules: () => '/automations',
+	newRule: () => '/automations/new',
+	conversation: (id: number) => `/ask/${seg(id)}`,
 	ask: () => '/ask',
-	conversation: (id: number) => `/ask/${id}`,
+	deskMessage: (id: number) => `/desk/${seg(id)}`,
 	desk: () => '/desk',
-	deskMessage: (id: number) => `/desk/${id}`,
+	/** The queue an agent's proposal waits in. */
 	workspace: (source?: 'rfq' | 'assistant' | 'mail' | 'purchase') =>
 		source ? `/workspace?source=${source}` : '/workspace',
-	/** What the agents did and what a person decided about it. */
-	workspaceDecisions: () => '/workspace#decisions',
+	/** What the agents did, and what a person decided about it. */
+	workspaceDecisions: () => '/workspace#decided',
+	operations: () => '/operations',
+	forecast: () => '/operations/forecast',
+	warehouse: (itemNo?: string) => (itemNo ? `/warehouse?part=${seg(itemNo)}` : '/warehouse'),
 	settings: () => '/settings',
 	settingsMcp: () => '/settings/mcp',
-	signin: () => '/signin'
+	signin: () => '/signin',
+	search: (q?: string) => (q ? `/search?q=${encodeURIComponent(q)}` : '/search')
 } as const;

@@ -14,7 +14,7 @@
 	  where they came from and when.
 	*/
 	import type { Snippet } from 'svelte';
-	import { day } from '$lib/format';
+	import { day, dayFull } from '$lib/format';
 
 	let {
 		title,
@@ -52,7 +52,7 @@
 		<div class="right">
 			{#if source || asOf}
 				<span class="t-meta muted provenance">
-					{#if source}{source}{/if}{#if source && asOf}, {/if}{#if asOf}as of {day(asOf, thisYear)}{/if}
+					{#if source}{source}{/if}{#if source && asOf}, {/if}{#if asOf}as of {thisYear === undefined ? dayFull(asOf) : day(asOf, thisYear)}{/if}
 				</span>
 			{/if}
 			{#if actions}{@render actions()}{/if}

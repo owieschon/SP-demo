@@ -24,7 +24,7 @@
 	<header class="head">
 		<h1 class="sr-only">Parts</h1>
 		<p class="faint">
-			Every part in the item master, with what it sold in the last 12 months, what it earns and what
+			Every part we sell, with what it sold in the last 12 months, what it earns and what
 			is promised against it. Search by number or by words from the description.
 		</p>
 	</header>
@@ -97,14 +97,14 @@
 					<table>
 						<thead>
 							<tr>
-								<th>Item</th>
-								<th>Description</th>
-								<th>Family</th>
-								<th class="num">On hand</th>
-								<th class="num">Units 12m</th>
-								<th class="num">Revenue 12m</th>
-								<th class="num">Margin</th>
-								<th class="num">Last sold</th>
+								<th scope="col">Item</th>
+								<th scope="col">Description</th>
+								<th scope="col">Family</th>
+								<th scope="col" class="num">On hand</th>
+								<th scope="col" class="num">Units 12m</th>
+								<th scope="col" class="num">Revenue 12m</th>
+								<th scope="col" class="num">Margin</th>
+								<th scope="col" class="num">Last sold</th>
 							</tr>
 						</thead>
 						<tbody>

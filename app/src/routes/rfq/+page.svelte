@@ -1,11 +1,11 @@
 <script lang="ts">
-	// RFQ intake: paste a customer's email and attach whatever came with it.
+	// Quote requests: paste a customer's email and attach whatever came with it.
 	// The server reads every file with the reader for its format, builds one
 	// draft out of them, checks it against the book and opens it for review.
 	import { enhance } from '$app/forms';
 	import Lock from '@lucide/svelte/icons/lock';
 	import Sparkles from '@lucide/svelte/icons/sparkles';
-	import DraftListSkeleton from '$lib/components/rfq/DraftListSkeleton.svelte';
+	import SkeletonRows from '$lib/components/ui/SkeletonRows.svelte';
 	import { moment } from '$lib/format';
 	import type { PageProps } from './$types';
 
@@ -31,12 +31,12 @@
 </script>
 
 <svelte:head>
-	<title>RFQ intake · Northline</title>
+	<title>Quote requests · Northline</title>
 </svelte:head>
 
 <main class="page">
 	<header class="head">
-		<h1>RFQ intake</h1>
+		<h1>Quote requests</h1>
 		<p class="faint">
 			Paste a customer's email asking for parts, and attach whatever came with it: a spreadsheet, a printed
 			purchase order, a CSV parts list. It is read into a draft, every field is checked against the catalog and
@@ -48,9 +48,11 @@
 		<header class="panel-head">
 			<h2 id="new-request">New request</h2>
 			{#if data.live.unlocked}
-				<span class="chip live"><Sparkles size={12} aria-hidden="true" />Live: {data.live.model}</span>
+				<span class="chip live" title="Model: {data.live.model}">
+					<Sparkles size={12} aria-hidden="true" />AI reading
+				</span>
 			{:else}
-				<span class="chip">Rules extractor</span>
+				<span class="chip" title="Read by pattern matching, with no model involved">Pattern reading</span>
 			{/if}
 		</header>
 
@@ -173,13 +175,13 @@
 
 	<section class="panel" aria-labelledby="recent">
 		<header class="panel-head">
-			<h2 id="recent">Your recent drafts</h2>
+			<h2 id="recent">Your recent quote requests</h2>
 		</header>
 		{#await data.drafts}
-			<DraftListSkeleton />
+			<SkeletonRows rows={6} cols={4} height={44} label="Loading recent quote requests" />
 		{:then drafts}
 			{#if drafts.length === 0}
-				<p class="body muted">No drafts yet. Load a sample above to see how it works.</p>
+				<p class="body muted">Nothing here yet. Load a sample above to see how it works.</p>
 			{:else}
 				<ul class="drafts">
 					{#each drafts as d (d.id)}
@@ -206,7 +208,7 @@
 				</ul>
 			{/if}
 		{:catch}
-			<p class="body notice error" role="alert">Your drafts could not be loaded. Reload the page to try again.</p>
+			<p class="body notice error" role="alert">Your quote requests could not be loaded.</p>
 		{/await}
 	</section>
 </main>

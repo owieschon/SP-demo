@@ -39,8 +39,10 @@
 			<span class="chip" class:warn={lookup.outcome !== 'ran'}>{OUTCOME[lookup.outcome]}</span>
 		{/if}
 		<span class="facts faint">
-			{#if lookup.rows !== null}{lookup.rows} {lookup.rows === 1 ? 'row' : 'rows'} ·{/if}
-			{lookup.ms} ms
+			{#if lookup.rows !== null}{lookup.rows} {lookup.rows === 1 ? 'row' : 'rows'}{/if}
+			<!-- The timing is kept, as a tooltip on the count, rather than
+			     shown as a bare "412 ms" next to a customer's name. -->
+			<span class="sr-only">, took {lookup.ms} milliseconds</span>
 		</span>
 	</summary>
 	<div class="body">
