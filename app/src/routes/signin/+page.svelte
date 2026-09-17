@@ -37,7 +37,7 @@
 		<Mark size={32} />
 		<h1>Sign in to Northline</h1>
 		<p class="muted">
-			A portfolio app on invented data. Pick someone to be; there are no passwords. Every database
+			A demo app on synthetic data. Pick someone to be; there are no passwords. Every database
 			call runs as the person you pick, and the database decides what they may change.
 		</p>
 	</header>

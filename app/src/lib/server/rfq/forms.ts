@@ -8,13 +8,16 @@
 import { fail, type ActionFailure } from '@sveltejs/kit';
 import type { SessionUser } from '$lib/types';
 import type { Db } from '../db/types.ts';
+import { readRequest, type StoredFile } from '../documents/read.ts';
+import { nameOf } from '../documents/request.ts';
+import type { ParsedDocument } from '../documents/types.ts';
 import { toAppError } from '../errors.ts';
 import { approveDraft, approveInput, rejectDraft, rejectInput, reviseDraft, reviseInput, type DraftWriteResult } from './drafts.ts';
 
 export type RfqFormFailure = { message: string; conflict?: boolean };
 
-/** Uploads bigger than this are not emails anyone pastes by hand. */
-export const MAX_UPLOAD_BYTES = 200_000;
+/** More than this in the paste box is not an email anybody typed. */
+export const MAX_PASTE_CHARS = 200_000;
 
 async function run(
 	work: () => Promise<DraftWriteResult>,
@@ -73,33 +76,47 @@ export async function rejectAction(db: Db, user: SessionUser, request: Request) 
 }
 
 /**
- * The email from the intake form: an uploaded .txt or .eml file wins over the
- * paste box. PDFs and other files are refused with a plain reason.
+ * The request from the intake form: whatever was pasted, plus every file
+ * that was attached, each read by the reader for its format (see
+ * ../documents/read.ts).
+ *
+ * A file that cannot be read stops the whole submission, and the page lists
+ * every reason at once. Half a request is worse than none: a quote missing
+ * the lines that were on the PDF nobody could read is a quote that goes out
+ * wrong.
  */
-export async function emailFromForm(
+export async function requestFromForm(
 	data: FormData
-): Promise<{ ok: true; text: string; name: string } | { ok: false; message: string }> {
-	const file = data.get('file');
-	if (file instanceof File && file.size > 0) {
-		const name = file.name || 'upload';
-		if (/\.pdf$/i.test(name) || file.type === 'application/pdf') {
-			return { ok: false, message: 'PDF attachments are not supported yet. Paste the email text instead.' };
-		}
-		if (!/\.(txt|eml)$/i.test(name)) {
-			return { ok: false, message: 'Upload a .txt or .eml file, or paste the email text.' };
-		}
-		if (file.size > MAX_UPLOAD_BYTES) {
-			return { ok: false, message: 'That file is larger than 200 KB. Paste the part of the email that matters.' };
-		}
-		return { ok: true, text: await file.text(), name };
+): Promise<
+	| { ok: true; documents: ParsedDocument[]; stored: StoredFile[]; sourceName: string }
+	| { ok: false; message: string }
+> {
+	const paste = data.get('email');
+	const pasted = typeof paste === 'string' ? paste : '';
+	if (pasted.length > MAX_PASTE_CHARS) {
+		return { ok: false, message: `That email is longer than ${MAX_PASTE_CHARS.toLocaleString('en-US')} characters.` };
 	}
-	const text = data.get('email');
-	if (typeof text === 'string' && text.trim().length > 0) {
-		if (text.length > MAX_UPLOAD_BYTES) {
-			return { ok: false, message: 'That email is longer than 200,000 characters.' };
-		}
-		const sample = data.get('sampleName');
-		return { ok: true, text, name: typeof sample === 'string' && sample ? sample : 'pasted email' };
+
+	const files = data.getAll('files').filter((value): value is File => value instanceof File && value.size > 0);
+	if (pasted.trim() === '' && files.length === 0) {
+		return {
+			ok: false,
+			message: 'Paste an email, attach a .txt, .eml, .pdf, .xlsx, .xls or .csv file, or load a sample.'
+		};
 	}
-	return { ok: false, message: 'Paste an email, upload a .txt or .eml file, or load a sample.' };
+
+	const read = await readRequest({ paste: pasted, files });
+	if (read.problems.length > 0) {
+		return { ok: false, message: read.problems.join(' ') };
+	}
+	if (read.documents.length === 0) {
+		return { ok: false, message: 'Nothing could be read out of that. Paste the request as text instead.' };
+	}
+
+	// A sample loaded from the list keeps its name, which is what the drafts
+	// list shows.
+	const sample = data.get('sampleName');
+	const sourceName =
+		read.stored.length === 0 && typeof sample === 'string' && sample ? sample : nameOf(read.documents);
+	return { ok: true, documents: read.documents, stored: read.stored, sourceName };
 }

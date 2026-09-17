@@ -1,2 +1,5 @@
 node_modules
 .env.local
+
+# Worktrees that agents run in.
+.claude/worktrees/

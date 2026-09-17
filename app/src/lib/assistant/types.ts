@@ -23,6 +23,12 @@ export const RISK_LABEL: Record<RiskClass, string> = {
 export type LookupOutcome = 'ran' | 'gated' | 'refused' | 'failed';
 
 /** One line under "what the assistant looked up". */
+/**
+ * Who answered: the scripted model, the real model, or an outside agent
+ * through the MCP server.
+ */
+export type AskMode = 'mock' | 'live' | 'mcp';
+
 export interface LookupView {
 	round: number;
 	name: string;
@@ -78,7 +84,7 @@ export interface MessageView {
 export interface ConversationView {
 	id: number;
 	title: string;
-	mode: 'mock' | 'live';
+	mode: AskMode;
 	messageCount: number;
 	/** How many more messages fit before a new conversation is needed. */
 	messagesLeft: number;
@@ -90,7 +96,7 @@ export interface ConversationView {
 export interface ConversationListItem {
 	id: number;
 	title: string;
-	mode: 'mock' | 'live';
+	mode: AskMode;
 	messageCount: number;
 	updatedAt: string;
 	/** Proposals still waiting for a decision. */
@@ -99,7 +105,7 @@ export interface ConversationListItem {
 
 /** Which model is answering, and whether the real one could be switched on. */
 export interface ModeView {
-	mode: 'mock' | 'live';
+	mode: AskMode;
 	/** Never says "Claude" unless Claude is really answering. */
 	label: string;
 	model: string | null;

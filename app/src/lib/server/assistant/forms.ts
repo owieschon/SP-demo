@@ -17,24 +17,29 @@ import { readCaps, readLimits } from './caps.ts';
 import { AskModelError, DEFAULT_MODEL, liveModel, messagesApi } from './claude.ts';
 import { toAskError } from './errors.ts';
 import type { AskModel } from './loop.ts';
-import { LIVE_COOKIE, LIVE_COOKIE_PATH, LIVE_MINUTES, liveConfigured, passphraseMatches, signLiveCookie, verifyLiveCookie } from './live.ts';
+import { LIVE_COOKIE, LIVE_COOKIE_PATH, LIVE_MINUTES, liveConfigured, passphraseMatches, passphraseRequired, signLiveCookie, verifyLiveCookie } from './live.ts';
 import { MOCK_LABEL, mockModel } from './mock.ts';
 import { decideProposal } from './proposals.ts';
 
 type Event = Pick<RequestEvent, 'cookies' | 'locals' | 'request'>;
 
-/** Live mode needs the server's key and passphrase, and this person's cookie. */
+/**
+ * Live mode needs the server's key. A passphrase is only in the way when the
+ * server sets one, and then this person must have typed it (the cookie).
+ */
 export function liveState({ cookies, locals }: Pick<Event, 'cookies' | 'locals'>) {
 	const values = { apiKey: env.ANTHROPIC_API_KEY, passphrase: env.LIVE_AI_PASSPHRASE, model: env.ANTHROPIC_MODEL };
 	const configured = liveConfigured(values) && env.ASSISTANT_MOCK !== '1';
 	const secret = sessionSecret(env.SESSION_SECRET, Boolean(env.VERCEL));
-	const unlocked = configured && verifyLiveCookie(cookies.get(LIVE_COOKIE), locals.user!.id, secret);
-	return { configured, unlocked, model: env.ANTHROPIC_MODEL || DEFAULT_MODEL, secret };
+	const locked = passphraseRequired(values);
+	const unlocked =
+		configured && (!locked || verifyLiveCookie(cookies.get(LIVE_COOKIE), locals.user!.id, secret));
+	return { configured, locked, unlocked, model: env.ANTHROPIC_MODEL || DEFAULT_MODEL, secret };
 }
 
 /**
- * What the badge says. Scripted demo mode is the default and never claims to
- * be the real model.
+ * What the badge says. It names the real model when the real model will
+ * answer, and never claims to be the real model when it is not.
  */
 export function modeView(event: Pick<Event, 'cookies' | 'locals'>): ModeView {
 	const live = liveState(event);
