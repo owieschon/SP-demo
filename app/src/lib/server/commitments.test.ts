@@ -383,3 +383,81 @@ describe('the nightly job', () => {
 		).rejects.toThrow(/outcomes_nightly_pushed_with_evidence/);
 	});
 });
+
+describe('the stored delivered figure (migration 0008)', () => {
+	async function drift() {
+		return db.asSystem((tx) =>
+			tx.sql<{ commitment_id: number }>`select commitment_id from nl.delivery_drift()`
+		);
+	}
+
+	it('follows a line being corrected and removed', async () => {
+		const c = await commitment({ value: 100000, startsOn: '2026-04-01', endsOn: '2026-04-30' });
+		await invoice(c.branch, '2026-04-10', 'ZT-100', 300);
+		expect((await progress(c.id)).delivered).toBe(300);
+		const invoiceNo = `T${invoiceSeq}`;
+
+		await db.asSystem((tx) => tx.sql`update nl.invoice_lines set amount = 250 where invoice_no = ${invoiceNo}`);
+		expect((await progress(c.id)).delivered).toBe(250);
+
+		// Deleting the invoice deletes its lines (on delete cascade).
+		await db.asSystem((tx) => tx.sql`delete from nl.invoices where invoice_no = ${invoiceNo}`);
+		expect((await progress(c.id)).delivered).toBe(0);
+	});
+
+	it('follows the scope and the window', async () => {
+		const c = await commitment({ value: 100000, startsOn: '2026-04-01', endsOn: '2026-04-30' });
+		await invoice(c.hq, '2026-04-10', 'ZT-300', 70); // not in scope yet
+		await invoice(c.hq, '2026-05-10', 'ZT-100', 20); // after the window
+		expect((await progress(c.id)).delivered).toBe(0);
+
+		await db.asSystem((tx) => tx.sql`insert into nl.commitment_items (commitment_id, item_no) values (${c.id}, 'ZT-300')`);
+		expect((await progress(c.id)).delivered).toBe(70);
+
+		await db.asSystem((tx) => tx.sql`update nl.commitments set ends_on = '2026-05-31' where id = ${c.id}`);
+		expect((await progress(c.id)).delivered).toBe(90);
+
+		await db.asSystem(
+			(tx) => tx.sql`delete from nl.commitment_items where commitment_id = ${c.id} and item_no = 'ZT-300'`
+		);
+		expect((await progress(c.id)).delivered).toBe(20);
+	});
+
+	it('follows an account moving to another family', async () => {
+		const a = await commitment({ value: 100000, startsOn: '2026-04-01', endsOn: '2026-04-30' });
+		const b = await commitment({ value: 100000, startsOn: '2026-04-01', endsOn: '2026-04-30' });
+		await invoice(a.branch, '2026-04-10', 'ZT-100', 400);
+		expect((await progress(a.id)).delivered).toBe(400);
+
+		await db.asSystem((tx) => tx.sql`update nl.customers set bill_to_no = ${b.hq} where customer_no = ${a.branch}`);
+		expect((await progress(a.id)).delivered).toBe(0);
+		expect((await progress(b.id)).delivered).toBe(400);
+	});
+
+	it('matches a fresh count for every commitment, including the whole seeded world', async () => {
+		const [{ n }] = await db.asSystem((tx) => tx.sql<{ n: number }>`select count(*) as n from nl.commitments`);
+		expect(n).toBeGreaterThan(30);
+		expect(await drift()).toEqual([]);
+	});
+
+	it('can be repaired by the nightly job if something ever writes around the triggers', async () => {
+		const c = await commitment({ value: 100000, startsOn: '2026-04-01', endsOn: '2026-04-30' });
+		await invoice(c.hq, '2026-04-10', 'ZT-100', 60);
+		await db.asSystem((tx) => tx.sql`update nl.commitment_delivery set delivered = 1 where commitment_id = ${c.id}`);
+		expect((await drift()).map((d) => d.commitment_id)).toEqual([c.id]);
+
+		const [row] = await db.asSystem((tx) => tx.sql<{ result: { repaired: number[] } }>`select nl.repair_delivery() as result`);
+		expect(row.result.repaired).toEqual([c.id]);
+		expect(await drift()).toEqual([]);
+	});
+
+	it('cannot be written by a signed-in user', async () => {
+		const c = await commitment({ value: 100000, startsOn: '2026-04-01', endsOn: '2026-04-30' });
+		await expect(
+			db.asUser(DANA, (tx) => tx.sql`update nl.commitment_delivery set delivered = 99999 where commitment_id = ${c.id}`)
+		).rejects.toThrow(/permission denied/);
+		await expect(
+			db.asUser(DANA, (tx) => tx.sql`select nl.measure_commitments(array[${c.id}::bigint])`)
+		).rejects.toThrow(/permission denied/);
+	});
+});
