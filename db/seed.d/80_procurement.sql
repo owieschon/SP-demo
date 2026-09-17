@@ -91,9 +91,7 @@ begin
   -- desk sees is one a buyer would actually place.
   -- -------------------------------------------------------------------------
   update nl.stock s
-     set on_hand = greatest(0, pick.floor_qty),
-         on_purchase_order = 0,
-         on_production_order = 0
+     set on_hand = greatest(0, pick.floor_qty)
     from (
       select
         r.item_no,
@@ -108,6 +106,14 @@ begin
         and not r.blocked
         and not r.made_to_order
         and r.demand_shape in ('steady', 'lumpy')
+        -- Nothing already on the way, so taking stock off the shelf is enough
+        -- to make the part genuinely short. This also keeps the file away
+        -- from nl.stock.on_purchase_order and on_production_order, which
+        -- db/seed.d/40_supply.sql picks its sample purchase and production
+        -- orders from: zeroing those columns here changed which parts its
+        -- sample files hold, and the fingerprints it had already stored for
+        -- them stopped matching.
+        and r.on_order_total = 0
       order by nl_seed.u('procure.pick|' || r.item_no)
       limit v_short
     ) pick
@@ -127,6 +133,7 @@ begin
     and not r.blocked
     and not r.made_to_order
     and r.policy_level is not null
+    and r.on_order_total = 0
   group by r.vendor_no
   having count(*) >= 3
   order by nl_seed.u('procure.minvendor|' || r.vendor_no)
@@ -135,7 +142,7 @@ begin
   if v_vendor is not null then
     -- Empty the shelf for that vendor's three cheapest policy parts.
     update nl.stock s
-       set on_hand = 0, on_purchase_order = 0, on_production_order = 0
+       set on_hand = 0
       from (
         select r.item_no
         from nl.part_replenishment r
@@ -144,6 +151,7 @@ begin
           and r.unit_cost between 1 and 40
           and not r.blocked
           and not r.made_to_order
+          and r.on_order_total = 0
         order by r.unit_cost, r.item_no
         limit 3
       ) pick
@@ -185,6 +193,11 @@ begin
     and i.vendor_no is not null
     and i.lead_time ~ '^[0-9]+[DWMY]$'
     and r.vendor_no <> coalesce(v_vendor, '')
+    -- Nothing on the way, so this part is not one db/seed.d/40_supply.sql
+    -- drew a sample purchase order from (that sample joins the item to its
+    -- vendor, and taking the vendor away would change the file it already
+    -- stored a fingerprint for).
+    and r.on_order_total = 0
   order by nl_seed.u('procure.novendor|' || r.item_no)
   limit 1;
 
@@ -192,8 +205,7 @@ begin
     update nl.items set vendor_no = null where item_no = v_item;
     -- And empty the shelf, so it stays on the list whatever the arithmetic
     -- does either side of this change.
-    update nl.stock set on_hand = 0, on_purchase_order = 0, on_production_order = 0
-     where item_no = v_item;
+    update nl.stock set on_hand = 0 where item_no = v_item;
   end if;
 
   -- -------------------------------------------------------------------------
