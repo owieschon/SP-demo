@@ -1,0 +1,77 @@
+# Northline
+
+The sales and operations system for Northline Exhaust Co., an invented maker
+of heavy-duty truck exhaust parts. A portfolio app. Every record in it is
+invented; nothing here describes a real company, person or customer.
+
+SvelteKit 2, Svelte 5, TypeScript, Postgres with no ORM. Every request runs in
+a transaction as the signed-in person, and row-level security in Postgres
+decides what they may read and change.
+
+## Signing in
+
+There are no passwords. GET /signin lists the people you can be and a POST
+with `userId` sets a signed cookie. Every other path redirects to /signin
+without one. Reads and writes are scoped to whoever the cookie names.
+
+## Routes
+
+Filters and sorts are query parameters, so every view is a link that can be
+handed to someone else.
+
+- /commitments               the board, six lanes. ?who=mine|all
+- /commitments/<id>          one commitment: scope, delivery, quotes, notes
+- /commitments/answer        the question asked when a window closes short
+- /accounts                  the account book. ?q ?state ?group ?quiet ?open ?sort ?page ?who
+- /accounts/<customer_no>    one account: people, revenue, orders, activity
+- /parts                     the part list. ?q ?family ?short ?reorder ?sort
+- /parts/<item_no>           one part: stock, price, cost, sales, buyers, siblings
+- /vendors                   the vendor list. ?q ?all
+- /vendors/<vendor_no>       one vendor: terms, contacts, parts supplied
+- /search                    accounts, parts and vendors in one page. ?q
+- /operations                the daily ERP export: upload, review, apply. ?snapshot
+- /operations/forecast       when each open line will really ship. ?status ?vendor ?wc ?customer ?who
+- /warehouse                 bins, the stock ledger, picks, counts. ?part
+- /automations               the rule list
+- /automations/new           build a rule
+- /automations/<id>          one rule and what it has done
+- /rfq                       turn a customer email into a draft quote
+- /rfq/<id>                  one draft: what was read, what was checked
+- /ask                       ask a question in plain English
+- /ask/<id>                  one conversation and any proposal waiting
+
+## Reading the pages
+
+Record names are anchors to the record's own URL, so the graph can be walked
+by following links. Every page has one `<main id="content">` and one `<h1>`,
+and its browser title names the record. Section headings carry ids that work
+as anchors, for example /commitments/3014#answers.
+
+There is no public JSON API. SvelteKit serves each page's load data at
+`<route>/__data.json`, which is an internal shape and is not a contract.
+
+## Tools for an agent
+
+An assistant lives at /ask with fourteen tools. Seven read (search accounts,
+read an account, read a commitment, list windows closed short, read a part,
+run a read-only SQL query, test an automation rule). Two write directly and
+are additive only (add a note, add a next step). Four write and are gated:
+they cannot run from a model at all, only be proposed for a person to
+approve. Read tools answer as JSON text; there is no output schema yet.
+
+An MCP server over HTTP is being built on another branch. Until it is
+merged, an outside agent reads this app through its pages.
+
+## What an agent must not do
+
+Nothing that changes a business record can be done by an agent without a
+person approving it. That is enforced in the SQL functions, not in a prompt:
+every write claims a request id, requires an active user, checks the field
+rules, locks on the row's version and writes an audit row. A refused write
+raises an NL4xx code.
+
+## More
+
+- docs/agent-map.md   every route, what it holds, and which tool covers it
+- docs/walkthrough.md how a request travels through the app
+- docs/sql.md         the views behind the figures
