@@ -1,3 +1,7 @@
 # Keep LF everywhere: SQL function bodies are hashed by db/fingerprint.sql,
 # and a CRLF checkout would change them.
 * text=auto eol=lf
+
+# Sample ERP exports keep their bytes exactly (CRLF, BOM): the tests compare
+# them with the generator byte for byte, and real exports look like this.
+fixtures/exports/*.csv -text
