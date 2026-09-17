@@ -12,7 +12,8 @@
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"test:unit": "vitest",
 		"test": "npm run test:unit -- --run",
-		"eval:rfq": "node scripts/eval-rfq.ts"
+		"eval:rfq": "node scripts/eval-rfq.ts",
+		"eval:agents": "node --import ./scripts/lib-alias.mjs scripts/eval-agents.ts"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-vercel": "^6.3.3",

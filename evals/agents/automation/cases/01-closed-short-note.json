@@ -1,0 +1,18 @@
+{
+  "about": "Every window that closed short with no answer yet gets a note. The count is recorded from the small world.",
+  "rule": {
+    "name": "Closed short, note it",
+    "description": "An eval fixture.",
+    "trigger": "window_closed_short",
+    "conditions": [],
+    "action": {
+      "kind": "note",
+      "body": "{customer} window closed short by {shortfall}."
+    },
+    "enabled": false
+  },
+  "expected": {
+    "matches": 3,
+    "recorded": true
+  }
+}

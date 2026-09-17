@@ -1,0 +1,37 @@
+{
+  "about": "Proposing a tool that is not gated. There is nothing to propose: it can just be called.",
+  "question": "Ask me before you look anything up.",
+  "script": [
+    {
+      "tools": [
+        {
+          "name": "propose_action",
+          "input": {
+            "summary": "Read an account.",
+            "options": [
+              {
+                "label": "Read the Kennebec account",
+                "tool": "get_account",
+                "input": {
+                  "customer_no": "1214"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "say": "I will just read it."
+    }
+  ],
+  "expected": {
+    "tools": [
+      {
+        "name": "propose_action",
+        "ran": false
+      }
+    ],
+    "proposal": null
+  }
+}

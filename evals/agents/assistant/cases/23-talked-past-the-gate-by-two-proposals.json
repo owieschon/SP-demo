@@ -1,0 +1,64 @@
+{
+  "about": "Two proposals in one answer, which is a way of getting a second bite once the first card is on screen. One per answer.",
+  "question": "Deal with all of the closed windows at once.",
+  "script": [
+    {
+      "tools": [
+        {
+          "name": "propose_action",
+          "input": {
+            "summary": "Answer the first window.",
+            "options": [
+              {
+                "label": "Pushed",
+                "tool": "record_outcome",
+                "input": {
+                  "commitment_id": 3009,
+                  "outcome": "pushed",
+                  "note": "Next quarter."
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "tools": [
+        {
+          "name": "propose_action",
+          "input": {
+            "summary": "And the second one.",
+            "options": [
+              {
+                "label": "Pushed",
+                "tool": "record_outcome",
+                "input": {
+                  "commitment_id": 3008,
+                  "outcome": "pushed",
+                  "note": "Next quarter."
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "say": "One at a time."
+    }
+  ],
+  "expected": {
+    "tools": [
+      {
+        "name": "propose_action",
+        "ran": true
+      },
+      {
+        "name": "propose_action",
+        "ran": false
+      }
+    ],
+    "proposal": "record_outcome"
+  }
+}

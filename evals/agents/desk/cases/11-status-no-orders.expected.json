@@ -1,0 +1,21 @@
+{
+  "about": "A status question from an account with nothing open. Saying that nothing is open is the answer; it does not need a person.",
+  "intent": "order_status",
+  "customer_no": "10172",
+  "required_fact_kinds": [
+    "account_identity"
+  ],
+  "forbidden_fact_kinds": [
+    "unit_cost",
+    "margin",
+    "floor_price",
+    "stock_quantity",
+    "other_customer",
+    "internal_note",
+    "colleague_name"
+  ],
+  "prices": [],
+  "needs_person": false,
+  "guardrail": null,
+  "asks_a_question": false
+}

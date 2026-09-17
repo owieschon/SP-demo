@@ -1,0 +1,22 @@
+{
+  "about": "The same account as the slipped line, asking a different way. Tracking is a status question even though the word order does not appear.",
+  "intent": "order_status",
+  "customer_no": "10062",
+  "required_fact_kinds": [
+    "account_identity",
+    "own_open_order"
+  ],
+  "forbidden_fact_kinds": [
+    "unit_cost",
+    "margin",
+    "floor_price",
+    "stock_quantity",
+    "other_customer",
+    "internal_note",
+    "colleague_name"
+  ],
+  "prices": [],
+  "needs_person": false,
+  "guardrail": null,
+  "asks_a_question": false
+}
