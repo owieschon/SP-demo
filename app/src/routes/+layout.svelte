@@ -148,14 +148,32 @@
 		return [];
 	});
 
-	// On a phone the rail is a bar that scrolls sideways, so the section you
-	// are in may start out off screen. Bring it into view on every navigation.
+	/*
+	  On a phone the rail is a bar that scrolls sideways, so the section you
+	  are in may start out off screen. Bring it into view on every navigation.
+
+	  Two things were wrong here and both were visible. The old guard was
+	  `scrollWidth > clientWidth`, which is true on a desktop too: the rail is
+	  52px wide with its labels clipped, so the check passed and the desktop
+	  rail was scrolled sideways on every navigation, taking its icons out of
+	  view. And `scrollIntoView` moves the browser's sequential focus
+	  navigation starting point, so the first Tab after a page load landed in
+	  the middle of the rail instead of at the top of the document, which
+	  would make the skip link unreachable.
+
+	  So: only when the rail really is the horizontal phone bar, and by
+	  setting scrollLeft rather than asking an element to scroll itself.
+	*/
 	let rail: HTMLElement | null = $state(null);
 	$effect(() => {
 		// Reading the path is what makes this run again after a navigation.
 		void page.url.pathname;
-		if (!rail || rail.scrollWidth <= rail.clientWidth) return;
-		rail.querySelector('[aria-current="page"]')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+		if (!rail) return;
+		if (!window.matchMedia('(max-width: 720px)').matches) return;
+		const current = rail.querySelector<HTMLElement>('[aria-current="page"]');
+		if (!current) return;
+		const middle = current.offsetLeft + current.offsetWidth / 2 - rail.clientWidth / 2;
+		rail.scrollTo({ left: Math.max(0, middle), behavior: 'smooth' });
 	});
 
 	function whoHref(value: 'mine' | 'all') {
@@ -163,23 +181,38 @@
 		params.set('who', value);
 		return `?${params}`;
 	}
+
+	/*
+	  Which section is the current one. It matches on whole path segments, so
+	  /parts/L3515 lights up Parts but a future /parts-catalog would not.
+	*/
+	function isCurrent(href: string): boolean {
+		const path = page.url.pathname;
+		return path === href || path.startsWith(href + '/');
+	}
 </script>
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
 </svelte:head>
 
-<!-- A thin bar while the next page loads. -->
+<!--
+	A thin bar while the next page loads. role="progressbar" with no value
+	says "something is happening, length unknown", which is the truth.
+-->
 {#if navigating.to}
-	<div class="loading-bar" aria-hidden="true"></div>
+	<div class="loading-bar" role="progressbar" aria-label="Loading the next page"></div>
 {/if}
 
 {#if data.user}
-	<!-- The first thing keyboard and screen-reader users reach: a way past the
-	     rail straight to the page. Visible only while it has focus. -->
-	<a class="skip" href="#content">Skip to the page</a>
+	<!--
+		Straight to the page content, for anyone arriving on the keyboard. It
+		is the first thing in the tab order and visible only when focused.
+	-->
+	<a class="skip-link" href="#content">Skip to the page</a>
+
 	<div class="shell">
-		<nav class="rail" bind:this={rail} aria-label="Main">
+		<nav class="rail" bind:this={rail} aria-label="Sections">
 			<a class="brand item pressable" href="/commitments">
 				<Mark size={24} />
 				<span class="label brand-name">Northline</span>
@@ -191,7 +224,7 @@
 						<a
 							class="item pressable"
 							href={item.href}
-							aria-current={page.url.pathname.startsWith(item.href) ? 'page' : undefined}
+							aria-current={isCurrent(item.href) ? 'page' : undefined}
 						>
 							<item.icon size={16} strokeWidth={1.75} aria-hidden="true" />
 							<span class="label">{item.label}</span>
@@ -201,12 +234,15 @@
 			</ul>
 
 			<div class="foot">
-				<div class="me" title="{data.user.fullName}, {data.user.title}">
+				<div class="me">
 					<span class="avatar" aria-hidden="true">{initials}</span>
 					<span class="label who">
 						<span class="name">{data.user.fullName}</span>
 						<span class="title">{data.user.title}</span>
 					</span>
+					<!-- The rail is 52px wide most of the time, so the name is only
+					     visible on hover. It is always here for a screen reader. -->
+					<span class="sr-only">Signed in as {data.user.fullName}, {data.user.title}</span>
 				</div>
 				<a class="item pressable" href="/signin">
 					<UserRoundArrowLeft size={16} strokeWidth={1.75} aria-hidden="true" />
@@ -384,7 +420,7 @@
 		border-radius: 50%;
 		display: grid;
 		place-items: center;
-		font-size: 0.78rem;
+		font-size: var(--fs-meta);
 		font-weight: 600;
 		letter-spacing: 0.02em;
 		color: var(--text);
@@ -403,7 +439,7 @@
 	}
 
 	.who .title {
-		font-size: 0.85rem;
+		font-size: var(--fs-meta);
 		color: var(--text-muted);
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -476,7 +512,7 @@
 	}
 
 	.demo-note {
-		font-size: 0.82rem;
+		font-size: var(--fs-meta);
 		color: var(--text-faint);
 		white-space: nowrap;
 	}
@@ -495,22 +531,6 @@
 
 	/* ------------------------------------------------------ loading bar */
 
-.skip {
-		position: fixed;
-		top: 8px;
-		left: 8px;
-		z-index: 100;
-		padding: 8px 12px;
-		border-radius: var(--radius);
-		background: var(--surface);
-		color: var(--text);
-		box-shadow: var(--overlay-shadow);
-		transform: translateY(-200%);
-	}
-
-	.skip:focus-visible {
-		transform: none;
-	}
 
 	main:focus-visible {
 		outline: none;
@@ -596,7 +616,7 @@
 		.item {
 			flex: none;
 			width: auto;
-			min-width: 60px;
+			min-width: 66px;
 			height: calc(var(--rail-w) - 6px);
 			flex-direction: column;
 			justify-content: center;
@@ -605,7 +625,7 @@
 		}
 
 		.item .label {
-			font-size: 10px;
+			font-size: var(--fs-meta);
 			line-height: 1;
 			letter-spacing: 0.01em;
 			opacity: 1;
