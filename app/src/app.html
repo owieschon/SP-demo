@@ -7,8 +7,19 @@
 <html lang="en" data-theme="%theme%">
 	<head>
 		<meta charset="utf-8" />
+		<!--
+			viewport-fit=cover lets the phone rail sit under the home indicator
+			(env(safe-area-inset-bottom) in app.css). There is deliberately no
+			user-scalable=no: a person must be able to zoom. Fields are 16px on
+			small screens instead, so iOS has no reason to zoom by itself.
+		-->
 		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-		<meta name="text-scale" content="scale" />
+		<meta name="description" content="Northline: the sales and operations system for Northline Exhaust Co. A portfolio app on invented data." />
+		<!--
+			Where an agent should look first: a plain-text map of the routes,
+			what each one holds and which tools cover it.
+		-->
+		<link rel="llms" type="text/plain" href="/llms.txt" />
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">
