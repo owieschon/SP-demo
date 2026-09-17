@@ -15,7 +15,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		// Not awaited on purpose: SvelteKit sends the page first and streams
 		// the rows when they are ready, so the board shows skeleton rows
 		// instead of a blank wait.
-		cards: listBoard(db, user.id, who === 'mine' ? user.id : null),
+		board: listBoard(db, user.id, who === 'mine' ? user.id : null),
 		// The year the server thinks it is, so dates in this year drop the year.
 		year: new Date().getFullYear()
 	};

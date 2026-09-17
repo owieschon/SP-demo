@@ -20,10 +20,10 @@
 	</header>
 
 	<!-- The rows arrive a moment after the page (see +page.server.ts). -->
-	{#await data.cards}
+	{#await data.board}
 		<BoardSkeleton />
-	{:then cards}
-		<Board {cards} who={data.who} year={data.year} />
+	{:then board}
+		<Board {board} who={data.who} year={data.year} />
 	{:catch}
 		<p class="notice error" role="alert">
 			The board could not be loaded.

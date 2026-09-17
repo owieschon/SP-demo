@@ -2,7 +2,8 @@
 // came out. Handy after changing db/seed.sql or a migration.
 //
 //   node scripts/world.ts                  small world, today pinned to 2026-09-17
-//   node scripts/world.ts full             the full world
+//   node scripts/world.ts demo             the local development world
+//   node scripts/world.ts full             the full world (takes minutes)
 //   node scripts/world.ts full 2026-12-01  the full world as of another day
 import { createTestDb, type WorldSize } from '../src/lib/server/db/pglite.ts';
 
@@ -36,7 +37,7 @@ await db.asSystem(async (tx) => {
 		from nl.commitment_progress p
 		join nl.customers c on c.customer_no = p.customer_no
 		order by array_position(array['promised','quoted','delivering','kept','pushed','broken'], p.status), p.id`;
-	console.table(board);
+	console.table(board.filter((row) => row.status !== 'kept').concat(board.filter((row) => row.status === 'kept').slice(0, 5)));
 });
 
 await db.close();

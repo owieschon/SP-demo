@@ -178,6 +178,32 @@ describe('delivery is measured from the ledger', () => {
 		expect(detail?.items.find((i) => i.itemNo === 'ZT-100')?.delivered).toBe(70);
 	});
 
+	it('counts accounts billed to a branch, and stops at a billing loop', async () => {
+		const c = await commitment({ value: 100000, startsOn: '2026-05-01', endsOn: '2026-05-31' });
+		const grandchild = `${c.branch}-G`;
+		await db.asSystem(async (tx) => {
+			await tx.sql`insert into nl.customers (customer_no, name, bill_to_no, price_group, owner_id, customer_since)
+			             values (${grandchild}, 'Test Fleet Yard', ${c.branch}, 'DEALER', ${DANA}, '2020-01-01')`;
+		});
+		await invoice(grandchild, '2026-05-10', 'ZT-100', 40);
+		expect((await progress(c.id)).delivered).toBe(40);
+
+		// Bad data: the head office now bills to its own grandchild. The walk
+		// must still end, and still count each account once.
+		await db.asSystem((tx) => tx.sql`update nl.customers set bill_to_no = ${grandchild} where customer_no = ${c.hq}`);
+		await invoice(c.hq, '2026-05-11', 'ZT-100', 5);
+		expect((await progress(c.id)).delivered).toBe(45);
+		const family = await db.asSystem((tx) =>
+			tx.sql<{ customer_no: string; depth: number }>`
+				select customer_no, depth from nl.commitment_family where commitment_id = ${c.id} order by depth`
+		);
+		expect(family).toEqual([
+			{ customer_no: c.hq, depth: 0 },
+			{ customer_no: c.branch, depth: 1 },
+			{ customer_no: grandchild, depth: 2 }
+		]);
+	});
+
 	it('flags a window that closed short with nobody having answered', async () => {
 		const c = await commitment({ value: 5000, startsOn: '2026-05-01', endsOn: '2026-08-31' });
 		await invoice(c.hq, '2026-05-10', 'ZT-100', 1000);
@@ -185,7 +211,7 @@ describe('delivery is measured from the ledger', () => {
 		expect(p.needs_outcome).toBe(true);
 		expect(p.status).toBe('delivering');
 		const board = await listBoard(db, DANA, DANA);
-		expect(board.find((card) => card.id === c.id)?.needsOutcome).toBe(true);
+		expect(board.cards.find((card) => card.id === c.id)?.needsOutcome).toBe(true);
 	});
 });
 

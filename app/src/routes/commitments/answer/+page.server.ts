@@ -11,7 +11,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const requested = url.searchParams.get('who');
 	const who = requested === 'mine' || requested === 'all' ? requested : seesEveryoneByDefault(user) ? 'all' : 'mine';
 
-	const waiting = (await listBoard(await getDb(), user.id, who === 'mine' ? user.id : null))
+	const waiting = (await listBoard(await getDb(), user.id, who === 'mine' ? user.id : null)).cards
 		.filter((c) => c.needsOutcome)
 		// Oldest closed first: those have waited longest.
 		.sort((a, b) => (b.daysSinceClose ?? 0) - (a.daysSinceClose ?? 0));

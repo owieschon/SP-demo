@@ -7,7 +7,7 @@ import { PGlite, types, type Transaction } from '@electric-sql/pglite';
 import { findDbDir, fingerprint, readMigrations, readSeed } from './files.ts';
 import { fromTemplate, roleSetup, type Db, type Param, type Row, type Tx } from './types.ts';
 
-export type WorldSize = 'full' | 'small';
+export type WorldSize = 'full' | 'demo' | 'small';
 
 // The same JavaScript types the Supabase driver returns (see postgres.ts).
 const parsers = {
@@ -142,7 +142,7 @@ export async function openLocalDb(options: {
 	log?: (message: string) => void;
 }): Promise<Db> {
 	const log = options.log ?? ((message: string) => console.log(`[local db] ${message}`));
-	const size = options.size ?? 'full';
+	const size = options.size ?? 'demo';
 	const dbDir = findDbDir();
 	const stamp = `${fingerprint([...readMigrations(dbDir), readSeed(dbDir)])}:${size}`;
 

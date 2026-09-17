@@ -70,5 +70,5 @@ On Owen's Windows PowerShell, write `npm.cmd`/`npx.cmd`; in Git Bash, plain `npm
 
 - `npm run dev`: dev server on port 5180 (local PGlite unless `DATABASE_URL` is set)
 - `npm run check`, `npm test`, `npm run build`: what CI runs
-- `node scripts/world.ts [small|full] [YYYY-MM-DD]`: build a world in memory and print it
+- `node scripts/world.ts [small|demo|full] [YYYY-MM-DD]`: build a world in memory and print it (full takes minutes; build it on Supabase instead)
 - `node scripts/fingerprint.ts [YYYY-MM-DD]`: hashes to compare with Supabase
