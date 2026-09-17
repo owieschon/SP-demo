@@ -11,6 +11,7 @@
 	import LogOut from '@lucide/svelte/icons/log-out';
 	import UserRoundArrowLeft from '@lucide/svelte/icons/user-round-arrow-left';
 	import Warehouse from '@lucide/svelte/icons/warehouse';
+	import Workflow from '@lucide/svelte/icons/workflow';
 	import { navigating, page } from '$app/state';
 	import Mark from '$lib/components/Mark.svelte';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
@@ -28,7 +29,8 @@
 	const NAV = [
 		{ href: '/commitments', label: 'Commitments', icon: ListChecks },
 		{ href: '/rfq', label: 'RFQ intake', icon: Inbox },
-		{ href: '/operations', label: 'Operations', icon: Warehouse }
+		{ href: '/operations', label: 'Operations', icon: Warehouse },
+		{ href: '/automations', label: 'Automations', icon: Workflow }
 	];
 
 	// "Pat Doe" -> "PD"
@@ -67,6 +69,19 @@
 			return [
 				{ label: 'RFQ intake', href: '/rfq' },
 				{ label: `R-${page.params.id}`, href: null }
+			];
+		}
+		if (route === '/automations') return [{ label: 'Automations', href: null }];
+		if (route === '/automations/new') {
+			return [
+				{ label: 'Automations', href: '/automations' },
+				{ label: 'New rule', href: null }
+			];
+		}
+		if (route === '/automations/[id=id]') {
+			return [
+				{ label: 'Automations', href: '/automations' },
+				{ label: `Rule ${page.params.id}`, href: null }
 			];
 		}
 		if (route.startsWith('/operations')) return [{ label: 'Operations', href: null }];
