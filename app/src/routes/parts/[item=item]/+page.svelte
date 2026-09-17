@@ -177,11 +177,11 @@
 						<table>
 							<thead>
 								<tr>
-									<th>Account</th>
-									<th class="num">Units</th>
-									<th class="num">Revenue</th>
-									<th class="num">Last price</th>
-									<th class="num">Last order</th>
+									<th scope="col">Account</th>
+									<th scope="col" class="num">Units</th>
+									<th scope="col" class="num">Revenue</th>
+									<th scope="col" class="num">Last price</th>
+									<th scope="col" class="num">Last order</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -214,12 +214,12 @@
 						<table>
 							<thead>
 								<tr>
-									<th>Posted</th>
-									<th>Invoice</th>
-									<th>Account</th>
-									<th class="num">Qty</th>
-									<th class="num">Price</th>
-									<th class="num">Amount</th>
+									<th scope="col">Posted</th>
+									<th scope="col">Invoice</th>
+									<th scope="col">Account</th>
+									<th scope="col" class="num">Qty</th>
+									<th scope="col" class="num">Price</th>
+									<th scope="col" class="num">Amount</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -270,13 +270,13 @@
 					<table>
 						<thead>
 							<tr>
-								<th>Ship date</th>
-								<th>Order</th>
-								<th>Account</th>
-								<th class="num">Qty</th>
-								<th class="num">Covered</th>
-								<th class="num">Short</th>
-								<th>Bucket</th>
+								<th scope="col">Ship date</th>
+								<th scope="col">Order</th>
+								<th scope="col">Account</th>
+								<th scope="col" class="num">Qty</th>
+								<th scope="col" class="num">Covered</th>
+								<th scope="col" class="num">Short</th>
+								<th scope="col">Bucket</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -370,10 +370,10 @@
 					<table>
 						<thead>
 							<tr>
-								<th>Item</th>
-								<th>Description</th>
-								<th class="num">On hand</th>
-								<th class="num">Revenue 12m</th>
+								<th scope="col">Item</th>
+								<th scope="col">Description</th>
+								<th scope="col" class="num">On hand</th>
+								<th scope="col" class="num">Revenue 12m</th>
 							</tr>
 						</thead>
 						<tbody>

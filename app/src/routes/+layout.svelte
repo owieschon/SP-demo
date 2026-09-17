@@ -40,7 +40,7 @@
 		{ href: '/desk', label: 'Desk', icon: Mails },
 		{ href: '/commitments', label: 'Commitments', icon: ListChecks },
 		{ href: '/accounts', label: 'Accounts', icon: Building2 },
-		{ href: '/rfq', label: 'RFQ intake', icon: Inbox },
+		{ href: '/rfq', label: 'Quote requests', icon: Inbox },
 		{ href: '/parts', label: 'Parts', icon: Package },
 		{ href: '/vendors', label: 'Vendors', icon: Truck },
 		{ href: '/operations', label: 'Operations', icon: Warehouse },
@@ -79,10 +79,10 @@
 				{ label: `C-${page.params.id}`, href: null }
 			];
 		}
-		if (route === '/rfq') return [{ label: 'RFQ intake', href: null }];
+		if (route === '/rfq') return [{ label: 'Quote requests', href: null }];
 		if (route === '/rfq/[id=id]') {
 			return [
-				{ label: 'RFQ intake', href: '/rfq' },
+				{ label: 'Quote requests', href: '/rfq' },
 				{ label: `R-${page.params.id}`, href: null }
 			];
 		}

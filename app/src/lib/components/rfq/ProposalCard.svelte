@@ -120,7 +120,7 @@
 					<textarea name="reason" rows="2" maxlength="500" placeholder="Not a request, duplicate, spam..."></textarea>
 				</label>
 				<div class="actions">
-					<button class="button" disabled={rejecting} aria-busy={rejecting}>
+					<button class="button danger" disabled={rejecting} aria-busy={rejecting}>
 						{#if rejecting}<span class="spinner" aria-hidden="true"></span>{/if}
 						Reject for good
 					</button>

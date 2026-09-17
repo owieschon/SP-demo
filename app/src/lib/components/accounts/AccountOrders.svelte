@@ -4,19 +4,30 @@
 	// invoices with their biggest parts.
 	import { count, day, money, moneyExact } from '$lib/format';
 	import { BUCKET_LABEL } from '$lib/components/exports/types';
+	import RowCount from '$lib/components/ui/RowCount.svelte';
 	import type { Orders } from './types';
 
 	let { orders, year }: { orders: Orders; year: number } = $props();
 
-	const openTotal = $derived(orders.openLines.reduce((sum, line) => sum + line.openValue, 0));
+	/*
+	  These two come from the query, not from the rows on screen.
+
+	  This header used to sum `orders.openLines`, which SQL had already cut to
+	  fifty rows, and present the result as what the account has on order. For
+	  an account with more than fifty open lines the headline dollar figure
+	  was simply wrong, and nothing on the page said so.
+	*/
+	const openCount = $derived(orders.openLineCount);
+	const openValue = $derived(orders.openLineValue);
 </script>
 
 <section class="panel" aria-labelledby="orders-title">
 	<header class="panel-head">
 		<h2 id="orders-title">Orders and invoices</h2>
-		{#if orders.openLines.length > 0}
-			<span class="faint">
-				{count(orders.openLines.length)} open lines worth <span class="num">{money(openTotal)}</span>
+		{#if openCount > 0}
+			<span class="muted">
+				{count(openCount)} open {openCount === 1 ? 'line' : 'lines'} worth
+				<span class="num">{money(openValue)}</span>
 			</span>
 		{/if}
 	</header>
@@ -27,13 +38,13 @@
 				<caption class="sr-only">Open order lines</caption>
 				<thead>
 					<tr>
-						<th>Ship date</th>
-						<th>Order</th>
-						<th>Item</th>
-						<th class="num">Qty</th>
-						<th class="num">Short</th>
-						<th class="num">Value</th>
-						<th>Bucket</th>
+						<th scope="col">Ship date</th>
+						<th scope="col">Order</th>
+						<th scope="col">Item</th>
+						<th scope="col" class="num">Qty</th>
+						<th scope="col" class="num">Short</th>
+						<th scope="col" class="num">Value</th>
+						<th scope="col">Bucket</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -56,6 +67,16 @@
 				</tbody>
 			</table>
 		</div>
+		{#if openCount > orders.openLines.length}
+			<p class="body">
+				<RowCount
+					shown={orders.openLines.length}
+					total={openCount}
+					noun="open lines"
+					order="oldest ship date first"
+				/>
+			</p>
+		{/if}
 	{/if}
 
 	{#if orders.invoices.length === 0}
@@ -66,13 +87,13 @@
 				<caption class="sr-only">Recent invoices</caption>
 				<thead>
 					<tr>
-						<th>Posted</th>
-						<th>Invoice</th>
-						<th>Their PO</th>
-						<th>Biggest parts</th>
-						<th class="num">Lines</th>
-						<th class="num">Freight</th>
-						<th class="num">Subtotal</th>
+						<th scope="col">Posted</th>
+						<th scope="col">Invoice</th>
+						<th scope="col">Their PO</th>
+						<th scope="col">Biggest parts</th>
+						<th scope="col" class="num">Lines</th>
+						<th scope="col" class="num">Freight</th>
+						<th scope="col" class="num">Subtotal</th>
 					</tr>
 				</thead>
 				<tbody>

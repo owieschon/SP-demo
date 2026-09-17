@@ -48,9 +48,14 @@ handed to someone else.
 - /automations/new           build a rule
 - /automations/<id>          one rule and what it has done
 - /rfq                       turn a customer email into a draft quote
-- /rfq/<id>                  one draft: what was read, what was checked
+- /rfq/<id>                  one draft quote: what was read, what was checked
+- /quotes/<id>               a quote, and the PDF of it
+- /desk                      the order desk mailboxes and what arrived. ?desk
+- /desk/<id>                 one message, what the agent made of it, its draft reply
+- /workspace                 one queue for every agent proposal. ?source ?account
 - /ask                       ask a question in plain English
 - /ask/<id>                  one conversation and any proposal waiting
+- /settings/mcp              mint and revoke MCP tokens (admin)
 
 ## Reading the pages
 
@@ -71,8 +76,12 @@ are additive only (add a note, add a next step). Four write and are gated:
 they cannot run from a model at all, only be proposed for a person to
 approve. Read tools answer as JSON text; there is no output schema yet.
 
-An MCP server over HTTP is being built on another branch. Until it is
-merged, an outside agent reads this app through its pages.
+An MCP server answers JSON-RPC 2.0 at POST /api/mcp: the read tools above,
+plus list_pending_approvals and a propose_* wrapper for each gated tool,
+each with MCP annotations. A bearer token minted at /settings/mcp is scoped
+read or propose and acts as one named person, so the same row-level security
+applies. GET /api/mcp returns 405 and the command to add it. Results are
+JSON in a text block; there is no output schema yet.
 
 ## What an agent must not do
 
@@ -85,5 +94,7 @@ raises an NL4xx code.
 ## More
 
 - docs/agent-map.md   every route, what it holds, and which tool covers it
+- docs/mcp.md         the MCP server, its tools, its tokens and its limits
+- docs/workspace.md   the queue every agent proposal waits in
 - docs/walkthrough.md how a request travels through the app
 - docs/sql.md         the views behind the figures

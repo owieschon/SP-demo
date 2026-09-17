@@ -25,7 +25,19 @@ import { createMockClient, type MockWorld } from './mock.ts';
 import { runMessage, type LiveClassifier, type RunResult } from './run.ts';
 import { recordMessage } from './writes.ts';
 
+/*
+  The settings the desk reads out of the environment.
+
+  Every key is optional, which makes this what TypeScript calls a weak
+  type: it rejects an argument that has none of these keys. `env` from
+  $env/dynamic/private is typed from the variables that actually exist when
+  svelte-check runs, so on a machine with no app/.env the check failed with
+  "no properties in common" at all four call sites, while passing on a
+  machine that happened to have MAIL_INBOX_ORDERS set. The index signature
+  says what is true: this is a bag of strings we look named keys up in.
+*/
 export interface DeskEnv {
+	[key: string]: string | undefined;
 	AGENTMAIL_API_KEY?: string;
 	MAIL_INBOX_ORDERS?: string;
 	MAIL_INBOX_PROCUREMENT?: string;

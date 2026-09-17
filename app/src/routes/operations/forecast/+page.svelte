@@ -26,7 +26,13 @@
 	<!-- The filters come from the URL, so they render with the page, before the
 	     projection arrives. -->
 	{#await data.forecast}
-		<ForecastFilters filters={data.filters} options={{ vendors: [], workCenters: [], customers: [] }} lineCount={0} />
+		<!-- lineCount is null, not 0: the projection has not answered yet, and
+		     the bar says so rather than stating a figure it does not have. -->
+		<ForecastFilters
+			filters={data.filters}
+			options={{ vendors: [], workCenters: [], customers: [] }}
+			lineCount={null}
+		/>
 		<ForecastSkeleton />
 	{:then forecast}
 		<ForecastFilters filters={forecast.filters} options={forecast.options} lineCount={forecast.lineCount} />

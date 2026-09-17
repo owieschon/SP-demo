@@ -84,7 +84,7 @@
 			{:else}
 				<span class="disagrees">
 					<TriangleAlert size={13} strokeWidth={2} aria-hidden="true" />
-					These do not agree. nl.warehouse_drift() reports it.
+					These do not agree. Operations has been told and is putting it right.
 				</span>
 			{/if}
 		</div>
@@ -114,12 +114,12 @@
 		<table>
 			<thead>
 				<tr>
-					<th>Where</th>
-					<th>Zone</th>
-					<th>Bin</th>
-					<th class="num">Qty</th>
-					<th>Last counted</th>
-					{#if canRun}<th></th>{/if}
+					<th scope="col">Where</th>
+					<th scope="col">Zone</th>
+					<th scope="col">Bin</th>
+					<th scope="col" class="num">Qty</th>
+					<th scope="col">Last counted</th>
+					{#if canRun}<th scope="col"></th>{/if}
 				</tr>
 			</thead>
 			<tbody>
@@ -201,12 +201,12 @@
 			<table>
 				<thead>
 					<tr>
-						<th>When</th>
-						<th>What</th>
-						<th>Where</th>
-						<th class="num">Qty</th>
-						<th>Against</th>
-						<th>Who</th>
+						<th scope="col">When</th>
+						<th scope="col">What</th>
+						<th scope="col">Where</th>
+						<th scope="col" class="num">Qty</th>
+						<th scope="col">Against</th>
+						<th scope="col">Who</th>
 					</tr>
 				</thead>
 				<tbody>

@@ -14,11 +14,11 @@
 	<table>
 		<thead>
 			<tr>
-				<th>What</th>
-				<th>Decision</th>
-				<th>By</th>
-				<th>When</th>
-				<th>Note</th>
+				<th scope="col">What</th>
+				<th scope="col">Decision</th>
+				<th scope="col">By</th>
+				<th scope="col">When</th>
+				<th scope="col">Note</th>
 			</tr>
 		</thead>
 		<tbody>
