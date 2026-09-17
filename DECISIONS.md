@@ -110,3 +110,43 @@ Each real choice, the options considered, and why. Newest at the bottom.
 - A rule is tested in a transaction Postgres itself marks read only, so "what would this do" cannot write.
 - Actions are additive only (a next step, a note). Anything that changes existing data goes through the same proposal and approval path as the assistant.
 - A rule fires at most once per subject, enforced by a unique key on (rule, subject), not by the runner's memory.
+
+## 19. A table wins over prose, and a file is what its bytes say
+
+- A request can arrive as text, a PDF, a spreadsheet or a CSV. When a document has a table, the table is read and the prose is not: a table costs nothing to read, and asking a model to read around a table invents structure that is already there.
+- Each document is read on its own. Gluing a covering note to a parts list put the list under the sign-off, where the email reader treats it as a signature and finds no lines.
+- The browser's claimed media type is discarded. The signature in the bytes decides what a file is and what a download is served as, with `nosniff`.
+- One unreadable file refuses the whole submission, with every reason at once. A quote missing the lines from the PDF nobody could read is worse than no quote.
+
+## 20. The desk agents: the model classifies, code decides what may be said
+
+- A message wakes the desk. The model's only job is to say what kind of message it is. It sees no prices, calls no tools and writes no prose, so an instruction hidden in an email has no path to a figure that leaves the building.
+- Everything a draft cites is checked against a disclosure policy for that recipient: every fact must be a kind they may hear and be about them, and every dollar figure in the body must trace back to one of those facts. The second rule is what catches a leak hidden in a sentence rather than in the facts list.
+- Nothing sends without a person, and only to addresses on an allowed list, checked again on the server at send time.
+- The reply prices with the full precedence, including quantity breaks, which means the emailed figure and the figure an approval writes must come from the same function. Where they do not yet (approval still prices on the tier discount alone), that is recorded as a gap rather than papered over.
+
+## 21. One queue for every agent request, which collects and routes but never approves
+
+- The workspace is a view over whatever waiting-for-a-person tables exist, presented in one shape, and a decision there calls the same write function the feature's own page calls. A test approves the same record both ways and compares every row written.
+- It degrades by construction: a view cannot name a table that does not exist, so the view is assembled from the sources present and rebuilt when a new one lands.
+
+## 22. An outside agent gets the same ceiling as the inside one
+
+- The MCP server reuses the assistant's tool registry rather than defining a second one. Read tools answer directly; every tool that would change data is exposed only as a proposal, so a coding agent cannot write, whatever its token allows.
+- A token is stored as a hash, acts as one named person, carries scopes and a daily cap, and every call is logged. The endpoint is public, so the doc says plainly what someone holding a token could do and could not do.
+
+## 23. The stock ledger explains the number on the shelf
+
+- Locations, bins and an append-only movement ledger sit under the item master's on-hand figure rather than replacing it. `nl.warehouse_drift()` returns any part where the three disagree, and the tests require it to be empty after a build and after every write.
+- Stock in a truck stays on the sending location's books until it is received, so the sum of the locations always equals the item master.
+
+## 24. One password in front of the site, and secrets keep their own doors
+
+- A demo with someone's API key on it should not be open to the internet, so `SITE_PASSWORD` puts one shared password in front of every page. What the browser keeps is a signed cookie holding only an expiry.
+- The endpoints that carry their own secret are exempt: MCP's bearer token, the two scheduled runs and the mail webhook. A shared password is weaker than a token, and a scheduler cannot type one.
+- The app's own "sign in as" picker stays passwordless behind it: inside the curtain, being a different person is the point.
+
+## 25. Invented supply is planned against demand
+
+- The first version gave a part supply because the item master said something was on order, which left 57% of open lines with nothing on order at all and no story to tell.
+- Now a part the shelf cannot reach gets an order for the pieces it is missing, due before the day they are needed most of the time and after it often enough to make lines late, with a deliberate minority of long-lead parts left uncovered. A test holds each share of the mix inside a band so it cannot drift back.
