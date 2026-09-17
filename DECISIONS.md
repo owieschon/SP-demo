@@ -67,3 +67,46 @@ Each real choice, the options considered, and why. Newest at the bottom.
 - Chosen: `nl.build('full')` (about 4,500 customers, 11,400 parts, seven years, half a million invoice lines) on Supabase; `'demo'` (700 customers, three years) for local development; `'small'` (90 customers, two years) for tests.
 - Why: comparing this stack with others is only honest at production volume. The generator's distributions (revenue per customer, parts per customer, lines per invoice, seasonality, discounts, margins, freight, credit memos, customer life stages, chains) were tuned against summary statistics of a real business of this kind. No names, records or exact figures were copied; dollars are rescaled.
 - The build runs in steps (`nl_seed.begin_build`, one `nl_seed.build_year` per year, `nl_seed.finish_build`) so a small server never runs one very long statement. The board caps its settled columns because the full world holds about 2,500 kept commitments.
+
+## 12. Delivered is stored, and triggers keep it current
+
+- Problem: the board recomputed delivery for every commitment ever made on every load. The cost grew with history (337 ms on the full world, 7.96 s for the same recount at 4x).
+- Options: a materialized view refreshed on a schedule; caching in the app; a table kept current by triggers; storing the final figure only once a window closes.
+- Chosen: `nl.commitment_delivery`, maintained by statement-level triggers on the four tables that can change a delivered figure (ledger lines, commitment items, commitment window or customer, billing family), re-measuring only the commitments a change can touch, in the same transaction.
+- Why: a scheduled refresh shows stale numbers between runs; an app cache can be bypassed by any other writer; closing-time snapshots miss late corrections to the ledger. Triggers are exact at commit time whoever writes. Status stays derived on every read (decision 7); only the sum is stored.
+- Guard rails: `nl.delivery_drift()` recounts through the live view and must return nothing (tested after every kind of change and over the whole world); the nightly job repairs and reports any drift; nobody can write the table directly. Details and timings in `docs/sql.md`.
+
+## 13. Load tests run on copies of the world, one copy at a time
+
+- `db/bench/scale.sql` copies the full world with new keys, which keeps its shape (families, windows, outcomes), instead of generating a bigger world with different statistics.
+- The first run loaded six copies in parallel, filled the Micro instance's disk and put the database into read-only mode. Recovery: drop the largest index, reset, rebuild, recreate the index (about ten minutes). The measured results stop at 4x. A 10x run needs a larger disk first, and one copy per call.
+
+## 14. The wrong ERP report is refused, not held
+
+- A file missing required columns, or with no data rows, writes nothing at all; the page names the missing columns, lists the columns the file does have, and guesses which report it is.
+- Why: a held snapshot exists so a person can release it. There is nothing to release in a file whose rows cannot be read, so holding it would be a dead end.
+- Partial, stale and partly broken files are still held, because releasing those is a real decision.
+
+## 15. A file is the same file when its content is the same
+
+- The ERP stamps the export time into every filename and can reorder columns, so identity comes from a SHA-256 of the normalized rows (sorted, canonical values), not the bytes or the name.
+- A re-upload of data already loaded is recognized whatever its status, including discarded, and writes nothing. Discard is final by design: a discarded file cannot be loaded later by uploading it again.
+- A corrected file differs in content, so it is a new snapshot.
+
+## 16. Import profiles, not import code
+
+- Each ERP report is a data object (header aliases, required columns, field types, date and number formats, natural key) and one reader works to that profile. A test reads an invented second report with European number formatting using only a new profile.
+- Why: the legacy systems this pattern targets have dozens of report layouts, and layouts change without notice. A new report should be configuration.
+
+## 17. The AI proposes; deterministic code validates; a person approves
+
+- RFQ extraction returns a draft with a confidence per field. Every field is then checked against the catalog and the customer master in TypeScript and SQL, and ends as ok, corrected or needs review with a reason.
+- A draft with anything still needing review cannot be approved. Approval passes only the draft id, its row version and a request id: the quote is built from the stored, re-validated draft, never from the request body, and a price that changed since the draft was checked raises a conflict.
+- The assistant's tools carry a risk class. Read and additive tools run; anything that changes or removes data is gated, and the model can only ask for it through a proposal a person approves.
+
+## 18. Rules are data, and their SQL is written by us
+
+- An automation rule names one of a fixed set of reviewed triggers and adds conditions on that trigger's typed fields. The app compiles those into a parameterized WHERE clause over the trigger's query. A rule never contains SQL, so a rule can never say something the catalog does not allow.
+- A rule is tested in a transaction Postgres itself marks read only, so "what would this do" cannot write.
+- Actions are additive only (a next step, a note). Anything that changes existing data goes through the same proposal and approval path as the assistant.
+- A rule fires at most once per subject, enforced by a unique key on (rule, subject), not by the runner's memory.

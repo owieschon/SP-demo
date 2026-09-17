@@ -4,8 +4,8 @@ A commitment says: this customer will buy these parts between these two dates,
 worth this much. Nobody types in how much has arrived. The database works it
 out from the invoice ledger, every time a page asks.
 
-All numbers below were measured on the full world on Supabase (Postgres 17,
-Micro compute) on 2026-09-17:
+Unless a section says otherwise, numbers were measured on the full world on
+Supabase (Postgres 17, Micro compute) on 2026-09-17:
 
 | Table | Rows |
 |---|---|
@@ -15,6 +15,7 @@ Micro compute) on 2026-09-17:
 | `nl.invoice_lines` | 450,522 |
 | `nl.commitments` | 2,644 |
 | `nl.commitment_items` | 12,491 |
+| `nl.commitment_delivery` | 2,644 |
 
 ## The three views
 
@@ -28,8 +29,9 @@ Micro compute) on 2026-09-17:
    inside the window. Credit memo lines are negative, so returns take delivery
    back off.
 3. **`nl.commitment_progress`**: one row per commitment, in one set-based pass.
-   It sums the lines, takes the latest answer to "the window closed short: what
-   happened?", counts linked quotes, and derives the status:
+   It reads the stored delivered figure (kept current by triggers, below),
+   takes the latest answer to "the window closed short: what happened?",
+   counts linked quotes, and derives the status:
 
    | Rule, checked in order | Status |
    |---|---|
@@ -43,7 +45,8 @@ Micro compute) on 2026-09-17:
    answered) and `expected_value` (delivered, plus the owner's confidence
    times what remains).
 
-The status is never stored, so it can never go stale.
+The status is never stored, so it can never go stale. The detail page lists
+the matching lines straight from `nl.commitment_lines`.
 
 ## The index behind it (migration 0005)
 
@@ -112,15 +115,93 @@ The results are the same. The tests check the family rules:
 branches and the accounts billed to them count, unrelated accounts
 do not, and a billing loop stops with each account counted once.
 
-## What is still left on the table
+## Keeping delivered current (migration 0008)
 
-- The date range is checked after the index lookup (`Rows Removed by Join
-  Filter: 263878`), because Memoize caches per customer and part, not per
-  window. Putting the window into the lookup would cut that further.
-- The board computes progress for all 2,644 commitments, then keeps the
-  129 it shows. Most are kept commitments from past years. A settled
-  commitment could store its final numbers once its window closes, but that
-  would break "never stored"; at 337 ms it is not worth it yet.
+After 0007 the board still measured all 2,644 commitments on every load,
+including 2,557 kept ones from past years whose figure could only change if
+the ledger changed. That cost grows with history, not with what the page
+shows.
+
+Delivered changes only when one of four things changes: invoice lines, a
+commitment's items, a commitment's customer or window, or which account
+bills to which. Statement-level triggers on those four tables work out which
+commitments the change can touch and re-measure only those, in the same
+transaction, into `nl.commitment_delivery`. The board reads the stored
+figure. The status is still derived on every read.
+
+| Trigger on | Re-measures |
+|---|---|
+| `invoice_lines` (insert, update, delete) | commitments on the line's account or any account above it, with the line's item in scope and its date in the window |
+| `commitment_items` | that commitment |
+| `commitments` (customer or window changed) | that commitment |
+| `customers` (`bill_to_no` changed) | every commitment above the account, on the old chain and the new |
+
+The triggers read the changed rows from transition tables, so an import of
+a thousand lines re-measures each affected commitment once. The measuring
+query fixes the commitment inside a lateral subquery, which puts the window
+into the index lookup (`posted_on` becomes an index condition, not a filter).
+
+Two things keep the stored figure honest:
+
+- `nl.delivery_drift()` recounts every commitment through the live view
+  (`nl.commitment_lines`, the code path from 0007) and returns any that
+  differ. The tests require it to be empty after every kind of change,
+  including over the whole seeded world. On Supabase it was empty after the
+  full build.
+- The nightly job calls `nl.repair_delivery()`, which re-measures anything
+  that drifted and reports it. Nothing is expected; it is there so a bug
+  would show up in the job log instead of on a card.
+
+Nobody can write the table directly: `nl_app` has SELECT only, and the
+measuring function is `security definer` with no EXECUTE grant (a test
+checks both).
+
+Migration 0009 then made the view ask for `nl.today()` once per query (a
+scalar subquery becomes an InitPlan) instead of once per row. That was 15 of
+the remaining 22 ms.
+
+| Board query, full world | Time |
+|---|---|
+| Recursive view (0003) | 10,963 ms |
+| Family function (0007) | 337 ms |
+| Stored delivered (0008) | 22 ms |
+| Today once per query (0009) | 6 to 10 ms |
+
+## At four times the size
+
+`db/bench/scale.sql` copies every customer, invoice, line, quote and
+commitment with new keys, so the copies keep the shape of the business. On
+the same Micro instance, at four times the full world:
+
+| | Full world | 4x |
+|---|---|---|
+| Invoice lines | 450,522 | 1,802,088 |
+| Commitments | 2,644 | 10,576 |
+| Recount every commitment the 0007 way | 304 ms | 7,963 ms |
+| Board, reading stored figures | 22 ms | 117 ms |
+| Detail page lines for one commitment | not measured | 1.9 ms |
+| One day of new invoice lines, with triggers | 169 lines, 38 ms | 676 lines, 324 ms |
+
+The recount grew 26 times for 4 times the data. The cause was not traced
+before the reset (index size against the instance's 1 GB of memory is the
+first suspect). The board grew about 5 times, in line with the
+number of commitments, and the 4x board figure was measured before 0009.
+
+The run stopped at 4x: copying the ledger six more times in parallel filled
+the instance's disk and Supabase switched the database to read-only. Freeing
+space and rebuilding the full world took ten minutes. At ten times, the
+disk needs to be sized first, and the copies loaded one at a time.
+
+What would come next at larger sizes:
+
+- The board still reads one row per commitment ever made. Kept commitments
+  from past years could move to a settled table that the board counts but
+  does not scan.
+- A day's import re-walks the billing chain for each account on it. With
+  thousands of accounts a day, a closure table of ancestors (maintained by
+  the same family trigger) would replace the walk with an index lookup.
+- `invoice_lines` could be partitioned by year; the delivery index would
+  then be per partition, and old partitions would stay cold.
 
 ## Reproducing the numbers
 
@@ -136,3 +217,14 @@ rollback;
 ```
 
 The exact board query is `listBoard` in `app/src/lib/server/commitments.ts`.
+
+Check the stored figures against a fresh count (empty means they agree), and
+repair any drift:
+
+```sql
+select * from nl.delivery_drift();
+select nl.repair_delivery();
+```
+
+The 4x run is in `db/bench/scale.sql`. Run it only on a database nobody is
+using, with enough disk, one copy per call.
