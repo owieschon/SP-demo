@@ -9,6 +9,7 @@
 	import ListChecks from '@lucide/svelte/icons/list-checks';
 	import LogOut from '@lucide/svelte/icons/log-out';
 	import UserRoundArrowLeft from '@lucide/svelte/icons/user-round-arrow-left';
+	import Warehouse from '@lucide/svelte/icons/warehouse';
 	import { navigating, page } from '$app/state';
 	import Mark from '$lib/components/Mark.svelte';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
@@ -23,7 +24,10 @@
 			'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#0d4a47"/><path d="M10 23V9h2.2l7.6 10V9H22v14h-2.2l-7.6-10v10z" fill="#e6f2f0"/></svg>'
 		);
 
-	const NAV = [{ href: '/commitments', label: 'Commitments', icon: ListChecks }];
+	const NAV = [
+		{ href: '/commitments', label: 'Commitments', icon: ListChecks },
+		{ href: '/operations', label: 'Operations', icon: Warehouse }
+	];
 
 	// "Pat Doe" -> "PD"
 	const initials = $derived(
@@ -56,6 +60,7 @@
 				{ label: `C-${page.params.id}`, href: null }
 			];
 		}
+		if (route.startsWith('/operations')) return [{ label: 'Operations', href: null }];
 		if (page.error) return [{ label: page.status === 404 ? 'Not found' : 'Error', href: null }];
 		return [];
 	});

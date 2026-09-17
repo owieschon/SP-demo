@@ -3,7 +3,7 @@ import postgres from 'postgres';
 import { fromTemplate, roleSetup, type Db, type Param, type Row, type Tx } from './types.ts';
 
 // What the custom type parsers below turn each Postgres type into.
-type ParsedTypes = { dateText: string; numericNumber: number; bigintNumber: number };
+type ParsedTypes = { dateText: string; numericNumber: number; bigintNumber: number; jsonText: unknown };
 
 export function createPostgresDb(url: string): Db {
 	const client = postgres(url, {
@@ -29,6 +29,16 @@ export function createPostgresDb(url: string): Db {
 				from: [1700],
 				serialize: (value: number) => String(value),
 				parse: (raw: string) => Number(raw)
+			},
+			// JSON goes in as text the app already encoded (see Param in types.ts).
+			// Left to itself, the driver sees `$1::jsonb`, JSON-encodes that
+			// text a second time, and Postgres receives a string instead of an
+			// array or object. PGlite does not do this, so only Supabase showed it.
+			jsonText: {
+				to: 3802,
+				from: [114, 3802],
+				serialize: (value: unknown) => (typeof value === 'string' ? value : JSON.stringify(value)),
+				parse: (raw: string) => JSON.parse(raw)
 			},
 			// So do counts and ids.
 			bigintNumber: {
