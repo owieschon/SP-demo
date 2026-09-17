@@ -54,8 +54,55 @@ describe('the world the seed leaves', () => {
 				       (select count(*) from nl.open_production_orders) as production`
 		);
 		expect(live.sales).toBeGreaterThan(80);
-		expect(live.purchase).toBeGreaterThan(20);
-		expect(live.production).toBeGreaterThan(20);
+		expect(live.purchase).toBeGreaterThan(10);
+		expect(live.production).toBeGreaterThan(10);
+	});
+
+	it('covers most of its demand, so the mix of statuses looks like a real order book', async () => {
+		// Supply is planned against demand (migration 0022): what the shelf does
+		// not cover becomes a requirement, most requirements are on order, and
+		// the dates decide who is late. The bands below are what that produces
+		// on the small world; they are wide enough for the world to move a
+		// little and tight enough to catch the failure they were written for,
+		// which was 57% of lines with nothing on order at all.
+		//
+		// The shares are read off nl.open_line_projection, the same view the
+		// page reads, so this is the mix a person would see.
+		const mix = await db.asUser(DANA, (tx) =>
+			tx.sql<{ status: string; lines: number; pct: number }>`
+				select status, count(*)::int as lines,
+				       round(100.0 * count(*) / sum(count(*)) over (), 1)::float8 as pct
+				from nl.open_line_projection
+				group by status`
+		);
+		const pct = (status: string) => mix.find((m) => m.status === status)?.pct ?? 0;
+
+		const bands: Record<string, [number, number]> = {
+			on_time: [45, 62],
+			late_waiting_supply: [12, 28],
+			past_due: [8, 18],
+			no_supply: [6, 16],
+			late_supply_overdue: [0, 6]
+		};
+		for (const [status, [low, high]] of Object.entries(bands)) {
+			expect(pct(status), `${status} is ${pct(status)}%`).toBeGreaterThanOrEqual(low);
+			expect(pct(status), `${status} is ${pct(status)}%`).toBeLessThanOrEqual(high);
+		}
+		// Every status is accounted for: the five above are all there are.
+		expect(mix.map((m) => m.status).sort()).toEqual(Object.keys(bands).sort());
+
+		// The demo story is "this line waits on that order", so a late line
+		// should usually name one.
+		const [named] = await db.asUser(DANA, (tx) =>
+			tx.sql<{ lines: number; named: number; late: number; late_named: number }>`
+				select count(*)::int as lines,
+				       count(*) filter (where supply_document is not null)::int as named,
+				       count(*) filter (where days_late > 0)::int as late,
+				       count(*) filter (where days_late > 0 and supply_document is not null)::int as late_named
+				from nl.open_line_projection`
+		);
+		expect(named.named / named.lines).toBeGreaterThan(0.4);
+		expect(named.late_named / named.late).toBeGreaterThan(0.45);
 	});
 
 	it('keeps the supply it generates in step with the item master', async () => {

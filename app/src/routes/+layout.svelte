@@ -9,6 +9,7 @@
 	import Building2 from '@lucide/svelte/icons/building-2';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Inbox from '@lucide/svelte/icons/inbox';
+	import InboxStack from '@lucide/svelte/icons/inbox-stack';
 	import ListChecks from '@lucide/svelte/icons/list-checks';
 	import Package from '@lucide/svelte/icons/package';
 	import LogOut from '@lucide/svelte/icons/log-out';
@@ -34,6 +35,7 @@
 
 	const NAV = [
 		{ href: '/ask', label: 'Ask', icon: Sparkles },
+		{ href: '/workspace', label: 'Workspace', icon: InboxStack },
 		{ href: '/commitments', label: 'Commitments', icon: ListChecks },
 		{ href: '/accounts', label: 'Accounts', icon: Building2 },
 		{ href: '/rfq', label: 'RFQ intake', icon: Inbox },
@@ -80,6 +82,13 @@
 			return [
 				{ label: 'RFQ intake', href: '/rfq' },
 				{ label: `R-${page.params.id}`, href: null }
+			];
+		}
+		if (route === '/workspace') return [{ label: 'Workspace', href: null }];
+		if (route === '/settings/mcp') {
+			return [
+				{ label: 'Settings', href: null },
+				{ label: 'Coding agents', href: null }
 			];
 		}
 		if (route === '/ask') return [{ label: 'Ask', href: null }];
