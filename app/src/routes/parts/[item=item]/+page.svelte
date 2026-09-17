@@ -106,6 +106,13 @@
 				<p class="faint small">
 					{#if p.shelf}shelf {p.shelf}, bin {p.bin}{:else}no shelf on file{/if}
 				</p>
+				<!-- The warehouse ledger explains this number: opening balance,
+				     every move since, closing balance. -->
+				<p class="small">
+					<a class="link" href="/warehouse?part={encodeURIComponent(p.itemNo)}">
+						Where this number came from
+					</a>
+				</p>
 			</div>
 			<div>
 				<dt>Incoming</dt>
