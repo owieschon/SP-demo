@@ -55,6 +55,7 @@ handed to someone else.
 - /workspace                 one queue for every agent proposal. ?source ?account
 - /ask                       ask a question in plain English
 - /ask/<id>                  one conversation and any proposal waiting
+- /settings                  the keys this server holds (admin)
 - /settings/mcp              mint and revoke MCP tokens (admin)
 
 ## Reading the pages
