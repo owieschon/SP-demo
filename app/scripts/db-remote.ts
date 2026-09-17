@@ -6,6 +6,7 @@
 //   node --env-file=.env scripts/db-remote.ts migrate 0011   ... up to and including 0011
 //   node --env-file=.env scripts/db-remote.ts seed       load db/seed.sql and db/seed.d (functions only)
 //   node --env-file=.env scripts/db-remote.ts rebuild    reset and build the full world, step by step
+//   node --env-file=.env scripts/db-remote.ts nightly    run the nightly job once, as pg_cron would
 //
 // Each migration runs in its own transaction and is recorded in
 // supabase_migrations.schema_migrations, the same table Supabase's own tools
@@ -124,7 +125,8 @@ try {
 	else if (command === 'migrate') await migrate(process.argv[3]);
 	else if (command === 'seed') await seed();
 	else if (command === 'rebuild') await rebuild();
-	else throw new Error(`Unknown command ${command}. Use status, migrate, seed or rebuild.`);
+	else if (command === 'nightly') await step('nightly', 'select nl.nightly()');
+	else throw new Error(`Unknown command ${command}. Use status, migrate, seed, rebuild or nightly.`);
 } catch (error) {
 	// Postgres errors carry no connection details; print the message only.
 	console.error(`failed: ${(error as Error).message}`);

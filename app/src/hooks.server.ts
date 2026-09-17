@@ -11,7 +11,8 @@ import { SESSION_COOKIE, sessionSecret, verifySession } from '$lib/server/sessio
 import { findActiveUser } from '$lib/server/users';
 import { readTheme, THEME_COOKIE } from '$lib/components/theme';
 
-const PUBLIC_PATHS = new Set(['/signin', '/robots.txt']);
+// The daily automation run checks its own secret (routes/api/cron/automations).
+const PUBLIC_PATHS = new Set(['/signin', '/robots.txt', '/api/cron/automations']);
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const secret = sessionSecret(env.SESSION_SECRET, Boolean(env.VERCEL));
