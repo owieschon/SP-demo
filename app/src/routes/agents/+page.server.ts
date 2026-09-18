@@ -95,20 +95,29 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	};
 };
 
-/** Turn a refusal from the database into something the page can show. */
+/*
+  Turn a refusal from the database into something the page can show.
+
+  `failed: true` is set on every refusal because FormNotice reads that field
+  to decide whether to announce the message with role="alert" instead of
+  role="status". Without it a refusal is rendered as though it had worked,
+  which on this page would mean a person believing they had raised an agent's
+  autonomy when the database had said no.
+*/
 async function run<T>(work: () => Promise<T>, done: string) {
 	try {
 		await work();
 		return { message: done };
 	} catch (error) {
 		if (error instanceof NotAPrincipal) {
-			return fail(422, { message: error.message, code: 'NL422' });
+			return fail(422, { message: error.message, code: 'NL422', failed: true });
 		}
 		const refusal = toAppError(error);
 		if (!refusal) throw error;
 		return fail(refusal.status, {
 			message: refusal.message,
 			code: refusal.code,
+			failed: true,
 			conflict: refusal.status === 409
 		});
 	}
