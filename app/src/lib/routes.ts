@@ -55,5 +55,7 @@ export const routes = {
 	settings: () => '/settings',
 	settingsMcp: () => '/settings/mcp',
 	signin: () => '/signin',
+	/** Who is responsible for what, what they may approve, and what they may see. */
+	people: () => '/people',
 	search: (q?: string) => (q ? `/search?q=${encodeURIComponent(q)}` : '/search')
 } as const;

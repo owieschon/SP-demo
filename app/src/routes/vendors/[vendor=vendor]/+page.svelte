@@ -12,6 +12,10 @@
 
 	const v = $derived(data.vendor);
 	const message = $derived(form ? { text: form.message, failed: form.failed } : null);
+	// How many receipts a part needs before the observed figure is trusted. It
+	// comes from the loader so the sentence on the page and nl.promise_lead_days
+	// cannot drift apart.
+	const minReceipts = $derived(data.minReceipts);
 </script>
 
 <svelte:head>
@@ -42,8 +46,11 @@
 				<dd>{v.freightTerms || 'not stated'}</dd>
 			</div>
 			<div>
-				<dt>Lead time</dt>
-				<dd>{v.leadTime || 'not stated'}</dd>
+				<dt>Lead time default</dt>
+				<dd>
+					{v.leadTime || 'not stated'}
+					<span class="faint small">covers every part, see below</span>
+				</dd>
 			</div>
 			<div>
 				<dt>Minimum order</dt>
@@ -89,6 +96,84 @@
 		canAdd={data.canAddContact}
 		{message}
 	/>
+
+	{#await data.leadTimes}
+		<TableSkeleton rows={8} title="Loading lead times" />
+	{:then leadTimes}
+		<section class="panel" aria-labelledby="lead-times">
+			<header class="panel-head">
+				<h2 id="lead-times">Lead time by part</h2>
+				<span class="faint">what they quote against what they do, worst tail first</span>
+			</header>
+			{#if leadTimes.length === 0}
+				<p class="body muted">
+					No part names this vendor as a source, so there is nothing to compare.
+				</p>
+			{:else}
+				<p class="body small faint">
+					A promise uses the ninetieth percentile of what actually arrived once there are
+					{minReceipts} receipts for a part, and the quote until then. The basis column says which.
+				</p>
+				<div class="table-wrap">
+					<table>
+						<thead>
+							<tr>
+								<th>Item</th>
+								<th class="num">Quoted</th>
+								<th class="num">Median</th>
+								<th class="num">90th</th>
+								<th class="num">Tail</th>
+								<th class="num">Late</th>
+								<th class="num">Promise</th>
+								<th>Basis</th>
+								<th class="num">Min order</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each leadTimes as part (part.itemNo)}
+								<tr>
+									<td class="mono">
+										<a class="link" href={partHref(part.itemNo)}>{part.itemNo}</a>
+										{#if !part.isPrimary}<span class="faint small">alternate</span>{/if}
+										{#if part.status !== 'active'}
+											<span class="warn small">{part.status}</span>
+										{/if}
+									</td>
+									<td class="num">{part.quotedLeadDays === null ? '·' : `${part.quotedLeadDays}d`}</td>
+									<td class="num">{part.medianDays === null ? '·' : `${part.medianDays}d`}</td>
+									<td class="num">{part.p90Days === null ? '·' : `${part.p90Days}d`}</td>
+									<td class="num" class:warn={(part.tailDays ?? 0) > 7}>
+										{part.tailDays === null ? '·' : `${part.tailDays > 0 ? '+' : ''}${part.tailDays}d`}
+									</td>
+									<td class="num">
+										{part.lateShare === null ? '·' : `${Math.round(part.lateShare * 100)}%`}
+									</td>
+									<td class="num" class:warn={!part.canPromise}>
+										{part.canPromise ? `${part.promiseDays}d` : 'no date'}
+									</td>
+									<td>
+										<span class="basis" class:faint={part.promiseBasis !== 'observed'}>
+											{part.promiseBasis}
+										</span>
+										{#if part.promiseBasis === 'observed'}
+											<span class="faint small">{part.receipts} receipts</span>
+										{/if}
+									</td>
+									<td class="num">
+										{count(part.minOrderQty)}{#if part.orderMultiple > 1}<span class="faint small"
+												>x{part.orderMultiple}</span
+											>{/if}
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			{/if}
+		</section>
+	{:catch}
+		<p class="notice error" role="alert">The lead times could not be loaded.</p>
+	{/await}
 
 	{#await data.parts}
 		<TableSkeleton rows={8} title="Loading parts" />
@@ -238,6 +323,15 @@
 
 	.desc {
 		min-width: 22ch;
+	}
+
+	.basis {
+		font-variant-caps: all-small-caps;
+		letter-spacing: 0.03em;
+	}
+
+	.warn {
+		color: var(--warning);
 	}
 
 	@media (max-width: 720px) {
