@@ -1,0 +1,28 @@
+{
+  "about": "One part and no stated quantity, so the answer is the price for one. The account has bought it before, so what they last paid is part of the answer.",
+  "intent": "price_question",
+  "customer_no": "10125",
+  "required_fact_kinds": [
+    "account_identity",
+    "part_description",
+    "own_price"
+  ],
+  "forbidden_fact_kinds": [
+    "unit_cost",
+    "margin",
+    "floor_price",
+    "stock_quantity",
+    "other_customer",
+    "internal_note",
+    "colleague_name"
+  ],
+  "prices": [
+    {
+      "item_no": "P6-12CP",
+      "quantity": 1
+    }
+  ],
+  "needs_person": false,
+  "guardrail": null,
+  "asks_a_question": false
+}

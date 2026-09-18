@@ -188,7 +188,7 @@ describe('the order desk in the queue', () => {
 			rfq: true,
 			assistant: true,
 			mail: true,
-			purchase: false
+			purchase: true
 		});
 	});
 
@@ -471,19 +471,29 @@ describe('the order desk in the queue', () => {
 	});
 });
 
-describe('purchase requests, which are not in this database', () => {
-	it('reports the source as absent and keeps it out of the view', async () => {
-		expect((await queueSources(db, DANA)).purchase).toBe(false);
-		expect(await listQueue(db, user(DANA), { source: 'purchase' })).toEqual([]);
+describe('purchase requests, which the procurement desk writes', () => {
+	it('reports the source as present and names it in the view', async () => {
+		expect((await queueSources(db, DANA)).purchase).toBe(true);
 
 		const [row] = await db.asSystem(
 			(tx) => tx.sql<{ definition: string }>`
 				select pg_catalog.pg_get_viewdef('nl.agent_queue'::regclass, true) as definition`
 		);
-		// The mail branch is in the view now; the purchase branch cannot be,
-		// because a view's names are resolved when it is created.
+		// A view resolves its names when it is created, so the procurement
+		// desk's table could only get in here by rebuilding the view, which
+		// is all migration 0030 does.
 		expect(row.definition).toContain('mail_drafts');
-		expect(row.definition).not.toContain('purchase_request');
+		expect(row.definition).toContain('purchase_request');
+	});
+
+	it('still refuses to name a source this database does not have', async () => {
+		// The guard that kept purchase out before 0029 is the thing being
+		// tested, so point it at a table nobody will ever add.
+		const [row] = await db.asSystem(
+			(tx) => tx.sql<{ found: string | null }>`
+				select nl.agent_queue_table(array['no_such_drafts', 'also_missing']) as found`
+		);
+		expect(row.found).toBeNull();
 	});
 });
 

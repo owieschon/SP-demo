@@ -166,7 +166,14 @@ export async function getConversation(db: Db, userId: number, id: number): Promi
 				outcome: call.outcome,
 				rows: call.rows,
 				ms: call.ms,
-				note: call.note
+				note: call.note,
+				/*
+				  Not stored: conformance is checked when the tool runs, and
+				  the note already carries the reason when it failed. Reading
+				  an old conversation back says "unknown" rather than claiming
+				  a result was fine.
+				*/
+				conforms: null
 			});
 			lookupsByMessage.set(call.message_id, list);
 		}

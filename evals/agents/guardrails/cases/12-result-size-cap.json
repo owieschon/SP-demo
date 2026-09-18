@@ -1,0 +1,22 @@
+{
+  "about": "A tool result over sixteen kilobytes loses rows from the end and says so.",
+  "check": "result_size_cap",
+  "refuses": {},
+  "expect": {
+    "verdict": "needs_person",
+    "reason_contains": "too big"
+  },
+  "passes": {
+    "payload": {
+      "rows": [
+        {
+          "item_no": "L490-168B",
+          "on_hand": 40
+        }
+      ]
+    }
+  },
+  "build": {
+    "payload_rows": 400
+  }
+}

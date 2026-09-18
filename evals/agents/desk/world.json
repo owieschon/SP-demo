@@ -1,0 +1,69 @@
+{
+  "about": "Stock, one price agreement, quantity breaks, a little invoice history and one open order line that has slipped. Loaded on top of evals/rfq/world.json, which brings the customers, contacts and parts. All of it is invented.",
+  "stock": [
+    { "item_no": "L490-168B", "on_hand": 40, "on_purchase_order": 0, "on_production_order": 0 },
+    { "item_no": "S6-48BC", "on_hand": 6, "on_purchase_order": 24, "on_production_order": 0 },
+    { "item_no": "M-4164", "on_hand": 0, "on_purchase_order": 0, "on_production_order": 0 },
+    { "item_no": "CL6SZ", "on_hand": 200, "on_purchase_order": 0, "on_production_order": 0 },
+    { "item_no": "FL5-14SS", "on_hand": 12, "on_purchase_order": 0, "on_production_order": 30 },
+    { "item_no": "P6-12CP", "on_hand": 25, "on_purchase_order": 0, "on_production_order": 0 },
+    { "item_no": "S7-36SS", "on_hand": 4, "on_purchase_order": 0, "on_production_order": 0 },
+    { "item_no": "HS5-30C", "on_hand": 0, "on_purchase_order": 50, "on_production_order": 0 },
+    { "item_no": "L660-1018SC", "on_hand": 18, "on_purchase_order": 0, "on_production_order": 0 },
+    { "item_no": "RBRC10B3", "on_hand": 60, "on_purchase_order": 0, "on_production_order": 0 }
+  ],
+  "agreements": [
+    {
+      "customer_no": "10072",
+      "item_no": "L490-168B",
+      "net_price": 61.5,
+      "valid_from": "2026-01-15",
+      "note": "Agreed for the year, open ended."
+    }
+  ],
+  "quantity_breaks": [
+    { "item_no": "L490-168B", "min_quantity": 12, "extra_discount": 0.05, "note": "A dozen or more" },
+    { "item_no": "L490-168B", "min_quantity": 25, "extra_discount": 0.08, "note": "Twenty-five or more" },
+    { "item_no": "CL6SZ", "min_quantity": 50, "extra_discount": 0.06, "note": "Fifty or more" }
+  ],
+  "invoices": [
+    {
+      "invoice_no": "EV-100001",
+      "customer_no": "10125",
+      "posted_on": "2026-08-12",
+      "lines": [{ "item_no": "P6-12CP", "quantity": 20, "unit_price": 70.11 }]
+    },
+    {
+      "invoice_no": "EV-100002",
+      "customer_no": "10012",
+      "posted_on": "2026-07-02",
+      "lines": [{ "item_no": "FL5-14SS", "quantity": 6, "unit_price": 126.0 }]
+    },
+    {
+      "invoice_no": "EV-100003",
+      "customer_no": "10062",
+      "posted_on": "2026-06-18",
+      "lines": [{ "item_no": "CL6SZ", "quantity": 100, "unit_price": 30.5 }]
+    }
+  ],
+  "open_lines": [
+    {
+      "document_no": "SO-EV-1001",
+      "line_no": 1,
+      "customer_no": "10062",
+      "item_no": "S6-48BC",
+      "ship_date": "2026-09-05",
+      "quantity": 10,
+      "unit_price": 244.46
+    },
+    {
+      "document_no": "SO-EV-1001",
+      "line_no": 2,
+      "customer_no": "10062",
+      "item_no": "CL6SZ",
+      "ship_date": "2026-09-30",
+      "quantity": 40,
+      "unit_price": 30.67
+    }
+  ]
+}
