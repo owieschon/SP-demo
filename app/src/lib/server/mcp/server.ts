@@ -6,9 +6,11 @@
 //   1. authentication. A bearer token, hashed and compared in constant time
 //      (tokens.ts). No token or a token that does not work is 401, and the
 //      token decides which person every query runs as.
-//   2. scopes. A tools/call the token's scopes do not cover is 403, before the
-//      tool is looked at. The same check runs again inside the handler, so a
-//      batched request cannot slip past the first one.
+//   2. the rung. Authentication hands back the token's level on the harness's
+//      autonomy ladder, and that level decides WHICH TOOLS EXIST for this
+//      request. There is no scope check any more and no 403 for one: a tool
+//      the rung does not offer is simply not a tool, so tools/list and
+//      tools/call cannot disagree and there is no second gate to forget.
 //   3. the day's cap. One claim per tools/call, counted in the database, so a
 //      restarted server does not forget. Over the cap is 429 with a sentence
 //      a person can read.
@@ -31,19 +33,35 @@ import { readToday } from '../assistant/gate.ts';
 import { fitResult } from '../assistant/wrap.ts';
 import { AppError, toAppError } from '../errors.ts';
 import { MAX_TOOL_RESULT_BYTES, type McpLimits } from './caps.ts';
-import { findMcpTool, toolsForScopes, type McpToolContext } from './tools.ts';
-import { authenticate, claimCall, logCall, type TokenIdentity } from './tokens.ts';
+import { findMcpTool, toolsForLevel, type McpToolContext } from './tools.ts';
+import { authenticate, claimCall, logCall, type TokenIdentity, type TokenLevel } from './tokens.ts';
 import type { Db } from '../db/types.ts';
 
 export const SERVER_NAME = 'northline';
 export const SERVER_VERSION = '1.0.0';
 
-/** What an outside agent is told about the shape of this server. */
-const INSTRUCTIONS = `Northline is the sales and operations system for Northline Exhaust Co. All of its data is invented.
+/**
+ * What an outside agent is told about the shape of this server. The second
+ * paragraph depends on the token's rung, because telling an agent it can only
+ * propose when it can actually act (or the other way round) makes it plan
+ * around a rule that is not there.
+ */
+function instructionsFor(level: TokenLevel): string {
+	const shape =
+		level === 'suggest'
+			? `Read tools answer straight away. Anything that would change a record is offered as propose_<name>, which creates a proposal that a named person approves in the app. Nothing you can call approves a proposal. When the person who minted this token trusts you with more, they raise its level on /agents and the same tools appear under their own names.`
+			: level === 'auto_review'
+				? `Read tools answer straight away. A tool that changes a record is offered under its own name and makes the change for real, as the person this token acts as, with a window in which they can take it back on /agents. Say why in the summary: it is the only record of your reasoning.`
+				: `Read tools answer straight away. A tool that changes a record is offered under its own name and makes the change for real, as the person this token acts as, with no approval step. Say why in the summary: it is the only record of your reasoning.`;
 
-Read tools answer straight away. Anything that would change a record is not here: instead there are propose_* tools, which create a proposal that a named person approves in the app. Nothing you can call approves a proposal, and no scope changes that.
+	return `Northline is the sales and operations system for Northline Exhaust Co. All of its data is invented.
+
+${shape}
+
+Whatever the level, a change is still bounded by what that person may do: their authority and its ceiling, the policy engine's cap, and the pause switch on /agents, which stops outside agents immediately. A request above the ceiling is refused and names the ceiling; it is never quietly turned into a proposal.
 
 Start with search_accounts when a question names a customer, get_part for a part number, and run_sql for a total or a ranking that no other tool gives. list_pending_approvals shows what you have left for a person to decide.`;
+}
 
 export interface McpDeps {
 	db: Db;
@@ -144,15 +162,18 @@ function withProtocolHeaders(request: Request): Request {
 // ---------------------------------------------------------------------------
 
 function buildServer(deps: McpDeps, token: TokenIdentity, today: () => Promise<string>): Server {
+	const level = token.autonomy.level;
 	const server = new Server(
 		{ name: SERVER_NAME, version: SERVER_VERSION },
-		{ capabilities: { tools: {} }, instructions: INSTRUCTIONS }
+		{ capabilities: { tools: {} }, instructions: instructionsFor(level) }
 	);
 
-	// tools/list shows what this token can actually call, so an agent does not
-	// plan around a tool it would be refused for.
+	// tools/list shows what this token can actually call AT ITS CURRENT RUNG,
+	// so an agent does not plan around a tool that is not there: at suggest a
+	// gated tool appears as propose_<name>, and from auto_review it appears
+	// under its own name. Raising the level on /agents changes this answer.
 	server.setRequestHandler(ListToolsRequestSchema, async () => ({
-		tools: toolsForScopes(token.scopes).map((tool) => ({
+		tools: toolsForLevel(level).map((tool) => ({
 			name: tool.name,
 			title: tool.title,
 			description: tool.description,
@@ -163,8 +184,15 @@ function buildServer(deps: McpDeps, token: TokenIdentity, today: () => Promise<s
 			annotations: {
 				title: tool.title,
 				readOnlyHint: tool.readOnly,
-				// A propose_* tool writes a proposal and nothing else, so it can
-				// never destroy anything and running it twice only asks twice.
+				/*
+				  A propose_* tool writes a proposal and nothing else, so it can
+				  never destroy anything and running it twice only asks twice. A
+				  tool offered under its own name changes a record, but none of
+				  them deletes one: they set a field, decide a snapshot, save a
+				  rule, or add a row. So this stays false, honestly, at every
+				  rung. Running one twice does change something twice, which is
+				  why idempotentHint follows readOnly rather than being asserted.
+				*/
 				destructiveHint: false,
 				idempotentHint: tool.readOnly,
 				// Every tool reads or writes this database and nothing else:
@@ -180,34 +208,28 @@ function buildServer(deps: McpDeps, token: TokenIdentity, today: () => Promise<s
 		const name = request.params.name;
 		const asked = name.slice(0, 60);
 
-		const tool = findMcpTool(name);
+		/*
+		  The lookup takes the rung, so a tool this rung does not offer does not
+		  exist for this request. That is the whole of the old scope check: at
+		  suggest, set_confidence is not a tool and propose_set_confidence is,
+		  and there is no input that could make the first one run. There is no
+		  second gate here to fall out of step with tools/list.
+		*/
+		const tool = findMcpTool(level, name);
 		if (!tool) {
-			// A gated tool (record_outcome, set_confidence, decide_export,
-			// save_automation_rule) lands here: it is not in the list at all, so
-			// there is no input that could make it run.
+			const alternative = findMcpTool(level, `propose_${name}`)
+				? ` At this token's level ("${level}") that change is asked for as "propose_${name}", and a person approves it. Raise the level on /agents to call it directly.`
+				: '';
 			await logCall(deps.db, token, {
 				method: 'tools/call',
 				tool: asked,
 				ms: since(),
 				outcome: 'refused',
-				note: 'No tool of that name.'
+				note: 'No tool of that name at this level.'
 			});
 			throw new McpError(
 				ErrorCode.InvalidParams,
-				`There is no tool called "${asked}". Call tools/list to see the ones this token has. A change to a record is asked for with a propose_ tool and approved by a person.`
-			);
-		}
-		if (!token.scopes.includes(tool.scope)) {
-			await logCall(deps.db, token, {
-				method: 'tools/call',
-				tool: tool.name,
-				ms: since(),
-				outcome: 'refused',
-				note: `Needs the ${tool.scope} scope.`
-			});
-			throw new McpError(
-				ErrorCode.InvalidParams,
-				`${tool.name} needs the "${tool.scope}" scope, and this token has ${token.scopes.join(' and ')}.`
+				`There is no tool called "${asked}". Call tools/list to see the ones this token has.${alternative}`
 			);
 		}
 
@@ -228,7 +250,10 @@ function buildServer(deps: McpDeps, token: TokenIdentity, today: () => Promise<s
 			db: deps.db,
 			userId: token.userId,
 			today: await today(),
-			tokenLabel: token.label
+			tokenLabel: token.label,
+			// The rung, so a tool that acts records the level it acted at rather
+			// than deciding one for itself.
+			autonomy: token.autonomy
 		};
 
 		try {
@@ -326,26 +351,16 @@ export async function handleMcpPost(request: Request, deps: McpDeps): Promise<Re
 		);
 	}
 
-	// 4. Scopes, before any tool is touched.
-	for (const call of calls) {
-		if (call.tool === null) continue;
-		const tool = findMcpTool(call.tool);
-		if (!tool || token.scopes.includes(tool.scope)) continue;
-		await logCall(deps.db, token, {
-			method: call.method,
-			tool: tool.name,
-			ms: 0,
-			outcome: 'refused',
-			note: `Needs the ${tool.scope} scope.`
-		});
-		return rpcError(
-			403,
-			-32000,
-			`This token has the ${token.scopes.join(' and ')} scope, and ${tool.name} needs "${tool.scope}". Mint a token with that scope at /settings/mcp.`
-		);
-	}
+	/*
+	  There is no step here for scopes any more. There used to be a 403 for a
+	  tool the token's scopes did not cover, checked once out here and again
+	  inside the handler so a batched request could not slip past the first
+	  one. Both are gone: the rung decides which tools exist, the lookup in
+	  the handler takes the rung, and a name that is not in this rung's list
+	  is answered as a name that does not exist. One question, one place.
+	*/
 
-	// 5. The day's cap: one claim per tool call, before the tool runs.
+	// 4. The day's cap: one claim per tool call, before the tool runs.
 	const toolCalls = calls.filter((call) => call.method === 'tools/call');
 	for (const call of toolCalls) {
 		try {
@@ -366,7 +381,7 @@ export async function handleMcpPost(request: Request, deps: McpDeps): Promise<Re
 		}
 	}
 
-	// 6. The protocol. Today's date is read at most once, and only if a tool
+	// 5. The protocol. Today's date is read at most once, and only if a tool
 	//    is going to want it.
 	let todayValue: string | null = null;
 	const today = async () => {
