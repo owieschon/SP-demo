@@ -5,6 +5,7 @@
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import TableSkeleton from '$lib/components/policy/TableSkeleton.svelte';
 	import { count, money, moneyExact, percent } from '$lib/format';
+	import { routes } from '$lib/routes';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -134,7 +135,7 @@
 							{#each proposed.accounts as account (account.customerNo)}
 								<tr>
 									<th scope="row">
-										<a href="/accounts/{account.customerNo}">{account.customerName}</a>
+										<a href={routes.account(account.customerNo)}>{account.customerName}</a>
 										<span class="faint">{account.customerNo}</span>
 									</th>
 									<td class="num">{money(account.revenue)}</td>
