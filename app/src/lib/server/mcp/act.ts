@@ -131,6 +131,31 @@ function toolContext(db: Db, userId: number, today: string, base: string): ToolC
 	};
 }
 
+/**
+ * What the field was, before the change, so an undo has something to put back.
+ *
+ * Only for the tools an undo can actually reverse. The others say plainly that
+ * they cannot be reversed by rule (harness/wake.ts), and recording a "before"
+ * for them would suggest otherwise: a note cannot be unwritten, an outcome
+ * settles a commitment, and an applied export snapshot has already replaced the
+ * live open order lines.
+ */
+async function capturedBefore(
+	db: Db,
+	userId: number,
+	tool: string,
+	toolInput: Record<string, unknown>
+): Promise<Record<string, unknown> | null> {
+	if (tool !== 'set_confidence') return null;
+	const commitmentId = Number(toolInput.commitment_id);
+	if (!Number.isInteger(commitmentId)) return null;
+	const [row] = await db.asUser(userId, (tx) =>
+		tx.sql<{ confidence: number }>`
+			select confidence from nl.commitments where id = ${commitmentId}`
+	);
+	return row ? { confidence: row.confidence } : null;
+}
+
 /** The proposal's row version, which decideProposal is held to. */
 async function proposalVersion(db: Db, userId: number, proposalId: number): Promise<string> {
 	const [row] = await db.asUser(userId, (tx) =>
@@ -162,6 +187,9 @@ async function actGated(
 ): Promise<ActOutcome> {
 	const base = randomUUID();
 	const ctx = toolContext(db, userId, today, base);
+
+	// What the field was, read before anything changes it.
+	const before = await capturedBefore(db, userId, input.tool, input.toolInput);
 
 	// 3. Write the change down first. The gate inside proposeFromMcp validates
 	//    the input against the gated tool's own schema and captures the row
@@ -220,6 +248,8 @@ async function actGated(
 			summary: input.summary,
 			token_label: input.tokenLabel,
 			conversation_id: conversationId,
+			// What it was, for the undo. Null when this tool has no reversal.
+			before,
 			result: written
 		},
 		requestId: `mcp-action-${base}`
