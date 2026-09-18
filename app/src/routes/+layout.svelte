@@ -36,6 +36,18 @@
 
 	let { data, children }: LayoutProps = $props();
 
+	/*
+	  Two pages get no shell even when somebody is signed in: the sign-in
+	  picker and the password curtain. The curtain in particular is in FRONT
+	  of the app, so drawing the rail, the person's name and a sign-out button
+	  around it says the opposite of what it means, and offers controls that
+	  cannot work until the password is typed. Keyed on the route rather than
+	  on data.user, because a signed-in person is exactly who sees the curtain
+	  when it expires.
+	*/
+	const BARE = ['/gate', '/signin'];
+	const bare = $derived(BARE.some((path) => page.url.pathname === path));
+
 	// The browser-tab icon is the Northline mark, drawn inline.
 	const favicon =
 		'data:image/svg+xml,' +
@@ -213,7 +225,7 @@
 	<div class="loading-bar" role="progressbar" aria-label="Loading the next page"></div>
 {/if}
 
-{#if data.user}
+{#if data.user && !bare}
 	<!--
 		Straight to the page content, for anyone arriving on the keyboard. It
 		is the first thing in the tab order and visible only when focused.
