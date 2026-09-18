@@ -9,8 +9,8 @@ import { fail } from '@sveltejs/kit';
 import { getDb } from '$lib/server/db';
 import { toAppError } from '$lib/server/errors';
 import { readMcpLimits } from '$lib/server/mcp/caps';
-import { mcpToolNames, MCP_TOOLS } from '$lib/server/mcp/tools';
-import { listTokens, mintToken, revokeToken, SCOPES, type McpScope } from '$lib/server/mcp/tokens';
+import { mcpToolNames, MCP_TOOL_ROSTER } from '$lib/server/mcp/tools';
+import { listTokens, mintToken, revokeToken } from '$lib/server/mcp/tokens';
 import { listUsers } from '$lib/server/users';
 import { env } from '$env/dynamic/private';
 import type { Actions, PageServerLoad } from './$types';
@@ -37,18 +37,17 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		isAdmin,
 		endpoint: `${url.origin}/api/mcp`,
 		limits: readMcpLimits(env),
-		// What the server exposes, so the page can say it without a second list.
-		tools: MCP_TOOLS.map((tool) => ({
-			name: tool.name,
-			title: tool.title,
-			scope: tool.scope,
-			readOnly: tool.readOnly
-		})),
+		/*
+		  The whole roster, with the lowest level each tool is offered at, so
+		  the page can describe what the server exposes without keeping a
+		  second list of its own. A token only ever sees its own level's slice
+		  of this, which is what tools/list answers with.
+		*/
+		tools: MCP_TOOL_ROSTER,
 		toolCount: mcpToolNames().length,
 		// Only an admin sees or manages tokens.
 		tokens,
 		people: isAdmin ? (await listUsers(db)).filter((person) => person.active) : [],
-		scopes: SCOPES,
 		// Fresh ids for the forms on this page load. Sending the same form twice
 		// sends the same id, so the database writes once. Revoke needs one per
 		// token, because two revokes on one page load are two different writes.
@@ -68,7 +67,6 @@ export const actions: Actions = {
 		const label = String(form.get('label') ?? '').trim();
 		const actsAs = Number(form.get('actsAs'));
 		const requestId = String(form.get('requestId') ?? '');
-		const scopes = form.getAll('scopes').map(String).filter((scope): scope is McpScope => scope === 'read' || scope === 'propose');
 
 		if (requestId.length < 8 || requestId.length > 100) {
 			return fail(400, { from: 'mint', message: 'The form is out of date. Reload the page and try again.' } satisfies MintResult);
@@ -82,15 +80,13 @@ export const actions: Actions = {
 		if (!Number.isInteger(actsAs) || actsAs <= 0) {
 			return fail(400, { from: 'mint', message: 'Choose the person this token acts as.' } satisfies MintResult);
 		}
-		if (scopes.length === 0) {
-			return fail(400, { from: 'mint', message: 'Choose at least one scope.' } satisfies MintResult);
-		}
 
 		try {
-			const minted = await mintToken(await getDb(), user.id, { label, actsAs, scopes, requestId });
+			const minted = await mintToken(await getDb(), user.id, { label, actsAs, requestId });
 			return {
 				from: 'mint',
-				message: 'Copy this token now. It is not stored and cannot be shown again.',
+				message:
+					'Copy this token now. It is not stored and cannot be shown again. It starts at suggest: it proposes, and you approve.',
 				secret: minted.secret,
 				label: minted.label,
 				tokenId: minted.tokenId

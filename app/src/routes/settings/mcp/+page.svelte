@@ -7,6 +7,9 @@
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import { enhance } from '$app/forms';
 	import { count, moment } from '$lib/format';
+	// The ladder's own labels, so this page and /agents cannot disagree about
+	// what "act with review" is called.
+	import { LEVEL_LABEL } from '$lib/harness/levels';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -59,8 +62,9 @@
 		}
 	}
 
-	const readTools = $derived(data.tools.filter((tool) => tool.readOnly));
-	const proposeTools = $derived(data.tools.filter((tool) => !tool.readOnly));
+	const readTools = $derived(data.tools.filter((tool) => tool.gate === 'read'));
+	const proposeTools = $derived(data.tools.filter((tool) => tool.gate === 'propose'));
+	const actTools = $derived(data.tools.filter((tool) => tool.gate === 'change'));
 </script>
 
 <svelte:head>
@@ -72,9 +76,11 @@
 		<div>
 			<h1>Connect a coding agent</h1>
 			<p class="faint">
-				Northline speaks MCP, so Claude Code, Cursor or Codex can read it and ask for changes. Read tools
-				answer straight away. Anything that would change a record becomes a proposal someone approves in
-				the app, exactly like the in-app assistant. Nothing an outside agent can call writes a record.
+				Northline speaks MCP, so Claude Code, Cursor or Codex can read it and work in it. A token acts as
+				one person and sees exactly what they see. Every token starts at <strong>suggest</strong>: it
+				answers questions, and anything that would change a record becomes a proposal someone approves in
+				the app. When you trust it with more, raise its level on <a href="/agents">/agents</a> and the
+				same tools appear under their own names.
 			</p>
 		</div>
 	</header>
@@ -206,21 +212,34 @@
 	<section class="panel">
 		<div class="panel-head"><h2>What it exposes</h2></div>
 		<div class="body">
-			<p class="scoped"><span class="chip">read</span> answers straight away, writes nothing:</p>
+			<p class="scoped">At every level, these answer straight away and write nothing:</p>
 			<ul class="tools">
 				{#each readTools as tool (tool.name)}
 					<li><code class="mono">{tool.name}</code></li>
 				{/each}
 			</ul>
-			<p class="scoped"><span class="chip">propose</span> creates a proposal a person approves:</p>
+			<p class="scoped">
+				At <span class="chip">suggest</span>, a change is offered like this, and a person approves it:
+			</p>
 			<ul class="tools">
 				{#each proposeTools as tool (tool.name)}
 					<li><code class="mono">{tool.name}</code></li>
 				{/each}
 			</ul>
+			<p class="scoped">
+				From <span class="chip">act with review</span> upwards, the same changes are offered under their
+				own names and happen for real:
+			</p>
+			<ul class="tools">
+				{#each actTools as tool (tool.name)}
+					<li><code class="mono">{tool.name}</code></li>
+				{/each}
+			</ul>
 			<p class="faint">
-				The tools that write are not here at all, so there is no input that could run one. An agent that
-				needs a note written asks a person for it.
+				A token only ever sees the list for the level it is on, so <code class="mono">tools/list</code>
+				tells an agent the truth about what it can do right now. Whatever the level, a change is bounded
+				by what its person may do: their authority and its ceiling, the policy engine's cap, and the
+				pause switch on <a href="/agents">/agents</a>.
 			</p>
 		</div>
 	</section>
@@ -242,22 +261,14 @@
 						{/each}
 					</select>
 				</label>
-				<fieldset>
-					<legend>Scopes</legend>
-					{#each data.scopes as scope (scope)}
-						<label class="check">
-							<input type="checkbox" name="scopes" value={scope} checked={scope === 'read'} />
-							<span>{scope}</span>
-						</label>
-					{/each}
-				</fieldset>
 				<button class="button primary" type="submit">
 					<Plus size={14} strokeWidth={1.75} aria-hidden="true" />
 					Mint
 				</button>
 				<p class="faint wide">
-					The token acts as the person you choose and sees exactly what they see. Give it
-					<code class="mono">read</code> only unless it needs to ask for changes.
+					The token acts as the person you choose and sees exactly what they see. There is nothing else
+					to choose here: it starts at <strong>suggest</strong>, where it proposes and a person
+					approves, and you raise it on <a href="/agents">/agents</a> once you trust it.
 				</p>
 			</form>
 		</section>
@@ -278,7 +289,7 @@
 						<tr>
 							<th scope="col">Label</th>
 							<th scope="col">Acts as</th>
-							<th scope="col">Scopes</th>
+							<th scope="col">Level</th>
 							<th scope="col">Last used</th>
 							<th scope="col" class="right">Today</th>
 							<th scope="col"></th>
@@ -294,7 +305,7 @@
 									{/if}
 								</td>
 								<td>{token.actsAsName}</td>
-								<td class="mono small">{token.scopes.join(', ')}</td>
+								<td class="mono small">{LEVEL_LABEL[token.level]}</td>
 								<td class="faint">
 									{token.lastUsedAt === null ? 'Never' : moment(token.lastUsedAt)}
 								</td>
