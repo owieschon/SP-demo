@@ -327,15 +327,33 @@ async function actAdditive(
 	  The row it wrote, for the run key and for the undo. An additive tool
 	  answers with its own id (activity_id or next_step_id), so the key names
 	  the row rather than a counter of our own.
+
+	  If there is no id, the run is NOT recorded with a placeholder. A key of
+	  mcp:0 would pass every check and still be wrong in a way nothing would
+	  catch: nl.agent_sampled hashes the run key to decide whether a person
+	  reviews the action afterwards, deterministically, so every action sharing
+	  one key gets the same verdict for ever. One in twenty would silently
+	  become all of them or none of them. A missing id means the tool answered
+	  in a shape this code does not understand, and saying so is the honest
+	  answer: the row it wrote is still in the audit log under this person.
 	*/
-	const writtenId = Number(payload.activity_id ?? payload.next_step_id ?? 0);
+	const writtenId = Number(payload.activity_id ?? payload.next_step_id ?? NaN);
+	if (!Number.isInteger(writtenId) || writtenId <= 0) {
+		return {
+			ok: false,
+			message:
+				`${input.tool} wrote a row but did not say which one, so the action could not be recorded ` +
+				`and there is nothing to undo it by. The write itself is in the audit log. Tell a person.`
+		};
+	}
+
 	const recorded = await recordActionAs(db, userId, {
 		agent: 'mcp',
 		workKind: input.autonomy.workKind,
-		runKey: `mcp:${writtenId || 0}`,
+		runKey: `mcp:${writtenId}`,
 		action: input.tool,
 		entity: MCP_ACTION_ENTITY,
-		entityId: String(writtenId || 0),
+		entityId: String(writtenId),
 		atLevel: input.autonomy.level === 'auto' ? 'auto' : 'auto_review',
 		undoMinutes: input.autonomy.level === 'auto_review' ? input.autonomy.undoWindowMinutes : null,
 		detail: {

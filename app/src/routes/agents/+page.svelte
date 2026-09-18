@@ -502,7 +502,25 @@
 													tone="danger"
 												/>
 											</form>
-										{:else if data.mayPromote && agent.agent === 'mcp'}
+										{:else if data.mayPromote}
+											<p class="t-meta muted">
+												{agent.name} has no row in <span class="mono">nl.users</span> yet, so its
+												autonomy is not a grant and there is nothing here to raise. Only the two
+												desk agents and the MCP tokens are principals. Its per-work-kind level is
+												on the board above.
+											</p>
+										{/if}
+
+										<!--
+											This is its OWN {#if}, not another arm of the chain above. It
+											was an {:else if} at first, which meant it only drew while the
+											mcp row happened to have no autonomy grant of its own. That is
+											true today and it is true by accident: grants are resolved by
+											mailbox kind (harness/trust.ts) and only the two desk agents
+											map. The moment anything gave the mcp row a grant, the whole
+											token list would have vanished with no error.
+										-->
+										{#if data.mayPromote && agent.agent === 'mcp'}
 											<!--
 											  4b. The same write, one token at a time.
 
@@ -551,6 +569,21 @@
 																Now at <strong>{LEVEL_LABEL[token.level]}</strong>:
 																{LEVEL_MEANING[token.level]}
 															</p>
+															{#if token.principalId === null}
+																<!--
+																	Minted before migration 0044, so it has no principal to
+																	hold a grant yet. Making one needs an admin, while moving
+																	a level needs change_policy, so this one row can refuse
+																	somebody the rest of the page works for. Saying so here
+																	beats a 403 they cannot explain.
+																-->
+																<p class="t-meta muted">
+																	This token predates the autonomy grant, so an administrator has
+																	to move it once before anybody with
+																	<span class="mono">change_policy</span> can. It behaves as
+																	suggest meanwhile.
+																</p>
+															{/if}
 															<div class="controls">
 																<label>
 																	<span class="t-meta muted">Level</span>
@@ -590,13 +623,6 @@
 													</p>
 												{/if}
 											</section>
-										{:else if data.mayPromote}
-											<p class="t-meta muted">
-												{agent.name} has no row in <span class="mono">nl.users</span> yet, so its
-												autonomy is not a grant and there is nothing here to raise. Only the two
-												desk agents and the MCP tokens are principals. Its per-work-kind level is
-												on the board above.
-											</p>
 										{/if}
 
 										<!--
