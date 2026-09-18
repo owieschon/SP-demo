@@ -20,7 +20,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { runTool } from '../assistant/gate.ts';
-import { outputProblem, TOOLS, type Tool, type ToolContext } from '../assistant/tools.ts';
+import { inputProblem, outputProblem, TOOLS, type Tool, type ToolContext } from '../assistant/tools.ts';
 import { proposeFromMcp } from './propose.ts';
 import type { McpScope } from './tokens.ts';
 import type { Db, Row } from '../db/types.ts';
@@ -181,7 +181,12 @@ function readTool(tool: Tool): McpTool {
 // list_pending_approvals: what is waiting for a person
 // ---------------------------------------------------------------------------
 
-const pendingSchema = z.object({
+/*
+  Strict, like every other tool input: an invented field is an error naming
+  the field rather than a default applied behind the caller's back. Both of
+  these fields have a default, so both come back in the answer.
+*/
+const pendingSchema = z.strictObject({
 	status: z
 		.enum(['draft', 'approved', 'rejected', 'executed'])
 		.default('draft')
@@ -189,12 +194,17 @@ const pendingSchema = z.object({
 	limit: z.number().int().min(1).max(20).default(10)
 });
 
+const pendingJsonSchema = z.toJSONSchema(pendingSchema, { target: 'draft-2020-12', io: 'input' }) as Record<
+	string,
+	unknown
+>;
+
 const listPendingApprovals: McpTool = {
 	name: 'list_pending_approvals',
 	title: 'List pending approvals',
 	description:
 		'Proposals waiting for a person to decide, newest first: what was proposed, which tool it would run, and the page to approve it on. Use it to check whether something you proposed has been decided yet. Ask for status "executed" to see the ones that went through.',
-	inputSchema: z.toJSONSchema(pendingSchema, { target: 'draft-2020-12', io: 'input' }) as Record<string, unknown>,
+	inputSchema: pendingJsonSchema,
 	scope: 'read',
 	readOnly: true,
 	...outputOf(
@@ -211,16 +221,19 @@ const listPendingApprovals: McpTool = {
 					})
 				),
 				row_count: z.number().int().nonnegative(),
-				status: z.enum(['draft', 'approved', 'rejected', 'executed'])
+				/* Both defaulted filters, reported under the names the input takes. */
+				status: z.enum(['draft', 'approved', 'rejected', 'executed']),
+				limit: z.number().int().positive()
 			}),
 			mcpRefusal
 		])
 	),
+	// The same wording every other tool's refusal uses, from the same function,
+	// so an unknown field is named here too instead of blamed on "input".
 	check: (input) => {
 		const parsed = pendingSchema.safeParse(input ?? {});
 		if (parsed.success) return { ok: true };
-		const first = parsed.error.issues[0];
-		return { ok: false, message: `${first.path.join('.') || 'input'}: ${first.message}` };
+		return { ok: false, message: inputProblem(parsed.error, pendingJsonSchema) };
 	},
 	run: async (ctx, input) => {
 		const asked = pendingSchema.parse(input ?? {});
@@ -240,7 +253,7 @@ const listPendingApprovals: McpTool = {
 				limit ${asked.limit}`
 		);
 		return {
-			payload: { rows, row_count: rows.length, status: asked.status },
+			payload: { rows, row_count: rows.length, status: asked.status, limit: asked.limit },
 			isError: false,
 			rows: rows.length
 		};
@@ -262,6 +275,10 @@ const summarySchema = z
  * The gated tool's own JSON Schema with a required `summary` added. The input
  * an agent sends is therefore exactly the gated tool's input plus the reason,
  * which keeps one shape per concept.
+ *
+ * `additionalProperties: false` is stated here and enforced by the gated
+ * tool's strict schema when the input is checked, so the published rule and
+ * the running one are the same rule.
  */
 function schemaWithSummary(tool: Tool): Record<string, unknown> {
 	const base = tool.jsonSchema as {
@@ -287,13 +304,16 @@ function withoutSummary(input: Record<string, unknown>): Record<string, unknown>
 
 function proposeTool(gated: Tool): McpTool {
 	const checkGatedInput = checkWith(gated);
+	const inputSchema = schemaWithSummary(gated);
+	/** Everything this tool takes: the gated tool's fields, plus summary. */
+	const accepted = Object.keys((inputSchema.properties ?? {}) as Record<string, unknown>);
 	return {
 		name: `propose_${gated.name}`,
 		title: titleFor(`propose_${gated.name}`),
 		description:
 			`Ask for this change instead of making it. It writes nothing: it creates a proposal that a person approves or rejects in the app, ` +
 			`and you get back the proposal's id and the page to approve it on. What it would do once approved: ${gated.description}`,
-		inputSchema: schemaWithSummary(gated),
+		inputSchema,
 		scope: 'propose',
 		readOnly: false,
 		...outputOf(
@@ -313,6 +333,26 @@ function proposeTool(gated: Tool): McpTool {
 		),
 		check: (input) => {
 			const shape = (input ?? {}) as Record<string, unknown>;
+			/*
+			  The unknown-field check belongs here rather than in the gated
+			  tool, which has never heard of `summary`: delegating it would
+			  name the field correctly but then list the accepted fields
+			  without the one the caller had just got right. Anything nested
+			  inside a field is still caught by the gated tool's own strict
+			  schema below.
+
+			  It runs before the summary check for the same reason the zod
+			  formatting prefers an unrecognized key: a misspelled `summary`
+			  is both a missing field and an unknown one, and only the second
+			  reading says what the caller typed.
+			*/
+			const unknownFields = Object.keys(shape).filter((key) => !accepted.includes(key));
+			if (unknownFields.length > 0) {
+				return {
+					ok: false,
+					message: `${unknownFields.join(', ')}: there is no input by that name. This tool takes ${accepted.join(', ')}.`
+				};
+			}
 			const summary = summarySchema.safeParse(shape.summary);
 			if (!summary.success) return { ok: false, message: `summary: ${summary.error.issues[0].message}` };
 			return checkGatedInput(withoutSummary(shape));

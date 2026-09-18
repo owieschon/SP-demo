@@ -82,7 +82,7 @@ describe('the request the live model gets', () => {
 			role: 'assistant',
 			kind: 'answer',
 			text: 'Let me look.',
-			toolCalls: [{ id: 'toolu_1', name: 'list_windows_closed_short', input: { owner: 'me' } }]
+			toolCalls: [{ id: 'toolu_1', name: 'list_windows_closed_short', input: { whose: 'me' } }]
 		},
 		{
 			role: 'user',

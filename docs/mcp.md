@@ -175,6 +175,17 @@ risk class there decides what happens here:
 A `propose_*` tool takes the gated tool's own input plus a required `summary`,
 which is the sentence the person deciding reads.
 
+Every tool input is closed: each schema in `tools/list` carries
+`additionalProperties: false`, and a field the tool does not have is `-32602`
+naming the field and listing what it does take. This is not tidiness. A loose
+input drops a word it does not recognise and carries on with the default, so
+a filter sent under the wrong name becomes a confident answer to a different
+question rather than an error. For the same reason, a filter with a default
+is reported in the answer under the name the input takes (`whose` and `limit`
+on `list_windows_closed_short`, `status` and `limit` on
+`list_pending_approvals`), so an agent can read back which question it
+actually asked.
+
 ## 4. What an agent cannot do
 
 - **Call a tool that writes.** `record_outcome`, `set_confidence`,
