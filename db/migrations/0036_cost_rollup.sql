@@ -212,9 +212,24 @@ create table nl.item_lead_rolled (
   -- changes; shorten this one and the promise date moves.
   critical_child text,
   -- The chain in words, one entry per level:
-  --   {"K-2003: assemble 1 day", "S6-72SA: make 4 days", "RM-TUBE-600-16-AL: buy 28 days"}
+  --   {"K-2003: assemble 1 day", "S6-72SA: make 4 days",
+  --    "RM-TU-0600-16-AL: buy 28 days (observed)"}
   critical_path  text[] not null default '{}',
   basis          text not null default '',   -- buy, make, assemble, process
+  -- WHERE THE BOUGHT DAYS CAME FROM. A made part's promise date is only as
+  -- honest as the purchase lead times underneath it, so the roll-up keeps
+  -- the word migration 0032 puts on the figure it used for this part's own
+  -- purchase: observed, quoted, item card, vendor default, default or
+  -- exception. Empty for a part with a parts list, which buys nothing of
+  -- its own. A demo can then say "42 days, the ninetieth percentile of
+  -- eleven receipts" rather than "42 days, because a field says 6W".
+  buy_basis      text not null default '',
+  buy_detail     text not null default '',
+  -- False when something under this part cannot be promised at all: a
+  -- bought part on allocation or discontinued at its only source. The date
+  -- is still computed, because the forecast needs a number to plan with,
+  -- but nobody should read it out to a customer.
+  can_promise    boolean not null default true,
   measured_at    timestamptz not null default now()
 );
 
@@ -315,6 +330,38 @@ begin
   where l.item_no in (select w.item_no from pg_temp.mfg_work w);
   create index mfg_own_item_idx on pg_temp.mfg_own (item_no);
   analyze pg_temp.mfg_own;
+
+  /*
+   * 3b. What it takes to BUY each leaf in the working set, once.
+   *
+   * A part with no parts list has to be bought before anything can be done
+   * to it, and what buying it takes is not a formula on the item card.
+   * Migration 0032 works it out from what the vendor actually did: the
+   * ninetieth percentile of the receipts for that vendor and that part where
+   * there are enough of them (nl.promise_min_receipts), falling back to the
+   * quote, then the item card, then the vendor card, then the house default,
+   * and raised by any published lead time exception. That is the figure the
+   * procurement desk and the order desk already quote, so this reads
+   * nl.lead_time_for() rather than copying the rule, and a made part's
+   * promise date is built out of the same numbers a buyer would defend.
+   *
+   * It is materialized once per measure rather than called inside the
+   * per-pass insert, because a leaf sits under many parents and the function
+   * is the most expensive thing in this file: one call per leaf in the
+   * working set instead of one per parent per level.
+   */
+  drop table if exists pg_temp.mfg_lead;
+  create temporary table mfg_lead on commit drop as
+  select w.item_no, l.days, l.basis, l.basis_detail, l.can_promise
+  from pg_temp.mfg_work w
+  cross join lateral nl.lead_time_for(w.item_no, v_today) l
+  where not exists (
+    select 1 from nl.bom_lines b
+    where b.parent_item = w.item_no and not b.is_substitute
+      and (b.effective_from is null or b.effective_from <= v_today)
+      and (b.effective_to is null or b.effective_to >= v_today));
+  create index mfg_lead_item_idx on pg_temp.mfg_lead (item_no);
+  analyze pg_temp.mfg_lead;
 
   select max(lvl) into v_max from pg_temp.mfg_work;
 
@@ -456,21 +503,32 @@ begin
     -- words is this level's line in front of that child's chain, so it
     -- composes in one step instead of being walked again.
     insert into nl.item_lead_rolled (
-      item_no, own_days, lead_days, levels, critical_child, critical_path, basis, measured_at)
+      item_no, own_days, lead_days, levels, critical_child, critical_path, basis,
+      buy_basis, buy_detail, can_promise, measured_at)
     select
       w.item_no,
       own.days,
       own.days + coalesce(kid.lead_days, 0),
       case when kid.item_no is null then 0 else kid.levels + 1 end,
       kid.item_no,
+      -- One line per level, and for a bought part the word that says where
+      -- its days came from, so the chain carries its own evidence.
       array[w.item_no || ': ' || own.basis || ' ' || own.days
-            || case when own.days = 1 then ' day' else ' days' end]
+            || case when own.days = 1 then ' day' else ' days' end
+            || case when own.basis = 'buy' and coalesce(bl.basis, '') <> ''
+                    then ' (' || bl.basis || ')' else '' end]
         || coalesce(kid.critical_path, '{}'::text[]),
       own.basis,
+      coalesce(bl.basis, ''),
+      coalesce(bl.basis_detail, ''),
+      -- This part's own purchase, and everything under it: one part on
+      -- allocation anywhere in the tree means the date is not promisable.
+      coalesce(bl.can_promise, true) and coalesce(kids.can_promise, true),
       now()
     from pg_temp.mfg_work w
-    join nl.items i on i.item_no = w.item_no
-    left join nl.vendors v on v.vendor_no = i.vendor_no
+    -- The purchase lead time for a leaf, from nl.lead_time_for() (above).
+    -- Absent for a part with a parts list, which buys nothing of its own.
+    left join pg_temp.mfg_lead bl on bl.item_no = w.item_no
     -- Does this part have a parts list, does it have steps of its own, and
     -- do any of those steps change the metal? The last one is the same test
     -- nl.item_supply_shape uses, so the basis here and the shape there
@@ -492,10 +550,7 @@ begin
         -- done to it, so its purchase lead time is part of its own days
         -- whether or not it also has a routing. That is what makes a plated
         -- bought part take the plater's time on top of the vendor's.
-        (case when has.has_bom then 0
-              else coalesce(nl.lead_time_days(i.lead_time),
-                            nl.lead_time_days(v.lead_time),
-                            nl.default_lead_days(i.replenishment)) end
+        (coalesce(bl.days, 0)
          + coalesce((
              select sum(
                case
@@ -527,6 +582,17 @@ begin
       order by l.lead_days desc, l.item_no
       limit 1
     ) kid on true
+    -- Promisable is an AND over every child, not just the critical one: the
+    -- part on allocation is rarely the one on the longest branch.
+    cross join lateral (
+      select bool_and(l.can_promise) as can_promise
+      from nl.bom_lines b
+      join nl.item_lead_rolled l on l.item_no = b.child_item
+      where b.parent_item = w.item_no
+        and not b.is_substitute
+        and (b.effective_from is null or b.effective_from <= v_today)
+        and (b.effective_to is null or b.effective_to >= v_today)
+    ) kids
     where w.lvl = v_pass
     on conflict (item_no) do update set
       own_days       = excluded.own_days,
@@ -535,10 +601,14 @@ begin
       critical_child = excluded.critical_child,
       critical_path  = excluded.critical_path,
       basis          = excluded.basis,
+      buy_basis      = excluded.buy_basis,
+      buy_detail     = excluded.buy_detail,
+      can_promise    = excluded.can_promise,
       measured_at    = excluded.measured_at;
   end loop;
 
   drop table if exists pg_temp.mfg_own;
+  drop table if exists pg_temp.mfg_lead;
   drop table if exists pg_temp.mfg_work;
   return v_total;
 end $$;
@@ -569,6 +639,23 @@ security definer
 set search_path = ''
 as $$
 begin
+  /*
+   * The world generator suspends this while it bulk loads and calibrates.
+   * It has to: calibrating the metal price means measuring the catalogue,
+   * moving one number and measuring again, and the statement that moves the
+   * number rewrites the whole material master, so the trigger would measure
+   * the catalogue a second time for nothing. Nine full passes became three.
+   *
+   * It is transaction local (set_config with is_local true), it is set in
+   * exactly one place (db/seed.d/95_manufacturing.sql), and the generator
+   * calls nl.measure_all_items() itself while it is on, so nothing is left
+   * unmeasured. An app request never sets it, and a request that somehow
+   * did would still leave a correct database, because the roll-up is
+   * repaired nightly and nl.rollup_drift() reports anything stale.
+   */
+  if coalesce(current_setting('nl.suspend_rollup', true), '') = 'on' then
+    return 0;
+  end if;
   if not exists (select 1 from nl.item_cost_rolled) then
     return 0;
   end if;
@@ -612,6 +699,15 @@ create trigger bom_lines_remeasure_delete after delete on nl.bom_lines
   for each statement execute function nl.remeasure_after_bom_change();
 
 -- 2. A routing operation. Same idea, keyed on the part it belongs to.
+--
+-- An UPDATE compares only the columns that can move a cost or a lead time.
+-- An operation row carries plenty that cannot: its description, its note,
+-- which qualification and which gauge it needs (migration 0037). Those get
+-- written in bulk by the seed and edited on the floor, and re-measuring the
+-- catalogue because somebody attached a gauge to an inspection step would be
+-- silly. Postgres will not take a column list and transition tables on the
+-- same trigger, so the filter is here rather than in the trigger definition.
+-- Same reason as nl.remeasure_after_vendor_change() below.
 create function nl.remeasure_after_routing_change() returns trigger
 language plpgsql
 security definer
@@ -625,8 +721,27 @@ begin
   elsif tg_op = 'DELETE' then
     select array_agg(distinct item_no) into v_items from old_rows;
   else
-    select array_agg(distinct item_no) into v_items
-    from (select item_no from new_rows union select item_no from old_rows) s;
+    select array_agg(distinct x.item_no) into v_items
+    from (
+      select n.item_no from new_rows n
+      join old_rows o on o.id = n.id
+      where (n.item_no, n.seq, n.work_center, n.setup_minutes, n.run_minutes_per_piece,
+             n.queue_minutes, n.move_minutes, n.standard_lot_size, n.yield_pct,
+             n.labor_class, n.machine, n.crew_size, n.overtime_premium, n.expedite_premium,
+             n.is_outside, n.vendor_no, n.outside_lead_time, n.outside_price_per_piece,
+             n.effective_from, n.effective_to)
+        is distinct from
+            (o.item_no, o.seq, o.work_center, o.setup_minutes, o.run_minutes_per_piece,
+             o.queue_minutes, o.move_minutes, o.standard_lot_size, o.yield_pct,
+             o.labor_class, o.machine, o.crew_size, o.overtime_premium, o.expedite_premium,
+             o.is_outside, o.vendor_no, o.outside_lead_time, o.outside_price_per_piece,
+             o.effective_from, o.effective_to)
+      union
+      -- An operation moved from one part to another changes both.
+      select o.item_no from old_rows o
+      join new_rows n on n.id = o.id
+      where n.item_no is distinct from o.item_no
+    ) x;
   end if;
   perform nl.remeasure(v_items);
   return null;
@@ -1022,7 +1137,10 @@ returns table (
   own_days       int,
   lead_days      int,
   is_critical    boolean,
-  critical_child text
+  critical_child text,
+  buy_basis      text,
+  buy_detail     text,
+  can_promise    boolean
 )
 language sql stable rows 40
 set search_path = ''
@@ -1057,11 +1175,15 @@ as $$
     coalesce(l.own_days, 0),
     coalesce(l.lead_days, 0),
     exists (select 1 from critical_items ci where ci.item_no = t.item_no),
-    l.critical_child
+    l.critical_child,
+    coalesce(l.buy_basis, ''),
+    coalesce(l.buy_detail, ''),
+    coalesce(l.can_promise, true)
   from tree t
   join nl.items i on i.item_no = t.item_no
   left join nl.item_lead_rolled l on l.item_no = t.item_no
-  group by t.item_no, i.description, l.basis, l.own_days, l.lead_days, l.critical_child
+  group by t.item_no, i.description, l.basis, l.own_days, l.lead_days, l.critical_child,
+           l.buy_basis, l.buy_detail, l.can_promise
 $$;
 
 -- Rolled cost against the item card's cost, for the parts where the two
@@ -1177,6 +1299,11 @@ as $$
       'levels', l.levels,
       'critical_child', l.critical_child,
       'critical_path', to_jsonb(l.critical_path),
+      -- Where the bought days at this level came from, and whether the date
+      -- may be read out to a customer at all.
+      'buy_basis', l.buy_basis,
+      'buy_detail', l.buy_detail,
+      'can_promise', l.can_promise,
       'ready_on', ((select nl.today()) + l.lead_days)),
 
     'on_hand', jsonb_build_object(
