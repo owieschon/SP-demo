@@ -481,7 +481,18 @@ const listWindowsClosedShort = tool({
 	description:
 		'Commitments whose window has closed with less than 95% delivered and no answer yet. This is the list the "closed short" page shows. Answering one is gated: propose it.',
 	schema: z.strictObject({
-		owner: z.enum(['me', 'everyone']).default('me'),
+		/*
+		  Named for the word the answer uses, not the other way round. It was
+		  `owner` in and `whose` out, and a client that read the answer and
+		  sent `whose` back had it dropped, because this field has a default:
+		  it got one person's commitments believing it had asked for
+		  everyone's, with no error at all. The answer is what a client reads
+		  first, so the answer's word wins.
+		*/
+		whose: z
+			.enum(['me', 'everyone'])
+			.default('me')
+			.describe('Whose commitments to list: "me" for yours, "everyone" for the whole team.'),
 		limit: z.number().int().min(1).max(20).default(10)
 	}),
 	output: answers(
@@ -493,7 +504,7 @@ const listWindowsClosedShort = tool({
 		})
 	),
 	run: async (ctx, input) => {
-		const mine = input.owner === 'me' ? ctx.userId : null;
+		const mine = input.whose === 'me' ? ctx.userId : null;
 		const rows = await ctx.db.asUser(ctx.userId, (tx) =>
 			tx.sql<Row>`
 				select p.id, p.title, p.customer_no, cu.name as customer_name,
@@ -512,7 +523,7 @@ const listWindowsClosedShort = tool({
 		return {
 			rows: rows.map((r) => ({ ...r, url: routes.commitmentAnswer(Number(r.id)) })),
 			row_count: rows.length,
-			whose: input.owner,
+			whose: input.whose,
 			limit: input.limit
 		};
 	}

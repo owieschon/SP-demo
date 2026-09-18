@@ -127,7 +127,7 @@ export function mockModel(options: { userId: number }): AskModel {
 			const shape = shapeOf(question);
 
 			if (shape === 'closed_short') {
-				if (step === 0) return ask('list_windows_closed_short', { owner: 'me', limit: 5 }, round);
+				if (step === 0) return ask('list_windows_closed_short', { whose: 'me', limit: 5 }, round);
 
 				const list = seen.find((s) => s.name === 'list_windows_closed_short')?.payload;
 				const first = rowsOf(list)[0];
