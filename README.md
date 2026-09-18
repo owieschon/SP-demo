@@ -1,110 +1,124 @@
 # Northline
 
-A full-stack sales and operations app for Northline Exhaust Co., an invented
-maker of heavy-duty truck exhaust parts whose ERP can only export files.
-SvelteKit 2 and Svelte 5 with TypeScript, on Postgres 17 (Supabase), with the
-business rules enforced inside the database. All data is invented.
+Northline is a full-stack sales and operations system for an invented truck-parts
+manufacturer whose legacy ERP exchanges files instead of serving an API. It uses
+SvelteKit 2, Svelte 5, strict TypeScript and Postgres 17. The database owns the
+business rules, while AI features can propose work but cannot approve their own
+changes. All business records are invented.
 
-**Live demo:** https://sp-demo-one.vercel.app (pick any user on the sign-in page; there are no passwords)
+I designed and built Northline in 48 hours to learn and demonstrate Svelte through a
+backend-heavy system. Coding agents wrote much of the implementation under the
+architecture, data model, rules and validation strategy I set; I reviewed, tested and
+measured the result.
 
-## What it shows
+## Three engineering highlights
 
-| Workflow | What happens | Start reading at |
-|---|---|---|
-| Commitments that measure themselves | A buyer's promise (these parts, this window, this value) tracks itself against the invoice ledger. Status is derived, never typed. When a window closes short, the owner answers one question. | [`docs/sql.md`](docs/sql.md), `db/migrations/0003`, `0007`, `0008` |
-| RFQ intake | A pasted customer email becomes a draft quote. An extractor proposes; deterministic code validates every field against the catalog and customer master; a person approves; the database creates the quote and a commitment. Scored against a set of test emails. | `app/src/lib/server/rfq/`, [`evals/rfq/`](evals/rfq/) |
-| Daily ERP export | The morning "open sales lines" CSV is parsed, normalized, hashed and staged. Suspicious files are held for a person. Applying it allocates stock oldest ship date first and sorts every open line into one bucket. | `app/src/lib/server/exports/`, `db/migrations/0010` |
-| Automation setup | A visual when / if / then builder. A rule names a reviewed trigger, adds conditions on its typed fields, and adds a next step or a note. It is tested in a read-only transaction before it is saved, runs daily, and fires at most once per record. | `app/src/lib/automation/catalog.ts`, `app/src/lib/server/automation/` |
-| Late-order forecast | Stock and incoming purchase and production orders are handed out over time, so every open line gets a projected ship date, a reason and who to call. | `db/migrations/0016`, [`docs/supply-forecast.md`](docs/supply-forecast.md) |
-| Cost, freight and price that move | Costs have a timeline, freight has a tariff with a monthly fuel surcharge, and one SQL function prices a line: agreement, then last paid, then tier, then list, with a margin floor and the reason. | [`docs/pricing.md`](docs/pricing.md), `db/migrations/0018` |
-| Records worth opening | Accounts with their people and history, parts with stock, sales and margin, vendors with terms and contacts, and one search box over all three. | `app/src/routes/accounts/`, `parts/`, `vendors/` |
-| Access control | Every request runs as a login-less role with the user's id set; row-level security and checked write functions decide the rest. | `db/migrations/0001`, `app/src/lib/server/db/` |
+- **SQL that explains its speed.** A commitment measures itself against invoice
+  history across a recursive customer family. On a full synthetic world, the board
+  moved from 10,963 ms to 6 to 10 ms through planner-aware SQL, a covering index,
+  trigger-maintained delivery totals and a once-per-query date read. These are dated
+  hosted measurements, not local or production claims. See the
+  [plans, data size and 4x limit](docs/sql.md).
+- **A safe edge around a file-only ERP.** Morning CSVs are matched to typed report
+  profiles, normalized, content-hashed and staged as a diff. Wrong reports are
+  refused; suspicious but readable files wait for a person; applying a snapshot
+  allocates stock oldest ship date first. Start at
+  [the export pipeline](app/src/lib/server/exports).
+- **AI as a bounded parser and proposer.** An extractor may propose RFQ fields, but
+  deterministic code resolves customers, parts, quantities, dates and prices. Tool
+  risk classes live in code; gated writes stop before input parsing and run only
+  after a person approves a stored, versioned proposal. The UI shows validation
+  reasons, source citations and refusals. See the
+  [assistant boundary](docs/assistant-gating.md).
 
-## Measured
+## Run it locally
 
-On the full world (4,490 customers, 11,422 parts, 114,555 invoices,
-450,522 invoice lines, 2,644 commitments), Supabase Micro compute:
-
-| Commitment board query | Time |
-|---|---|
-| First version (recursive view) | 10,963 ms |
-| Family walk as a function that declares its size | 337 ms |
-| Delivered kept current by triggers | 22 ms |
-| Today's date read once per query | 6 to 10 ms |
-
-At four times the data (1.8 million invoice lines) the board takes 117 ms,
-where recounting every commitment takes 7.96 s. The plans, the trigger
-design and the load test are in [`docs/sql.md`](docs/sql.md).
-
-## How it fits together
-
-```mermaid
-flowchart LR
-  B[Browser] --> K[SvelteKit on Vercel<br/>load functions, form actions,<br/>signed session cookie]
-  K --> S[app/src/lib/server<br/>zod input checks,<br/>one Db interface]
-  S -->|"set local role nl_app<br/>set nl.user_id"| P[(Postgres 17)]
-  S -.->|live mode only| A[Anthropic API<br/>RFQ extraction]
-  subgraph P2 [Inside Postgres]
-    R[Row-level security]
-    W[Write functions:<br/>request id, role rules,<br/>row version, audit row]
-    V[Views: progress, allocation]
-    T[Triggers: delivered figures]
-    C[pg_cron: nightly rebuild<br/>and drift check]
-  end
-  P --- P2
-```
-
-- No ORM. The SQL is the point; every query is a tagged template with bound parameters.
-- Without `DATABASE_URL` the app runs on PGlite, real Postgres compiled to WebAssembly, built from the same migrations. The tests use it too, so they run against Postgres with no setup.
-- The AI never writes. It proposes; code validates; a person approves; a database function does the write under that person's name.
-
-## Run it
-
-Node 24.
+Use Node 24. You do not need Docker, a database, app credentials or a model API. The
+first start builds a persistent demo world in PGlite from the portable migrations and
+the same seed files used by hosted Postgres, so it can take a minute or two:
 
 ```bash
 cd app
-npm install
+npm ci
 npm run dev
 ```
 
-Open http://localhost:5180. The first start builds a local database with a
-mid-sized world (a minute or two). No keys or database are needed; RFQ intake
-uses its rule-based extractor until a key is configured.
+Open <http://localhost:5180> and choose an active role. Leave `app/.env` absent so
+the app stays on local PGlite, uses deterministic extraction and simulates mail.
+
+Run the offline verification from `app/`:
 
 ```bash
-npm run check      # svelte-check and TypeScript
-npm test           # Vitest, database tests on PGlite
-npm run build      # production build (Vercel adapter)
-npm run eval:rfq   # score RFQ extraction against the test emails
+npm run check      # Svelte and TypeScript checks
+npm test           # Vitest against in-memory PGlite
+npm run build      # production build with the Vercel adapter
+npm run eval:rfq   # rules-only RFQ regression evaluation
 ```
 
-To run against Supabase, copy `app/.env.example` to `app/.env` and set
-`DATABASE_URL` to the transaction pooler (port 6543). Applying the schema is
-described in [`db/README.md`](db/README.md).
+CI runs the clean install, check, test and build sequence on Node 24.
 
-## Where things are
+## Review three flows
 
-| Path | What it is |
-|---|---|
-| `app/` | The SvelteKit app. Pages in `src/routes`, server code in `src/lib/server`, components in `src/lib/components`. |
-| `db/migrations/` | The schema, in order. The only source of truth. `*.supabase.sql` files use Supabase-only features. |
-| `db/seed.sql` | The world generator: `nl.reset()`, `nl.build('full' \| 'demo' \| 'small')`. |
-| `db/bench/` | The load test. |
-| `docs/` | How the SQL works ([`sql.md`](docs/sql.md)). |
-| `evals/rfq/` | Test emails, expected results and scored reports for RFQ intake. |
-| `fixtures/exports/` | Sample ERP export files, good and bad. |
-| [`DECISIONS.md`](DECISIONS.md) | Each real design choice, the options and why. |
-| [`CLAUDE.md`](CLAUDE.md) | The rules coding agents follow in this repo. |
-| `demo/`, `tools/` | Earlier demo tooling, not part of the app ([`demo/README.md`](demo/README.md)). |
+These three beats take about five minutes and keep writes inside the local invented
+world:
 
-## How this was built
+1. Open **Morning exports**. Download **Today's sales lines**, upload it and inspect
+   the staged diff. **Wrong report** demonstrates refusal; **Partial export**
+   demonstrates a hold. Yesterday's file is already applied, so uploading it
+   demonstrates duplicate detection.
+2. Open **Order desk**, expand **Add a quote request by hand**, load an invented
+   sample and choose **Read and check**. This creates a quote request, not an outbound
+   reply. Open the request to inspect field-level evidence; approval can happen there
+   or in **Approval queue** and creates the quote and commitment without sending mail.
+3. Open **Commitments** and inspect a record. Delivery comes from matching invoice
+   lines across the billing family, returns subtract from it, and status is derived.
+   Checked write functions enforce identity, idempotency, row versions and auditing.
 
-I'm Owen Schoeniger. I designed Northline and directed its build over a few
-days: the architecture, the data model, the rules the database enforces, the
-validation approach and every decision in `DECISIONS.md`. Most of the code
-was written by coding agents (Claude Code) working to those rules, and I
-reviewed, tested and measured what they produced. The world's statistical
-shape was tuned to match a real business of this kind; no names, records or
-exact figures were carried over. Nothing here runs in production or serves
-real customers.
+Continue with the [ten-minute reviewer tour](docs/loom-script.md) for automations and
+the assistant, or the [code walkthrough](docs/walkthrough.md) to trace a request
+through SvelteKit, TypeScript and Postgres.
+
+## Know the trust boundaries
+
+| Boundary | What enforces it |
+| --- | --- |
+| Browser to database | Tagged templates bind values; every user transaction runs as `nl_app` with `nl.user_id`; row-level security and explicit grants decide access. |
+| Write path | Checked functions require an active user, claim an idempotency key, validate authorization and fields, and append an audit row. Mutations of existing records also compare `updated_at`. |
+| Assistant SQL | `nl_readonly` has no grant on people or conversation tables; Postgres marks the transaction read-only and applies a timeout. |
+| Model actions | Code assigns each tool a risk class. Gated tools can only become stored proposals, and approval reloads stored input instead of trusting the browser or model. |
+| Outbound mail | A person must approve, and the server checks a recipient allowlist at send time. The local no-key path records a simulated send. |
+| Hosted access | A shared password protects the private demo before its passwordless role picker. This is a review curtain, not production identity. |
+
+The private hosted demo is at <https://sp-demo-one.vercel.app>. Ask the owner for
+access and use it read-only unless asked to act: **Order desk** is connected to an
+external mail service, so polling or approving a reply can have a real external
+effect.
+
+## Read the evidence honestly
+
+- **Offline tests:** PGlite runs the portable Postgres schema and integration tests
+  without external services. It does not reproduce the hosted network, connection
+  pooler or Supabase-only `pg_cron` migrations.
+- **RFQ evaluation:** the rules extractor currently gets 26 of 28 invented cases
+  fully right and holds field scores to a checked-in baseline. The cases and
+  extractor share an author, so this is a regression floor, not a held-out
+  generalization result. See the [evaluation contract](evals/rfq/README.md).
+- **SQL benchmark:** the 2026-09-17 figures in [`docs/sql.md`](docs/sql.md) were
+  measured on Supabase Postgres 17 Micro compute over invented data. The offline
+  suite does not rerun them, and they are not an independent or production workload.
+- **Demo scope:** Northline does not serve real customers. Hosted integrations can
+  still have real side effects, which is why the reproducible tour runs locally.
+
+## Find the source
+
+| Path | What it owns |
+| --- | --- |
+| [`app/src/routes/`](app/src/routes) | SvelteKit loads, form actions, pages and HTTP endpoints |
+| [`app/src/lib/server/`](app/src/lib/server) | Server-only validation, integrations, agents and database access |
+| [`db/migrations/`](db/migrations) | Ordered schema, roles, policies, functions, views and triggers |
+| [`db/seed.sql`](db/seed.sql), [`db/seed.d/`](db/seed.d) | Deterministic invented worlds |
+| [`evals/`](evals) | Invented cases, expected results, baselines and reports |
+| [`DECISIONS.md`](DECISIONS.md) | Architecture choices, alternatives and tradeoffs |
+| [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | Clean-install verification |
+
+The [database guide](db/README.md) covers world sizes and migration behavior.
