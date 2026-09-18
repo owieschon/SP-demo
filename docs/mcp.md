@@ -16,6 +16,18 @@ MCP request, so `/api/mcp` is a public path and the bearer token is the only
 thing protecting it. What that means in practice is in
 [section 8](#8-what-a-stolen-token-gets-and-what-it-does-not).
 
+## 0. The workflow
+
+1. **Open `/settings/mcp`.** Everyone can see it. The buttons need an admin,
+   because minting is admin-only in the database.
+2. **Press your agent's button.** One click mints a token that acts as you,
+   labels it with the provider it was made for, and fills it into that agent's
+   own config: the `claude mcp add` command for Claude Code, the `mcpServers`
+   block for Cursor, the `mcp_servers` table for Codex. Copy the one finished
+   block, or open Cursor's install link. No secret is typed by hand.
+3. **Work in plain language.** It reads straight away, and anything that would
+   change a record comes back as a proposal you approve in `/workspace`.
+
 ## 1. The endpoint
 
 `POST /api/mcp`, MCP over streamable HTTP, JSON-RPC 2.0. It handles
@@ -225,9 +237,33 @@ visible.
 
 ## 9. Connecting
 
-Mint a token at **`/settings/mcp`** (an admin only), choose the person it acts
-as, and copy the secret on the spot. The page fills the live URL and the fresh
-token into every snippet below.
+**`/settings/mcp`** has one button per provider. Pressing one mints a token in
+that click and hands back the finished block for that agent, with this
+deployment's endpoint and the fresh bearer header already in it. The token is
+labelled with the provider it was made for, so the token list below says where
+each one went, and it acts as the person who pressed the button rather than
+somebody chosen from a list.
+
+The pieces: the list of providers and the assembly are in
+`app/src/lib/mcp/providers.ts` (outside `$lib/server`, because the page and the
+form action both need it); the click is `connect` in
+`app/src/routes/settings/mcp/+page.server.ts` and
+`app/src/lib/server/mcp/connect.ts`, which calls the same `mintToken` the mint
+form calls, so there is one minting path and one audit row; the marks are
+inline SVG in `app/src/lib/components/settings/ProviderMark.svelte`, so a
+connect panel needs nothing off the network to draw itself.
+
+Two details worth knowing:
+
+- **A non-admin sees the buttons greyed out with the reason on the page.**
+  Minting is admin-only in `nl.mint_mcp_token`, so posting the form by hand is
+  refused by the same rule; the greying is a kindness, not the enforcement.
+- **A reused request id is refused rather than answered.**
+  `nl.claim_request` replays the first write, which would hand back the first
+  token's id beside a second secret that was never stored: a block that cannot
+  authenticate. `connect.ts` compares the hash and asks for a reload instead.
+
+The same three blocks, for reference:
 
 **Claude Code**
 
@@ -259,6 +295,40 @@ http_headers = { Authorization = "Bearer <token>" }
 
 Codex has moved its HTTP server settings between versions; if it does not take
 this, check `codex mcp add --help`.
+
+Cursor is the only one of the three with an install deep link
+(`cursor://anysphere.cursor-deeplink/mcp/install?...`), so it is the only one
+the page can offer a second click for. The link is handled by the copy of
+Cursor on that machine, so the token in it does not travel anywhere. Claude
+Code takes a CLI command and Codex reads a file, and the page does not draw
+them a button that pretends otherwise.
+
+### What a real deployment would add
+
+Be clear about what "one click" means here. It means the app does everything up
+to the paste: no secret typed by hand, no JSON assembled by a person, no
+endpoint looked up. It does **not** mean an authorization handshake, because
+none of these three clients has a hosted account that holds their MCP server
+list: they read local files or take a CLI command, so there is no consent
+screen of theirs to redirect to, and a mocked one would be a lie with a spinner
+on it.
+
+The right end state is the real thing: a **hosted OAuth authorization flow**,
+which MCP's own authorization spec describes and which newer clients can drive.
+That would add a consent screen on Northline naming the client and what it is
+asking for, dynamic client registration so each client gets its own identity
+rather than sharing one secret, short-lived access tokens with refresh tokens
+behind them, and revocation that works from either side, so a person can
+disconnect Northline from inside their agent and not only from this page.
+
+Why that matters to a customer rather than to us: a bearer token pasted into
+`mcp.json` is a long-lived shared secret sitting in a plain text file on a
+laptop, readable by anything else on that machine and copied along with the
+file into a dotfiles repository. Today's answer to that is narrow and honest:
+the token is shown once and only its SHA-256 is stored, it acts as one person
+under row-level security, it cannot call a tool that writes, it is capped per
+day, every call is logged, and it can be revoked in one click. OAuth replaces
+the shared secret itself, which is the part this page cannot fix.
 
 **Without a client**, to see that it is alive:
 
@@ -305,3 +375,24 @@ above:
 
 The assistant's own 91 tests still pass unchanged, which is the other half of
 the claim that this reuses its safety model rather than copying it.
+
+### The connect flow
+
+`app/src/lib/server/mcp/connect.test.ts` against PGlite, and
+`app/src/lib/mcp/providers.test.ts` with no database, because the assembly is
+arithmetic.
+
+| Claim | Test |
+|---|---|
+| A provider button mints exactly one token, labelled with that provider, acting as the person who pressed it | `pressing a provider button > mints exactly one token, labelled with the provider it was made for` |
+| A double submit is one token, and the second attempt is refused by name rather than answered with a dead secret | `pressing a provider button > mints once when the same click arrives twice ...` |
+| It mints at the smallest setting there is | `pressing a provider button > mints with the smallest scope ...` |
+| A provider we do not have, and a stale form, are refused before anything is minted | `pressing a provider button > refuses a provider it does not have ...`, `> refuses a stale form ...` |
+| A non-admin cannot mint, is told why, and leaves no token behind | `somebody who is not an admin > cannot mint, is told why, and leaves no token behind` |
+| The assembled block has this deployment's endpoint and the token, and the token exactly once | `the block that comes back > has this deployment's endpoint and the token in it ...` |
+| Only Cursor gets an install link | `the block that comes back > carries an install link only for the provider that has one` |
+| The page's server key is the same string the server answers to | `the block that comes back > names the same server key the MCP server answers to` |
+| The secret cannot be read back from the token table, the audit log, the call log or the list the page renders | `the secret > cannot be read back anywhere after the click` |
+| Each provider's panel draws itself with no image, no fetch, no import and no absolute URL | `a provider panel, drawn with nothing off the network > fetches nothing` |
+| Each mark is inline and in currentColor, so one copy works in light and dark | `... > draws a mark for every provider, inline`, `... > draws them in currentColor ...` |
+| Every provider button is a real button, so a keyboard reaches it | `... > gives every provider a real button rather than a clickable div` |
