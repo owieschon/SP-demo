@@ -32,7 +32,7 @@
 -- statement per group rather than one function call per claim. Every snippet
 -- is a literal substring of the body it is quoted from, which is the rule
 -- nl.record_claim enforces for everybody else.
-create or replace function nl_seed.extra_90_context() returns void
+create or replace function nl_seed.extra_93_context() returns void
 language plpgsql
 set search_path = ''
 as $$

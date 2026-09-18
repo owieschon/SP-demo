@@ -1,4 +1,4 @@
--- 0027 The context engine: how scattered raw material becomes trustworthy
+-- 0034 The context engine: how scattered raw material becomes trustworthy
 -- context an agent can act on, with its provenance still attached.
 --
 -- The problem this solves. An operator's knowledge is not in one table. It is
@@ -57,7 +57,7 @@ create table nl.context_defaults (
 );
 
 comment on table nl.context_defaults is
-  'The context engine''s own thresholds and horizons, used when the policy engine is not in this database (migration 0027).';
+  'The context engine''s own thresholds and horizons, used when the policy engine is not in this database (migration 0034).';
 
 insert into nl.context_defaults (key, value, note) values
   ('promotion.min_confidence', '0.5',
@@ -173,7 +173,7 @@ begin
     );
 
     comment on table nl.context_attributes is
-      'The data dictionary. An extraction that does not land on a row here is not a claim (migration 0027).';
+      'The data dictionary. An extraction that does not land on a row here is not a claim (migration 0034).';
 
     -- The dictionary itself. Reference data, not part of the invented world,
     -- so it lives in the migration: a claim cannot be written before this
@@ -294,7 +294,7 @@ create table nl.sources (
 );
 
 comment on table nl.sources is
-  'What the context engine reads from, and how far each one is trusted. Registered through adapters over the stores that already exist; nothing is copied (migration 0027).';
+  'What the context engine reads from, and how far each one is trusted. Registered through adapters over the stores that already exist; nothing is copied (migration 0034).';
 
 create index sources_kind_idx on nl.sources (kind, trust_tier desc);
 
@@ -326,7 +326,7 @@ create table nl.source_documents (
 );
 
 comment on table nl.source_documents is
-  'One row per thing read, pointing back at where it really lives. The bytes are never duplicated (migration 0027).';
+  'One row per thing read, pointing back at where it really lives. The bytes are never duplicated (migration 0034).';
 
 create index source_documents_source_idx on nl.source_documents (source_key, received_at desc);
 create index source_documents_ref_idx on nl.source_documents (ref_table, ref_id);
@@ -344,7 +344,7 @@ create table nl.source_document_pages (
 );
 
 comment on table nl.source_document_pages is
-  'What a reader got out of a document whose own store holds bytes, not text (migration 0027).';
+  'What a reader got out of a document whose own store holds bytes, not text (migration 0034).';
 
 -- The text of a document, whichever way it is held. This is what makes the
 -- verbatim-span guard enforceable in the database rather than a promise the
@@ -420,7 +420,7 @@ create table nl.legacy_crm_rows (
 );
 
 comment on table nl.legacy_crm_rows is
-  'A legacy CRM export staged as it arrived. Never cleaned in place: claims are made from it and the mess stays visible (migration 0027).';
+  'A legacy CRM export staged as it arrived. Never cleaned in place: claims are made from it and the mess stays visible (migration 0034).';
 
 -- Two years of archived mail.
 --
@@ -450,7 +450,7 @@ create table nl.mail_archive (
 );
 
 comment on table nl.mail_archive is
-  'Archived correspondence, kept as raw material. Separate from nl.mail_messages, which is the order desk''s live queue (migration 0027).';
+  'Archived correspondence, kept as raw material. Separate from nl.mail_messages, which is the order desk''s live queue (migration 0034).';
 
 create index mail_archive_received_idx on nl.mail_archive (received_at desc);
 create index mail_archive_customer_idx on nl.mail_archive (customer_no);
@@ -492,7 +492,7 @@ create table nl.extractors (
 );
 
 comment on table nl.extractors is
-  'Who made a claim and at which version. Revoking one stops its claims counting toward promotion without deleting the record (migration 0027).';
+  'Who made a claim and at which version. Revoking one stops its claims counting toward promotion without deleting the record (migration 0034).';
 
 create index extractors_revoked_by_idx on nl.extractors (revoked_by);
 
@@ -599,7 +599,7 @@ create table nl.claims (
 );
 
 comment on table nl.claims is
-  'What a source says about one attribute of one subject, with its locator and verbatim snippet. Claims disagree; facts do not (migration 0027).';
+  'What a source says about one attribute of one subject, with its locator and verbatim snippet. Claims disagree; facts do not (migration 0034).';
 
 create index claims_subject_idx on nl.claims (subject_kind, subject_id, attribute)
   where status = 'valid';
@@ -629,7 +629,7 @@ create view nl.claim_candidates with (security_invoker = true) as
     and (e.name is null or e.revoked_at is null);
 
 comment on view nl.claim_candidates is
-  'Claims that count: valid, from an active source, from an extractor nobody revoked (migration 0027).';
+  'Claims that count: valid, from an active source, from an extractor nobody revoked (migration 0034).';
 
 -- ---------------------------------------------------------------------------
 -- 7. "I could not tell what this means", and claims that failed validation
@@ -664,7 +664,7 @@ create table nl.context_review_items (
 );
 
 comment on table nl.context_review_items is
-  'Extractions that did not land on a dictionary attribute, and claims that failed validation. Both keep their snippet (migration 0027).';
+  'Extractions that did not land on a dictionary attribute, and claims that failed validation. Both keep their snippet (migration 0034).';
 
 create index context_review_items_open_idx on nl.context_review_items (status, created_at desc);
 create index context_review_items_subject_idx on nl.context_review_items (subject_kind, subject_id);
@@ -718,7 +718,7 @@ create table nl.entity_links (
 );
 
 comment on table nl.entity_links is
-  'What a raw name, address, phone or part number was decided to be, by a rule or by a person (migration 0027).';
+  'What a raw name, address, phone or part number was decided to be, by a rule or by a person (migration 0034).';
 
 create unique index entity_links_one_accepted_idx
   on nl.entity_links (raw_kind, raw_value) where decision = 'accepted';
@@ -795,7 +795,7 @@ create table nl.facts (
 );
 
 comment on table nl.facts is
-  'The current answer per subject, attribute and scope, with the claims behind it and who decided (migration 0027).';
+  'The current answer per subject, attribute and scope, with the claims behind it and who decided (migration 0034).';
 
 create unique index facts_current_idx
   on nl.facts (subject_kind, subject_id, attribute, scope_key) where status = 'current';
@@ -825,7 +825,7 @@ create view nl.fact_state with (security_invoker = true) as
   where f.status = 'current';
 
 comment on view nl.fact_state is
-  'Current facts with today''s verdict: expired (past its window) and stale (past its freshness horizon) (migration 0027).';
+  'Current facts with today''s verdict: expired (past its window) and stale (past its freshness horizon) (migration 0034).';
 
 -- ---------------------------------------------------------------------------
 -- 10. Conflicts: what the rule would not settle
@@ -856,7 +856,7 @@ create table nl.context_conflicts (
 );
 
 comment on table nl.context_conflicts is
-  'Where two claims disagree by more than the threshold and trust does not settle it, so a person decides (migration 0027).';
+  'Where two claims disagree by more than the threshold and trust does not settle it, so a person decides (migration 0034).';
 
 create unique index context_conflicts_open_idx
   on nl.context_conflicts (subject_kind, subject_id, attribute, scope_key) where status = 'open';
@@ -901,7 +901,7 @@ create table nl.playbooks (
 );
 
 comment on table nl.playbooks is
-  'Durable know-how: authored, reviewed, versioned, not extracted. Compiled into every bundle in its scope (migration 0027).';
+  'Durable know-how: authored, reviewed, versioned, not extracted. Compiled into every bundle in its scope (migration 0034).';
 
 create index playbooks_subject_idx on nl.playbooks (subject_kind) where active;
 create index playbooks_author_idx on nl.playbooks (author_id);
@@ -933,7 +933,7 @@ create table nl.context_bundles (
 );
 
 comment on table nl.context_bundles is
-  'Compiled context per subject and purpose: facts above the bar with their citations, the playbooks in scope, and the policy values in force. Versioned and content-hashed (migration 0027).';
+  'Compiled context per subject and purpose: facts above the bar with their citations, the playbooks in scope, and the policy values in force. Versioned and content-hashed (migration 0034).';
 
 create unique index context_bundles_current_idx
   on nl.context_bundles (subject_kind, subject_id, purpose) where is_current;
@@ -963,7 +963,7 @@ create table nl.context_reads (
 );
 
 comment on table nl.context_reads is
-  'Which compiled bundle version an agent action read. The honesty mechanism: it makes an action explainable and an eval replayable (migration 0027).';
+  'Which compiled bundle version an agent action read. The honesty mechanism: it makes an action explainable and an eval replayable (migration 0034).';
 
 create index context_reads_bundle_idx on nl.context_reads (bundle_id, read_at desc);
 create index context_reads_entity_idx on nl.context_reads (entity, entity_id);
@@ -1072,7 +1072,7 @@ as $$
 $$;
 
 comment on function nl.context_coverage(int) is
-  'What we know, what has gone stale and what is missing, per subject kind and attribute. The worst rows come first, because they are the work list (migration 0027).';
+  'What we know, what has gone stale and what is missing, per subject kind and attribute. The worst rows come first, because they are the work list (migration 0034).';
 
 -- The worst offenders for one attribute: subjects that matter and have no
 -- fresh fact, heaviest first.
@@ -2116,7 +2116,7 @@ as $$
 $$;
 
 comment on function nl.context_value(text, text, text, text, text) is
-  'The value in force, most specific scope first. A stale or expired fact does not answer (migration 0027).';
+  'The value in force, most specific scope first. A stale or expired fact does not answer (migration 0034).';
 
 -- ---------------------------------------------------------------------------
 -- 18. Compiling a bundle
@@ -2385,7 +2385,7 @@ as $$
 $$;
 
 comment on function nl.context_for(text, text, text) is
-  'The compiled context bundle for one subject and purpose: facts above the bar with their citations, the playbooks in scope, the policy in force, and its version. What agents read instead of assembling context themselves (migration 0027).';
+  'The compiled context bundle for one subject and purpose: facts above the bar with their citations, the playbooks in scope, the policy in force, and its version. What agents read instead of assembling context themselves (migration 0034).';
 
 -- One exact version, so an eval replays against a frozen bundle rather than
 -- a moving database.

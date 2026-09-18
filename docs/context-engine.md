@@ -16,8 +16,8 @@ So this is a mill. Raw material goes in one end; what comes out is a
 
 | Piece | Where |
 |---|---|
-| Schema, the rules, the read path | `db/migrations/0031_context_engine.sql` |
-| The seeded mess, and the facts made out of it | `db/seed.d/90_context.sql` |
+| Schema, the rules, the read path | `db/migrations/0034_context_engine.sql` |
+| The seeded mess, and the facts made out of it | `db/seed.d/93_context.sql` |
 | Normalizing, recognizing, shared types | `app/src/lib/context/**` |
 | Adapters, extraction, resolution, promotion, the build | `app/src/lib/server/context/**` |
 | Pages | `app/src/routes/context/**`, `app/src/lib/components/context/**` |
