@@ -71,6 +71,19 @@ export const RAIL_RULES: RailRequirement[] = [
 		authorities: ['change_policy'],
 		because: 'A rule that runs itself is a policy.'
 	},
+	/*
+	  Everybody, deliberately. A trust surface only works if the sceptic can
+	  open it: somebody reviewing a drafted reply cannot judge it without
+	  knowing what wrote it and what that thing is allowed to do. Reading it
+	  gives nothing away, because row-level security still decides which runs
+	  each person sees, and the two writes on it are gated by the database
+	  (change_policy to raise autonomy; nothing at all to pull the brake).
+	*/
+	{
+		href: '/agents',
+		always: true,
+		because: 'What an agent may do, and what it refused, is not a secret inside a company.'
+	},
 	{
 		href: '/people',
 		always: true,

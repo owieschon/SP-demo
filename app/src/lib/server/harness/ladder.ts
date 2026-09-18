@@ -20,12 +20,10 @@ import type { Db, Tx } from '../db/types.ts';
 import { guarded } from '../errors.ts';
 import type { Autonomy, BoardRow, Level, PauseRow, Plan } from './types.ts';
 
-export const LEVEL_ORDER: Record<Level, number> = {
-	shadow: 1,
-	suggest: 2,
-	auto_review: 3,
-	auto: 4
-};
+// The ladder's order is defined with its labels in $lib/harness/levels and
+// re-exported through types.ts. It is re-exported again here because the
+// callers that need it ask the ladder for it.
+export { LEVEL_ORDER } from './types.ts';
 
 export function nextLevel(level: Level): Level | null {
 	if (level === 'shadow') return 'suggest';
