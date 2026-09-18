@@ -87,7 +87,7 @@
 							{count(refusal.times)}
 							<span class="t-meta muted wrap">last {moment(refusal.lastAt)}</span>
 						</td>
-						<td class="said">{refusal.lastDetail || 'no detail was recorded'}</td>
+						<td class="detail">{refusal.lastDetail || 'no detail was recorded'}</td>
 					</tr>
 				{/each}
 			</tbody>
@@ -132,7 +132,7 @@
 		max-width: 38ch;
 	}
 
-	.said {
+	.detail {
 		max-width: 44ch;
 		white-space: normal;
 		color: var(--text-muted);
