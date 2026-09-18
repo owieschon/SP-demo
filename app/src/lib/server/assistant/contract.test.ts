@@ -210,14 +210,21 @@ describe('the MCP surface publishes the same contract', () => {
 
 	it('accepts a conforming payload and rejects one missing a promised field', () => {
 		const search = MCP_TOOLS.find((t) => t.name === 'search_accounts')!;
-		expect(search.checkOutput({ rows: [], row_count: 0 }).ok).toBe(true);
+		expect(search.checkOutput({ rows: [], row_count: 0, limit: 8 }).ok).toBe(true);
 		// row_count is promised, so leaving it out is a broken contract.
-		expect(search.checkOutput({ rows: [] }).ok).toBe(false);
+		expect(search.checkOutput({ rows: [], limit: 8 }).ok).toBe(false);
+		// So is the limit that was applied: a caller cannot tell a short list
+		// from a capped one without it.
+		expect(search.checkOutput({ rows: [], row_count: 0 }).ok).toBe(false);
 		// A row without its url is too: that is the whole point of the field.
-		expect(search.checkOutput({ rows: [{ customer_no: '1', name: 'X' }], row_count: 1 }).ok).toBe(false);
+		expect(search.checkOutput({ rows: [{ customer_no: '1', name: 'X' }], row_count: 1, limit: 8 }).ok).toBe(false);
 		// An extra column is fine: a query may gain one without breaking anyone.
 		expect(
-			search.checkOutput({ rows: [{ customer_no: '1', name: 'X', url: '/accounts/1', extra: 1 }], row_count: 1 }).ok
+			search.checkOutput({
+				rows: [{ customer_no: '1', name: 'X', url: '/accounts/1', extra: 1 }],
+				row_count: 1,
+				limit: 8
+			}).ok
 		).toBe(true);
 	});
 
