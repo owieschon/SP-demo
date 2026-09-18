@@ -1,18 +1,18 @@
-# Walkthrough
+# Code walkthrough
 
-A guided tour for someone reading the code for the first time: what each
-part does, how a request travels through it, which Svelte and SvelteKit
-features it uses, and questions a reviewer is likely to ask.
+Use this guide after the focused demo when you want to trace a browser request into
+TypeScript and Postgres. It maps the server boundary, one read, one write and the
+main integration flows to their source; for the click-by-click product path, start
+with the [reviewer tour](loom-script.md).
 
 ## The shape of the app
 
 ```
 app/src/
-  hooks.server.ts         every request: session cookie -> user, sign-in gate, theme
+  hooks.server.ts         access gate, session cookie -> user, sign-in gate, theme
   app.html, app.css       the page shell and the design tokens
   params/id.ts            route matcher: /commitments/[id=id] only takes digits
   lib/
-    types.ts              types shared by server and pages
     format.ts             money, numbers, dates, places
     components/           Svelte components (board, cards, forms, badges)
     server/               code that only ever runs on the server
@@ -39,18 +39,19 @@ db/
   bench/                  the load test
 ```
 
-Anything under `lib/server` can only be imported by server code. SvelteKit
-refuses to bundle it into the browser, so database code and secrets can
-never leak into a page.
+SvelteKit treats `lib/server` as server-only and rejects browser imports from it at
+build time. Database clients, secrets and privileged workflows live behind that
+boundary.
 
 ## How a request travels
 
 Take "open the commitment board", `GET /commitments`:
 
-1. **`hooks.server.ts`** runs first. It checks the HMAC signature on the
-   `nl_session` cookie (`lib/server/session.ts`), loads that user if they are
-   still active, and redirects to `/signin` if nobody is signed in. The user
-   goes into `event.locals.user`.
+1. **`hooks.server.ts`** runs first. When `SITE_PASSWORD` is configured, it checks
+   the signed access-gate cookie before loading the app. It then checks the HMAC
+   signature on the `nl_session` cookie (`lib/server/session.ts`), loads that user
+   if they are still active, and redirects to `/signin` if nobody is signed in. The
+   user goes into `event.locals.user`.
 2. **`routes/+layout.server.ts`** hands the user to every page (for the rail
    and the avatar).
 3. **`routes/commitments/+page.server.ts`** is the page's `load` function. It
@@ -106,38 +107,33 @@ And a write, "answer the window-closed question", `POST /commitments/answer`:
 | Param matchers | restrict a route parameter | `params/id.ts` |
 | `$app/state` `page`, `navigating` | the current URL and route, and whether a navigation is in flight | `+layout.svelte` |
 
-## The database, file by file
+## Read the database by capability
 
-| Migration | What it adds |
-|---|---|
-| `0001_foundation` | schema `nl`, roles `nl_app` and `nl_readonly`, users, audit log, request ids, `nl.today()` |
-| `0002_book` | what the ERP knows: agencies, price groups, customers (with bill-to families), contacts, vendors, items, stock, invoices, invoice lines |
-| `0003_commitments` | commitments, their items, outcomes, quotes, notes, next steps; the three progress views; the write functions; the nightly "pushed" rule; policies |
-| `0004_invoice_subtotal` | invoice subtotals for revenue history |
-| `0005_delivery_index` | the index delivery measurement reads |
-| `0006_function_search_path` | pins `search_path` on every function |
-| `0007_customer_family` | the family walk as a function that tells the planner its size (11 s to 337 ms) |
-| `0008_delivery_ledger` | delivered figures stored and kept current by triggers; drift check and repair |
-| `0009_progress_today_once` | reads today's date once per query |
-| `0010_erp_exports` | workflow D: export snapshots, staging, live open lines, allocation view |
-| `0011_rfq_intake` | workflow C: RFQ drafts and the approval function |
-| `0012_nightly.supabase` | the pg_cron job: rebuild the world, answer "pushed", repair drift |
-| `0013_automation_rules` | rules, runs and firings; how often each account usually orders |
-| `0014_accounts` | contacts with history, the accounts list view, and the everyday writes |
-| `0015_catalog_vendors` | vendor terms and contacts, reorder points, part and vendor summaries |
-| `0016_supply_forecast` | purchase and production orders, and the projected ship date per line |
-| `0017_assistant` | the assistant's conversations, proposals and usage counters |
-| `0018_cost_and_pricing` | cost over time, freight rates, customer price agreements |
-| `0019_warehouse` | locations and bins, the stock movement ledger, counts, shipments |
+The ordered files in `db/migrations/` are the schema source of truth. Read them in
+these groups instead of relying on a second migration-by-migration registry that can
+drift:
 
-## Workflow C: quote requests (`/desk`, `/desk/requests/<id>`)
+| Range | Capability |
+| --- | --- |
+| `0001` to `0009` | Roles, users, the imported business book, commitments, query plans, trigger-maintained delivery and drift checks |
+| `0010` to `0019` | ERP exports, RFQ intake, scheduled maintenance, automation, account and catalog depth, supply forecasting, the assistant, pricing and warehouse state |
+| `0020` to `0030` | Document parsing and generation, desk agents, supply coverage, the shared decision queue, MCP access, settings, the agent harness and procurement |
+| `0031` to `0043` | Roles and disclosure, price sheets, commitment history, policy resolution, manufacturing cost and traceability, capacity, decision records, run trails and overview reporting |
+
+Files ending in `.supabase.sql` use hosted features such as `pg_cron` and are skipped
+by PGlite. The [database guide](../db/README.md) explains the world sizes, local
+behavior and hosted migration process.
+
+## Follow a quote request (`/desk`, `/desk/requests/<id>`)
 
 A customer's email becomes a draft quote. There is no upload screen: the
-request arrives in the order desk's mailbox and the agent reads it. `/rfq`
-and `/rfq/<id>` are 308 redirects to `/desk` and `/desk/requests/<id>` so
-older links keep working. A request that came in on the telephone is typed
-into the "Add a quote request by hand" panel on `/desk`, which makes the same
-desk item with its source recorded as a person. The path:
+request arrives in the order desk's mailbox and the agent reads it. A mail message
+lives at `/desk/<id>`; its validated quote request lives at
+`/desk/requests/<id>`. `/rfq` and `/rfq/<id>` are 308 redirects to the desk and the
+quote-request detail so older links keep working. A request that came in on the
+telephone is typed into the "Add a quote request by hand" panel on `/desk`, which
+makes the same quote-request record with its source recorded as a person. It does not
+create an outbound reply draft. The path:
 
 1. The desk agent's run (`lib/server/desk/run.ts`), or hand entry
    (`lib/server/agentruns/handentry.ts`), calls `extract` in
@@ -158,8 +154,9 @@ desk item with its source recorded as a person. The path:
    card says nothing is created until approval. `nl.approve_rfq_draft` takes
    only the request id, its row version and a request id, re-checks the
    stored record, and creates the quote and a commitment in `quoted` in one
-   transaction. `/workspace` is the one screen where that decision is taken;
-   `/desk` and `/desk/requests/<id>` are where the work is read.
+   transaction. A person can make that decision on `/desk/requests/<id>` or from the
+   shared `/workspace` approval queue. The mail reply queue is a separate workflow;
+   approving a hand-entered quote request does not send mail.
 5. **Evals.** `evals/rfq/` holds 28 invented emails with the answers they
    should produce. `npm run eval:rfq` scores the extractor field by field and
    writes a dated report. A test fails if any score drops below the recorded
@@ -257,9 +254,14 @@ what the 4x run measured.
 
 **How do the tests run against Postgres without Docker?**
 PGlite is Postgres 17 compiled to WebAssembly. The tests build a small world
-in memory from the same migrations Supabase runs, with today pinned.
+in memory from the same portable migrations and seed files, with today pinned.
+Supabase-only migrations are skipped.
 
 **How is the AI kept from doing damage?**
-It only proposes. Code validates every field against the database, a person
-approves, and a SQL function does the write using the stored, validated
-draft, never values from the request. See workflow C below.
+Reads and two narrowly additive tools, adding a note or next step, run immediately
+under the signed-in person's database permissions and audit trail. Changes to
+existing records are gated: the model can only create a proposal, a person approves
+the stored option, and the same checked SQL function used by the UI performs the
+write. RFQ extraction follows a separate boundary described above: code validates
+the proposed fields, then approval writes from the stored draft rather than request
+values.

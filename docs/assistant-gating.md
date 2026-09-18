@@ -45,7 +45,7 @@ number, the proposal's row version, a request id, and the conversation id the
 form came from. Then, in order:
 
 1. the proposal is read **as the signed-in person**. Row-level security means
-   another person's proposal is simply not there, which is a 404;
+   another person's proposal is not visible, which is a 404;
 2. it has to belong to the conversation the form came from, else 404;
 3. the page also sends back the input it displayed. It is never used as the
    values to write: it is compared with the stored option as canonical JSON
@@ -138,7 +138,7 @@ call.
 
 ## 7. The tests that prove each of these
 
-`app/src/lib/server/assistant/*.test.ts`, 91 tests. The load-bearing ones:
+The load-bearing cases in `app/src/lib/server/assistant/*.test.ts` are:
 
 | Claim | Test |
 |---|---|
