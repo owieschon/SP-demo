@@ -68,6 +68,18 @@ export function day(iso: string, thisYear?: number): string {
 	return thisYear === undefined || y === thisYear ? base : `${base}, ${y}`;
 }
 
+/**
+ * 'Sep 17, 2026'. Always says the year, for a date with nothing around it to
+ * say which year is meant: a figure's as-of stamp, or an availability date
+ * read off a panel on its own. day() drops the year when it matches
+ * `thisYear`, which is right inside a table of this year's rows and wrong
+ * for a date standing by itself.
+ */
+export function dayFull(iso: string): string {
+	const [y, m, d] = iso.split('-').map(Number);
+	return `${MONTHS[m - 1]} ${d}, ${y}`;
+}
+
 /** 'Aug 1 to Oct 15' */
 export function windowRange(startsOn: string, endsOn: string, thisYear?: number): string {
 	return `${day(startsOn, thisYear)} to ${day(endsOn, thisYear)}`;
