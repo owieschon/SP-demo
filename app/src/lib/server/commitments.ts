@@ -150,29 +150,10 @@ export interface CommitmentDetail extends BoardCard {
 		amount: number;
 		runningDelivered: number;
 	}[];
-	outcomes: {
-		outcome: Outcome;
-		source: 'person' | 'nightly';
-		answeredBy: string | null;
-		answeredAt: string;
-		note: string;
-	}[];
-	quotes: {
-		id: number;
-		quotedOn: string;
-		validUntil: string | null;
-		total: number;
-		lines: number;
-		linked: boolean;
-	}[];
-	nextSteps: {
-		id: number;
-		title: string;
-		dueOn: string | null;
-		ownerName: string;
-		done: boolean;
-	}[];
 }
+// The quote versions, the conditions, the outcome trail and the next steps
+// come from lib/server/commitments/depth.ts (migration 0027), which the page
+// streams in behind this. They used to be three thin lists here.
 
 export async function getCommitment(db: Db, userId: number, id: number): Promise<CommitmentDetail | null> {
 	return db.asUser(userId, async (tx) => {
@@ -260,55 +241,6 @@ export async function getCommitment(db: Db, userId: number, id: number): Promise
 			order by q.posted_on desc, q.invoice_no desc, q.line_no desc
 			limit 50`;
 
-		const outcomes = await tx.sql<{
-			outcome: Outcome;
-			source: 'person' | 'nightly';
-			answered_by: string | null;
-			answered_at: Date;
-			note: string;
-		}>`
-			select o.outcome, o.source, u.full_name as answered_by, o.answered_at, o.note
-			from nl.commitment_outcomes o
-			left join nl.users u on u.id = o.answered_by
-			where o.commitment_id = ${id}
-			order by o.answered_at desc, o.id desc`;
-
-		// Quotes written for this commitment, and any later quote to the same
-		// customer family that asks for its parts (the nightly job's evidence).
-		const quotes = await tx.sql<{
-			id: number;
-			quoted_on: string;
-			valid_until: string | null;
-			total: number;
-			lines: number;
-			linked: boolean;
-		}>`
-			select q.id, q.quoted_on, q.valid_until,
-			       coalesce(sum(ql.quantity * ql.unit_price), 0) as total,
-			       count(ql.line_no)::int as lines,
-			       q.commitment_id is not distinct from ${id}::bigint as linked
-			from nl.quotes q
-			join nl.quote_lines ql on ql.quote_id = q.id
-			where q.commitment_id = ${id}
-			   or (q.customer_no in (select f.customer_no from nl.commitment_family f where f.commitment_id = ${id})
-			       and exists (select 1 from nl.commitment_items ci
-			                   where ci.commitment_id = ${id} and ci.item_no = ql.item_no))
-			group by q.id
-			order by q.quoted_on desc`;
-
-		const steps = await tx.sql<{
-			id: number;
-			title: string;
-			due_on: string | null;
-			owner_name: string;
-			done: boolean;
-		}>`
-			select s.id, s.title, s.due_on, u.full_name as owner_name, s.completed_at is not null as done
-			from nl.next_steps s
-			join nl.users u on u.id = s.owner_id
-			where s.commitment_id = ${id}
-			order by s.completed_at is not null, s.due_on nulls last`;
-
 		const mayChange = head.owner_id === userId || head.is_admin;
 		return {
 			...toCard(head),
@@ -350,29 +282,7 @@ export async function getCommitment(db: Db, userId: number, id: number): Promise
 					unitPrice: r.unit_price,
 					amount: r.amount,
 					runningDelivered: r.running_delivered
-				})),
-			outcomes: outcomes.map((r) => ({
-				outcome: r.outcome,
-				source: r.source,
-				answeredBy: r.answered_by,
-				answeredAt: r.answered_at.toISOString(),
-				note: r.note
-			})),
-			quotes: quotes.map((r) => ({
-				id: r.id,
-				quotedOn: r.quoted_on,
-				validUntil: r.valid_until,
-				total: r.total,
-				lines: r.lines,
-				linked: r.linked
-			})),
-			nextSteps: steps.map((r) => ({
-				id: r.id,
-				title: r.title,
-				dueOn: r.due_on,
-				ownerName: r.owner_name,
-				done: r.done
-			}))
+				}))
 		};
 	});
 }

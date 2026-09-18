@@ -1,6 +1,14 @@
 // Types shared by the server and the pages.
 
-export type Role = 'account_manager' | 'operations' | 'admin';
+import type { Preset } from './roles/types.ts';
+
+/*
+  A role is now the name of a preset: a starting set of scope, authority and
+  disclosure (migration 0027, $lib/roles/types). It is a label and nothing
+  resolves a permission from it, so this type is only used for what to call
+  somebody on screen.
+*/
+export type Role = Preset;
 
 /** The signed-in person, as the pages see them. */
 export interface SessionUser {
@@ -8,6 +16,8 @@ export interface SessionUser {
 	fullName: string;
 	title: string;
 	role: Role;
+	/** One line saying what they answer for. Empty until somebody sets it. */
+	responsibility: string;
 }
 
 /** Derived in SQL (nl.commitment_progress), never stored. */
