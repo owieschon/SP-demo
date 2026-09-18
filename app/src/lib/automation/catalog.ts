@@ -138,7 +138,19 @@ export const COMMON_PLACEHOLDERS = ['customer', 'commitment', 'headline'] as con
 
 export const MAX_CONDITIONS = 6;
 
-export const conditionSchema = z.object({
+/*
+  These three are strict, because a rule is an input to two tools
+  (test_automation_rule and save_automation_rule) and a nested object is
+  where a drafting agent actually types field names. A loose object would
+  drop an invented key and save a rule that quietly does less than was asked
+  for.
+
+  Making them strict cannot break a rule that is already stored: a loose zod
+  object strips the keys it does not know, so what save_automation_rule wrote
+  to jsonb never had an extra key in it. The rule editor builds exactly this
+  shape too.
+*/
+export const conditionSchema = z.strictObject({
 	field: z.string().min(1).max(40),
 	op: z.enum(Object.keys(OPERATORS) as [Operator, ...Operator[]]),
 	// Numbers only: money in dollars, percents as 0 to 100, users by id.
@@ -150,13 +162,13 @@ export type Condition = z.infer<typeof conditionSchema>;
 const template = (max: number) => z.string().trim().min(3).max(max);
 
 export const actionSchema = z.discriminatedUnion('kind', [
-	z.object({
+	z.strictObject({
 		kind: z.literal('next_step'),
 		title: template(200),
 		dueInDays: z.number().int().min(0).max(60),
 		assignTo: z.enum(['record_owner', 'rule_owner'])
 	}),
-	z.object({
+	z.strictObject({
 		kind: z.literal('note'),
 		body: template(500)
 	})
@@ -169,7 +181,7 @@ export const ACTION_LABELS: Record<Action['kind'], string> = {
 };
 
 export const ruleSchema = z
-	.object({
+	.strictObject({
 		name: z.string().trim().min(3).max(80),
 		description: z.string().trim().max(300).default(''),
 		trigger: z.enum(TRIGGER_KEYS),

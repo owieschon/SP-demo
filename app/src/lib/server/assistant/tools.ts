@@ -16,6 +16,14 @@
 //
 // A tool's handler is plain code with a zod schema on its input, so a made-up
 // field or a string where a number belongs is refused before any SQL runs.
+//
+// Every input object is a strictObject, which is the whole point rather than a
+// detail: a loose input drops a field it does not know and carries on with the
+// default, so "whose" instead of "owner" quietly asks a different question and
+// answers it confidently. A misspelled or invented field is an error naming
+// the field instead, and `additionalProperties: false` says so in the JSON
+// Schema that tools/list publishes, so a client sees the same rule the server
+// enforces.
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { ruleSchema } from '$lib/automation/catalog';
@@ -79,6 +87,18 @@ export interface ToolDef<I> {
 	) => Promise<Record<string, unknown>>;
 	/** gated tools only: the sentence a proposal option shows. */
 	label?: (input: I) => string;
+	/**
+	 * Defaulted input fields that do NOT change the answer, so the answer does
+	 * not report them back.
+	 *
+	 * Every other defaulted field is a filter, and a filter that was applied
+	 * without being asked for has to be visible in the answer: that is how an
+	 * agent notices it asked the wrong question. The registry test in
+	 * contract.test.ts holds every tool to it, so a new tool with a hidden
+	 * default fails the test rather than shipping. Listing a field here is a
+	 * claim that its value cannot change which rows come back.
+	 */
+	nonFilterDefaults?: readonly string[];
 }
 
 /** The registry's view of a tool: the same shape whatever its input type is. */
@@ -96,6 +116,8 @@ export interface Tool {
 	 * match the schema it was given.
 	 */
 	checkOutput?(payload: unknown): { ok: true } | { ok: false; message: string };
+	/** See ToolDef.nonFilterDefaults. Empty for most tools. */
+	nonFilterDefaults: readonly string[];
 	parse(input: unknown): { ok: true; value: unknown } | { ok: false; message: string };
 	run?(ctx: ToolContext, input: unknown): Promise<unknown>;
 	capture?(ctx: ToolContext, input: unknown): Promise<Capture>;
@@ -110,11 +132,15 @@ export interface Tool {
 
 /** Turn a typed definition into a registry entry. */
 function tool<I>(def: ToolDef<I>): Tool {
+	const jsonSchema = z.toJSONSchema(def.schema, { target: 'draft-2020-12', io: 'input' }) as Record<
+		string,
+		unknown
+	>;
 	return {
 		name: def.name,
 		risk: def.risk,
 		description: def.description,
-		jsonSchema: z.toJSONSchema(def.schema, { target: 'draft-2020-12', io: 'input' }) as Record<string, unknown>,
+		jsonSchema,
 		outputSchema: def.output
 			? (z.toJSONSchema(def.output, { target: 'draft-2020-12', io: 'output' }) as Record<string, unknown>)
 			: undefined,
@@ -125,12 +151,11 @@ function tool<I>(def: ToolDef<I>): Tool {
 					return { ok: false, message: outputProblem(parsed.error) };
 				}
 			: undefined,
+		nonFilterDefaults: def.nonFilterDefaults ?? [],
 		parse(input) {
 			const parsed = def.schema.safeParse(input);
 			if (parsed.success) return { ok: true, value: parsed.data };
-			const first = parsed.error.issues[0];
-			const where = first.path.length ? first.path.join('.') : 'input';
-			return { ok: false, message: `${where}: ${first.message}` };
+			return { ok: false, message: inputProblem(parsed.error, jsonSchema) };
 		},
 		run: def.run ? (ctx, input) => def.run!(ctx, input as I) : undefined,
 		capture: def.capture ? (ctx, input) => def.capture!(ctx, input as I) : undefined,
@@ -194,6 +219,61 @@ export function outputProblem(error: z.ZodError): string {
 }
 
 /**
+ * The field names a JSON Schema accepts at a path, so an error about an
+ * unknown field can say what the tool would have taken instead. It walks
+ * `properties` (and `items` for an array step) and gives up quietly if the
+ * path leads somewhere without named fields.
+ */
+function acceptedAt(schema: Record<string, unknown>, path: readonly PropertyKey[]): string[] {
+	let node: Record<string, unknown> | undefined = schema;
+	for (const step of path) {
+		if (!node) return [];
+		if (typeof step === 'number') {
+			node = node.items as Record<string, unknown> | undefined;
+			continue;
+		}
+		const properties = node.properties as Record<string, Record<string, unknown>> | undefined;
+		node = properties?.[String(step)];
+	}
+	const properties = node?.properties as Record<string, unknown> | undefined;
+	return properties ? Object.keys(properties) : [];
+}
+
+/**
+ * Why an input was refused, in one line that names the field.
+ *
+ * An unknown field gets its own sentence, because that is the case this is
+ * here for: zod reports an unrecognized key with the key inside the message
+ * and no path at all, so the plain join would blame "input" and leave the
+ * reader guessing which word was wrong. Saying the field and then what the
+ * tool does accept turns a silently dropped filter into a fixable error.
+ */
+export function inputProblem(error: z.ZodError, schema: Record<string, unknown>): string {
+	/*
+	  An unknown field is reported ahead of any other problem, even though zod
+	  lists the field problems first. It is usually the cause rather than a
+	  second fault: an input of { account_no: "1214" } has two issues, a
+	  missing customer_no and an unrecognized account_no, and only the second
+	  one tells the caller what it actually did wrong. Fixing the name fixes
+	  both, and anything still wrong is reported on the next attempt.
+	*/
+	const unknownKey = error.issues.find((issue) => issue.code === 'unrecognized_keys');
+	const first = unknownKey ?? error.issues[0];
+	if (first.code === 'unrecognized_keys') {
+		const keys = (first as unknown as { keys: string[] }).keys;
+		const at = first.path.join('.');
+		const where = keys.map((key) => (at ? `${at}.${key}` : key)).join(', ');
+		const accepted = acceptedAt(schema, first.path);
+		const expected = accepted.length
+			? `${at ? `"${at}" takes` : 'This tool takes'} ${accepted.join(', ')}.`
+			: 'Check the input schema for the fields it takes.';
+		return `${where}: there is no input by that name. ${expected}`;
+	}
+	const where = first.path.length ? first.path.join('.') : 'input';
+	return `${where}: ${first.message}`;
+}
+
+/**
  * A row that names a record. Every read tool puts `url` on these, built from
  * `$lib/routes`, so a caller can follow an answer instead of reassembling
  * the address from the id.
@@ -202,6 +282,17 @@ const linked = (fields: z.ZodRawShape) => z.looseObject({ ...fields, url: z.stri
 
 /** A whole number of rows. */
 const rowCount = z.number().int().nonnegative();
+
+/**
+ * The `limit` that was actually used, reported back under the same name the
+ * input takes.
+ *
+ * It matters because `limit` has a default: an agent that did not ask for one
+ * still got one, and without seeing it a short list reads as "that is all
+ * there is" rather than "that is the first ten". With the cap in the answer,
+ * row_count equal to limit is a visible sign there may be more.
+ */
+const rowCap = z.number().int().positive();
 
 /**
  * The row version of the thing a gated tool would change, as it is right now.
@@ -240,14 +331,16 @@ const searchAccounts = tool({
 	risk: 'read',
 	description:
 		'Find accounts by name, town or account number. Returns revenue this year and last, when they last ordered, how quiet they are against their own rhythm, and their open commitments. Use this first when the question names a customer.',
-	schema: z.object({
+	schema: z.strictObject({
 		query: z.string().trim().min(1).max(60).describe('Part of the name, the town, or the account number.'),
 		limit: z.number().int().min(1).max(20).default(8)
 	}),
 	output: answers(
 		z.looseObject({
 			rows: z.array(linked({ customer_no: z.string(), name: z.string() })),
-			row_count: rowCount
+			row_count: rowCount,
+			/** The cap that was applied, asked for or defaulted. See rowCap. */
+			limit: rowCap
 		})
 	),
 	run: async (ctx, input) => {
@@ -267,7 +360,8 @@ const searchAccounts = tool({
 		// the pages use, so an answer can be followed rather than read out.
 		return {
 			rows: rows.map((r) => ({ ...r, url: routes.account(String(r.customer_no)) })),
-			row_count: rows.length
+			row_count: rows.length,
+			limit: input.limit
 		};
 	}
 });
@@ -277,7 +371,7 @@ const getAccount = tool({
 	risk: 'read',
 	description:
 		'One account in full: revenue, ordering rhythm, its open commitments and its open order lines from the morning ERP export. Business facts only, no contact details.',
-	schema: z.object({ customer_no: customerNo }),
+	schema: z.strictObject({ customer_no: customerNo }),
 	output: answers(
 		z.looseObject({
 			account: linked({ customer_no: z.string(), name: z.string() }),
@@ -330,7 +424,7 @@ const getCommitment = tool({
 	risk: 'read',
 	description:
 		'One commitment: its derived status, what has been delivered against it from the invoice ledger, the parts in scope and the invoice lines that were matched to it.',
-	schema: z.object({ commitment_id: commitmentId }),
+	schema: z.strictObject({ commitment_id: commitmentId }),
 	output: answers(
 		z.looseObject({
 			commitment: linked({ id: z.number(), title: z.string(), status: z.string() }),
@@ -386,19 +480,31 @@ const listWindowsClosedShort = tool({
 	risk: 'read',
 	description:
 		'Commitments whose window has closed with less than 95% delivered and no answer yet. This is the list the "closed short" page shows. Answering one is gated: propose it.',
-	schema: z.object({
-		owner: z.enum(['me', 'everyone']).default('me'),
+	schema: z.strictObject({
+		/*
+		  Named for the word the answer uses, not the other way round. It was
+		  `owner` in and `whose` out, and a client that read the answer and
+		  sent `whose` back had it dropped, because this field has a default:
+		  it got one person's commitments believing it had asked for
+		  everyone's, with no error at all. The answer is what a client reads
+		  first, so the answer's word wins.
+		*/
+		whose: z
+			.enum(['me', 'everyone'])
+			.default('me')
+			.describe('Whose commitments to list: "me" for yours, "everyone" for the whole team.'),
 		limit: z.number().int().min(1).max(20).default(10)
 	}),
 	output: answers(
 		z.looseObject({
 			rows: z.array(linked({ id: z.number(), title: z.string(), shortfall: z.number() })),
 			row_count: rowCount,
-			whose: z.enum(['me', 'everyone'])
+			whose: z.enum(['me', 'everyone']),
+			limit: rowCap
 		})
 	),
 	run: async (ctx, input) => {
-		const mine = input.owner === 'me' ? ctx.userId : null;
+		const mine = input.whose === 'me' ? ctx.userId : null;
 		const rows = await ctx.db.asUser(ctx.userId, (tx) =>
 			tx.sql<Row>`
 				select p.id, p.title, p.customer_no, cu.name as customer_name,
@@ -417,7 +523,8 @@ const listWindowsClosedShort = tool({
 		return {
 			rows: rows.map((r) => ({ ...r, url: routes.commitmentAnswer(Number(r.id)) })),
 			row_count: rows.length,
-			whose: input.owner
+			whose: input.whose,
+			limit: input.limit
 		};
 	}
 });
@@ -427,7 +534,7 @@ const getPart = tool({
 	risk: 'read',
 	description:
 		'One part: stock on hand and on order, what open orders already claim, whether it is under its reorder point, how it has sold over the last twelve months, and its lead time.',
-	schema: z.object({ item_no: itemNo }),
+	schema: z.strictObject({ item_no: itemNo }),
 	output: answers(z.looseObject({ part: linked({ item_no: z.string(), description: z.string() }) })),
 	run: async (ctx, input) => {
 		const rows = await ctx.db.asUser(ctx.userId, (tx) =>
@@ -472,7 +579,7 @@ const runSql = tool({
 	name: 'run_sql',
 	risk: 'read',
 	description: `Run one read-only SELECT against Postgres when no other tool answers the question: a total, a ranking, a group by. One statement, no semicolons, no comments, at most 1,000 rows. It runs as a read-only role with no access at all to the tables about people (nl.users, nl.contacts, nl.activities) or to assistant conversations, so a query touching one of those is refused by the database. Tables and views: ${SQL_TABLES.join('; ')}. Today's date is nl.today().`,
-	schema: z.object({
+	schema: z.strictObject({
 		sql: z.string().trim().min(1).max(4000).describe('One SELECT, or a WITH that ends in a SELECT.'),
 		why: z.string().trim().max(200).default('').describe('One line on what you are measuring.')
 	}),
@@ -484,6 +591,11 @@ const runSql = tool({
 			capped: z.boolean()
 		})
 	),
+	// `why` is a line for the log and for a person reading the trail. It is
+	// never part of the query, so it cannot change which rows come back and
+	// the answer does not repeat it. The 1,000 row cap is fixed rather than an
+	// input, and `capped` already says when it was reached.
+	nonFilterDefaults: ['why'],
 	run: (ctx, input) => runReadOnlySql(ctx.db, input.sql)
 });
 
@@ -492,7 +604,7 @@ const testAutomationRule = tool({
 	risk: 'read',
 	description:
 		'Try an automation rule out without saving it: it is compiled to one parameterized query and run in a read-only transaction, and you get back how many subjects match now and what the action would write for each. Use this before proposing save_automation_rule.',
-	schema: z.object({ rule: ruleSchema }),
+	schema: z.strictObject({ rule: ruleSchema }),
 	output: answers(
 		z.looseObject({
 			matches_now: rowCount,
@@ -528,7 +640,7 @@ const addNote = tool({
 	risk: 'additive',
 	description:
 		'Write a note on an account, in your name, marked as coming from the assistant. Nothing existing changes. Use it to record what you found out, not to promise anything.',
-	schema: z.object({
+	schema: z.strictObject({
 		customer_no: customerNo,
 		body: z.string().trim().min(1).max(2000),
 		commitment_id: z.number().int().positive().nullable().default(null)
@@ -538,7 +650,14 @@ const addNote = tool({
 			wrote: z.literal('note'),
 			// From nl.log_activity's own result, which the write function builds.
 			activity_id: z.number(),
-			customer_no: z.string()
+			customer_no: z.string(),
+			/**
+			 * Which commitment the note was tied to, null for none. It defaults
+			 * to null, so the answer says which it was: a note meant for a
+			 * commitment that quietly landed on the account alone is the same
+			 * mistake as a quietly defaulted filter.
+			 */
+			commitment_id: z.number().nullable()
 		})
 	),
 	run: async (ctx, input) => {
@@ -548,7 +667,7 @@ const addNote = tool({
 				                       ${input.commitment_id}::bigint, null,
 				                       ${ctx.requestId('note')}, 'assistant') as result`
 		);
-		return { wrote: 'note', ...row.result };
+		return { wrote: 'note', ...row.result, commitment_id: input.commitment_id };
 	}
 });
 
@@ -557,7 +676,7 @@ const addNextStep = tool({
 	risk: 'additive',
 	description:
 		'Add a next step on an account, owned by you, due in a number of days. Nothing existing changes.',
-	schema: z.object({
+	schema: z.strictObject({
 		customer_no: customerNo,
 		title: z.string().trim().min(3).max(200),
 		due_in_days: z.number().int().min(0).max(60).default(7),
@@ -568,7 +687,14 @@ const addNextStep = tool({
 			wrote: z.literal('next_step'),
 			// From nl.add_next_step's own result.
 			next_step_id: z.number(),
-			owner_id: z.number()
+			owner_id: z.number(),
+			/**
+			 * Both of these default, so both are reported. A step that was
+			 * asked for with no due date lands seven days out, and an agent
+			 * that cannot see the seven cannot tell that it never chose it.
+			 */
+			due_in_days: z.number().int().nonnegative(),
+			commitment_id: z.number().nullable()
 		})
 	),
 	run: async (ctx, input) => {
@@ -579,7 +705,12 @@ const addNextStep = tool({
 				                        ${input.commitment_id}::bigint,
 				                        ${ctx.requestId('step')}, 'assistant') as result`
 		);
-		return { wrote: 'next_step', ...row.result };
+		return {
+			wrote: 'next_step',
+			...row.result,
+			due_in_days: input.due_in_days,
+			commitment_id: input.commitment_id
+		};
 	}
 });
 
@@ -592,7 +723,7 @@ const recordOutcome = tool({
 	risk: 'gated',
 	description:
 		'Answer the window-closed question on a commitment: kept, pushed or broken. This settles the commitment and changes the pipeline, so it is gated: put it in propose_action and let the owner decide.',
-	schema: z.object({
+	schema: z.strictObject({
 		commitment_id: commitmentId,
 		outcome: z.enum(['kept', 'pushed', 'broken']),
 		note: z.string().trim().max(500).default('')
@@ -615,7 +746,7 @@ const setConfidence = tool({
 	risk: 'gated',
 	description:
 		"Change the owner's confidence on a commitment, 0 to 100. It moves the expected value every report reads, so it is gated: propose it.",
-	schema: z.object({
+	schema: z.strictObject({
 		commitment_id: commitmentId,
 		confidence: z.number().int().min(0).max(100)
 	}),
@@ -636,7 +767,7 @@ const decideExport = tool({
 	risk: 'gated',
 	description:
 		'Apply, release or discard a staged ERP export snapshot. Applying replaces the live open order lines the whole operations view reads, and only operations or an admin may do it, so it is gated: propose it.',
-	schema: z.object({
+	schema: z.strictObject({
 		snapshot_id: z.number().int().positive(),
 		decision: z.enum(['apply', 'release', 'discard']),
 		note: z.string().trim().max(500).default('')
@@ -659,7 +790,7 @@ const saveAutomationRule = tool({
 	risk: 'gated',
 	description:
 		'Save an automation rule, new or changed. A saved rule writes on its own every night, so it is gated: try it with test_automation_rule, then propose saving it.',
-	schema: z.object({
+	schema: z.strictObject({
 		rule: ruleSchema,
 		rule_id: z.number().int().positive().nullable().default(null)
 	}),
@@ -684,13 +815,13 @@ const saveAutomationRule = tool({
 // propose_action: the only door from a gated tool to a real write
 // ---------------------------------------------------------------------------
 
-export const proposalOptionSchema = z.object({
+export const proposalOptionSchema = z.strictObject({
 	label: z.string().trim().min(3).max(200).describe('What this option does, in one line, for the person deciding.'),
 	tool: z.string().trim().min(1).max(60).describe('The exact name of the gated tool.'),
 	input: z.record(z.string(), z.unknown()).describe("That tool's input, complete and exact.")
 });
 
-export const proposeActionSchema = z.object({
+export const proposeActionSchema = z.strictObject({
 	summary: z
 		.string()
 		.trim()
