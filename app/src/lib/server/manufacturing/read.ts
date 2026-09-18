@@ -31,7 +31,7 @@ import type {
 	SupplyShape,
 	TraceBackRow,
 	WhereUsedRow
-} from './types.ts';
+} from '$lib/manufacturing/types';
 
 /** How many short lines the board explains. Each one costs an explosion. */
 export const SHORTAGE_LIMIT = 12;

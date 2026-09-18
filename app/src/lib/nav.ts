@@ -49,6 +49,9 @@ import SunMedium from '@lucide/svelte/icons/sun-medium';
 import Route from '@lucide/svelte/icons/route';
 import Warehouse from '@lucide/svelte/icons/warehouse';
 import Workflow from '@lucide/svelte/icons/workflow';
+import Building2 from '@lucide/svelte/icons/building-2';
+import Package from '@lucide/svelte/icons/package';
+import Truck from '@lucide/svelte/icons/truck';
 import Scale from '@lucide/svelte/icons/scale';
 import BookMarked from '@lucide/svelte/icons/book-marked';
 import ShoppingCart from '@lucide/svelte/icons/shopping-cart';
@@ -121,6 +124,12 @@ export const NAV: NavSection[] = [
 		heading: 'Records',
 		items: [
 			{
+				href: routes.accounts(),
+				label: 'Accounts',
+				hint: 'The book: who buys, how often, and what is promised',
+				icon: Building2
+			},
+			{
 				href: routes.commitments(),
 				label: 'Commitments',
 				hint: 'What buyers promised to buy, and what has landed against it',
@@ -137,6 +146,18 @@ export const NAV: NavSection[] = [
 				label: 'Inventory',
 				hint: 'Bins, the stock ledger, the pick queue and the counts due',
 				icon: Boxes
+			},
+			{
+				href: routes.parts(),
+				label: 'Parts',
+				hint: 'What we sell, what it costs to make or buy, and what is on the shelf',
+				icon: Package
+			},
+			{
+				href: routes.vendors(),
+				label: 'Suppliers',
+				hint: 'Who supplies the bought parts, on what terms, and how late they run',
+				icon: Truck
 			}
 		]
 	},
@@ -210,10 +231,15 @@ export function phoneItems(role: Role): NavItem[] {
 }
 
 /** Routes the rail does not link but other pages and the palette still reach. */
+/*
+  Reachable, and deliberately not in the rail. Accounts, parts and suppliers
+  used to live here on the argument that a lookup belongs in the command
+  palette. That argument is right for an app somebody uses every day and wrong
+  for one somebody is shown: a sidebar is how a stranger learns what the
+  business is made of, and a business whose sidebar holds three queues and no
+  nouns reads as a toy. They are in Records now.
+*/
 export const UNRAILED = [
-	{ href: routes.accounts(), label: 'Accounts', hint: 'The book: who buys, how often, and what is promised' },
-	{ href: routes.parts(), label: 'Parts', hint: 'What we sell, what it earns and what is on the shelf' },
-	{ href: routes.vendors(), label: 'Vendors', hint: 'Who supplies the bought parts, and on what terms' },
 	{ href: routes.ask(), label: 'Ask', hint: 'Put a question to the whole database' },
 	{ href: routes.search(), label: 'Search', hint: 'Accounts, parts and vendors on one results page' },
 	{ href: routes.settingsMcp(), label: 'Coding agents', hint: 'Connect an outside agent to this app' }
