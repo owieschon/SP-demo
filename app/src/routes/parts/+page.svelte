@@ -1,13 +1,43 @@
 <script lang="ts">
+	/*
+	  The parts list: one Page, one Toolbar, one Panel, one DataTable.
+
+	  The filters are a GET form, so the state of the list is the URL. The
+	  three sortable columns are header links that carry the sort in the query
+	  string, which replaces the select that used to sit in the filter bar:
+	  the header is where a person looks for a sort, and a link can be shared.
+	*/
 	import PartFlags from '$lib/components/catalog/PartFlags.svelte';
-	import TableSkeleton from '$lib/components/catalog/TableSkeleton.svelte';
-	import { PART_SORT_LABEL, PART_SORTS, partHref } from '$lib/components/catalog/types';
-	import { count, day, money, percent } from '$lib/format';
+	import { PART_SORT_LABEL } from '$lib/components/catalog/types';
+	import DataTable from '$lib/components/ui/DataTable.svelte';
+	import LoadFailed from '$lib/components/ui/LoadFailed.svelte';
+	import Money from '$lib/components/ui/Money.svelte';
+	import Page from '$lib/components/ui/Page.svelte';
+	import Panel from '$lib/components/ui/Panel.svelte';
+	import Qty from '$lib/components/ui/Qty.svelte';
+	import SkeletonRows from '$lib/components/ui/SkeletonRows.svelte';
+	import Toolbar from '$lib/components/ui/Toolbar.svelte';
+	import WhenDate from '$lib/components/ui/WhenDate.svelte';
+	import { count, percent } from '$lib/format';
+	import { routes } from '$lib/routes';
+	import type { Column } from '$lib/components/ui/table';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 
 	const q = $derived(data.query);
+	const filtered = $derived(Boolean(q.q || q.family || q.short || q.belowReorder));
+
+	const columns: Column[] = [
+		{ key: 'item', header: 'Item' },
+		{ key: 'desc', header: 'Description', width: '32%' },
+		{ key: 'family', header: 'Family' },
+		{ key: 'onHand', header: 'On hand', align: 'right', sort: { asc: 'on_hand' } },
+		{ key: 'units', header: 'Units 12m', align: 'right' },
+		{ key: 'revenue', header: 'Revenue 12m', align: 'right', sort: { asc: 'revenue' } },
+		{ key: 'margin', header: 'Margin', align: 'right', sort: { asc: 'margin' } },
+		{ key: 'lastSold', header: 'Last sold', align: 'right' }
+	];
 
 	// With JavaScript on, changing a filter submits the form at once. Without
 	// it, the Apply button does the same thing.
@@ -16,185 +46,126 @@
 	}
 </script>
 
-<svelte:head>
-	<title>Parts · Northline</title>
-</svelte:head>
-
-<main class="page">
-	<header class="head">
-		<h1 class="sr-only">Parts</h1>
-		<p class="faint">
-			Every part we sell, with what it sold in the last 12 months, what it earns and what
-			is promised against it. Search by number or by words from the description.
-		</p>
-	</header>
-
-	<!-- A plain GET form: the filters end up in the URL. -->
-	<form class="filters panel" method="GET" data-sveltekit-keepfocus>
-		<label class="grow">
-			<span class="sr-only">Search parts</span>
-			<input name="q" value={q.q} placeholder="Number or description, for example 8 chrome stack" />
-		</label>
-
-		<label>
-			<span class="sr-only">Family</span>
-			{#await data.families}
-				<select disabled><option>Family</option></select>
-			{:then families}
-				<select name="family" onchange={submitNow}>
-					<option value="">Every family</option>
-					{#each families as family (family.family)}
-						<option value={family.family} selected={family.family === q.family}>
-							{family.family} ({count(family.items)})
-						</option>
-					{/each}
-				</select>
-			{/await}
-		</label>
-
-		<label>
-			<span class="sr-only">Sort by</span>
-			<select name="sort" onchange={submitNow}>
-				{#each PART_SORTS as sort (sort)}
-					<option value={sort} selected={sort === q.sort}>{PART_SORT_LABEL[sort]}</option>
-				{/each}
-			</select>
-		</label>
-
-		<label class="tick">
-			<input type="checkbox" name="short" value="1" checked={q.short} onchange={submitNow} />
-			<span>Short on open orders</span>
-		</label>
-
-		<label class="tick">
-			<input type="checkbox" name="reorder" value="1" checked={q.belowReorder} onchange={submitNow} />
-			<span>Below reorder point</span>
-		</label>
-
-		<button class="button">Apply</button>
-	</form>
-
+<Page
+	title="Parts"
+	subtitle="What each part sold in the last twelve months, what it earns, and what is promised against it. Search by number or by words from the description."
+>
 	{#await data.parts}
-		<TableSkeleton rows={8} title="Loading parts" />
+		<Toolbar
+			action={routes.parts()}
+			keep={{ sort: q.sort }}
+			searchName="q"
+			searchValue={q.q}
+			searchLabel="Search parts by number or description"
+			searchPlaceholder="Number or description, for example 8 chrome stack"
+			submitLabel="Apply"
+			{filtered}
+			clearHref={routes.parts()}
+		/>
+		<Panel title="Parts" busy flush>
+			<SkeletonRows rows={10} cols={8} header label="Loading parts" />
+		</Panel>
 	{:then parts}
-		<section class="panel" aria-labelledby="results">
-			<header class="panel-head">
-				<h2 id="results">
-					{count(parts.total)} {parts.total === 1 ? 'part' : 'parts'}
-				</h2>
-				{#if parts.total > parts.rows.length}
-					<span class="faint">showing the first {count(parts.rows.length)} by {PART_SORT_LABEL[q.sort].toLowerCase()}</span>
-				{/if}
-			</header>
-
-			{#if parts.rows.length === 0}
-				<p class="body muted">
-					No part matches. Try fewer words, or
-					<a class="link" href="/parts">clear the filters</a>.
-				</p>
-			{:else}
-				<div class="table-wrap">
-					<table>
-						<thead>
-							<tr>
-								<th scope="col">Item</th>
-								<th scope="col">Description</th>
-								<th scope="col">Family</th>
-								<th scope="col" class="num">On hand</th>
-								<th scope="col" class="num">Units 12m</th>
-								<th scope="col" class="num">Revenue 12m</th>
-								<th scope="col" class="num">Margin</th>
-								<th scope="col" class="num">Last sold</th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each parts.rows as part (part.itemNo)}
-								<tr>
-									<td class="mono"><a class="link" href={partHref(part.itemNo)}>{part.itemNo}</a></td>
-									<td class="desc">
-										{part.description}
-										<PartFlags {part} compact />
-									</td>
-									<td class="muted">{part.family}</td>
-									<td class="num">{count(part.onHand)}</td>
-									<td class="num">{count(part.units12m)}</td>
-									<td class="num">{money(part.revenue12m)}</td>
-									<td class="num">{part.margin12m === null ? '·' : percent(part.margin12m)}</td>
-									<td class="num">{part.lastSoldOn ? day(part.lastSoldOn, data.year) : 'never'}</td>
-								</tr>
+		<Toolbar
+			action={routes.parts()}
+			keep={{ sort: q.sort }}
+			searchName="q"
+			searchValue={q.q}
+			searchLabel="Search parts by number or description"
+			searchPlaceholder="Number or description, for example 8 chrome stack"
+			submitLabel="Apply"
+			resultCount="{count(parts.total)} {parts.total === 1 ? 'part' : 'parts'} match"
+			{filtered}
+			clearHref={routes.parts()}
+		>
+			{#snippet filters()}
+				<label>
+					<span class="sr-only">Family</span>
+					{#await data.families}
+						<select disabled aria-busy="true">
+							<option value="">Loading families</option>
+						</select>
+					{:then families}
+						<select name="family" onchange={submitNow}>
+							<option value="">Every family</option>
+							{#each families as family (family.family)}
+								<option value={family.family} selected={family.family === q.family}>
+									{family.family} ({count(family.items)})
+								</option>
 							{/each}
-						</tbody>
-					</table>
-				</div>
-			{/if}
-		</section>
+						</select>
+					{/await}
+				</label>
+
+				<label class="tick">
+					<input type="checkbox" name="short" value="1" checked={q.short} onchange={submitNow} />
+					<span>Short on open orders</span>
+				</label>
+
+				<label class="tick">
+					<input
+						type="checkbox"
+						name="reorder"
+						value="1"
+						checked={q.belowReorder}
+						onchange={submitNow}
+					/>
+					<span>Below reorder point</span>
+				</label>
+			{/snippet}
+		</Toolbar>
+
+		<Panel title="Parts" flush>
+			<DataTable
+				{columns}
+				rows={parts.rows}
+				rowKey={(part) => part.itemNo}
+				caption="Parts, sorted by {PART_SORT_LABEL[q.sort].toLowerCase()}"
+				sort={q.sort}
+				total={parts.total}
+				noun="parts"
+				order="by {PART_SORT_LABEL[q.sort].toLowerCase()}"
+				emptyLine="No part matches those filters."
+				emptyAction="Clear the filters"
+				emptyHref={routes.parts()}
+			>
+				{#snippet row(part)}
+					<td class="mono"><a class="link" href={routes.part(part.itemNo)}>{part.itemNo}</a></td>
+					<td class="desc">
+						{part.description}
+						<PartFlags {part} compact />
+					</td>
+					<td class="muted">{part.family}</td>
+					<td class="num"><Qty value={part.onHand} unit="pieces" bare /></td>
+					<td class="num"><Qty value={part.units12m} unit="units" bare /></td>
+					<td class="num"><Money value={part.revenue12m} /></td>
+					<td class="num">
+						{#if part.margin12m === null}
+							<span class="muted">no cost on file</span>
+						{:else}
+							{percent(part.margin12m)}
+						{/if}
+					</td>
+					<td class="num">
+						<WhenDate iso={part.lastSoldOn} thisYear={data.year} fallback="never" />
+					</td>
+				{/snippet}
+			</DataTable>
+		</Panel>
 	{:catch}
-		<p class="notice error" role="alert">
-			The parts could not be loaded.
-			<a class="button" href="/parts" data-sveltekit-reload>Try again</a>
-		</p>
+		<LoadFailed what="the parts" />
 	{/await}
-</main>
+</Page>
 
 <style>
-	.page {
-		max-width: 1180px;
-		margin: 0 auto;
-		padding: var(--space-3) var(--space-4) var(--space-6);
-		display: grid;
-		gap: var(--space-3);
-	}
-
-	.head p {
-		max-width: 80ch;
-		font-size: 0.92rem;
-	}
-
-	.filters {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: var(--space-3);
-		padding: var(--space-3);
-	}
-
-	.filters label {
-		display: block;
-	}
-
-	.filters .grow {
-		flex: 1 1 260px;
-	}
-
-	.filters .grow input {
-		width: 100%;
-	}
-
-	.filters .tick {
+	.tick {
 		display: flex;
 		align-items: center;
 		gap: 6px;
-	}
-
-	.table-wrap {
-		overflow-x: auto;
+		white-space: nowrap;
 	}
 
 	.desc {
 		min-width: 22ch;
-	}
-
-	.body {
-		padding: var(--space-3);
-	}
-
-	@media (max-width: 720px) {
-		.page {
-			padding: var(--space-3);
-		}
-
-		.filters {
-			gap: var(--space-2);
-		}
 	}
 </style>
