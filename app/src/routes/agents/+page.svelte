@@ -502,7 +502,14 @@
 													tone="danger"
 												/>
 											</form>
-										{:else if data.mayPromote}
+										{:else if data.mayPromote && agent.agent !== 'mcp'}
+											<!--
+												Everything except mcp. The MCP row has no grant of its own
+												either, but it is not without a principal: it has one PER
+												TOKEN, and the block below raises those. Saying "nothing here
+												to raise" right above the forms that raise them would
+												contradict itself on screen.
+											-->
 											<p class="t-meta muted">
 												{agent.name} has no row in <span class="mono">nl.users</span> yet, so its
 												autonomy is not a grant and there is nothing here to raise. Only the two
