@@ -145,6 +145,40 @@ comment on column nl.items.kind is
 comment on column nl.items.phantom is
   'A pass-through assembly that is never stocked: its bill of materials is exploded into its parent.';
 
+-- The data dictionary (0034) claims nl.items, and its gaps view holds it to
+-- every column of every entity it claims. Eight columns arrived here, so they
+-- are documented here, beside the migration that added them, rather than in a
+-- separate file somebody has to remember to edit.
+insert into nl.data_dictionary
+  (entity, field, label, meaning, unit, source, derivation, example, shareable)
+values
+  ('nl.items', 'kind', 'What it is',
+   'Raw material, component, work in progress, finished good or kit. This decides which cost element it becomes inside a parent bill of materials, and it is not the same question as how the part is replenished.',
+   '', 'app', 'Set when the part is loaded, from its category and its place in a bill of materials.',
+   'component', false),
+  ('nl.items', 'phantom', 'Phantom assembly',
+   'A pass-through assembly that is never stocked. Its bill of materials is exploded into its parent instead, so it never appears on a shelf or in a count.',
+   '', 'erp export', '', 'false', false),
+  ('nl.items', 'configured_to_order', 'Configured to order',
+   'The part is built to a configuration the customer chooses, so it has no single finished cost or lead time until the order names the options.',
+   '', 'erp export', '', 'false', true),
+  ('nl.items', 'consignment', 'On consignment',
+   'Stock sitting here that the supplier still owns. It is on the shelf and countable, and it is not ours until it is consumed.',
+   '', 'erp export', '', 'false', false),
+  ('nl.items', 'customer_supplied', 'Customer supplied',
+   'The customer sends the material and we work on it, so there is labour and machine time in the cost and no material cost at all.',
+   '', 'erp export', '', 'false', true),
+  ('nl.items', 'drop_shipped', 'Drop shipped',
+   'Shipped by the supplier straight to the customer. It never reaches our dock, so it has no stock and no pick.',
+   '', 'erp export', '', 'false', true),
+  ('nl.items', 'non_stock', 'Not stocked',
+   'A part we sell or consume but deliberately do not hold. It is bought or made for the order that needs it.',
+   '', 'erp export', '', 'false', true),
+  ('nl.items', 'service_only', 'Service only',
+   'Sold as a replacement part and never used in a bill of materials here, so it has demand but no parent.',
+   '', 'erp export', '', 'false', true)
+on conflict (entity, field) do nothing;
+
 -- Parts already in the book that are material rather than finished goods.
 -- On a fresh build this runs against an empty table and the seed sets the
 -- kind itself; on a database that already has the book it fixes it in place.

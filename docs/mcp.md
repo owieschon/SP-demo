@@ -16,6 +16,65 @@ MCP request, so `/api/mcp` is a public path and the bearer token is the only
 thing protecting it. What that means in practice is in
 [section 8](#8-what-a-stolen-token-gets-and-what-it-does-not).
 
+## 0. The workflow, end to end
+
+What a person actually does, in order. The rest of this document is the
+mechanics behind each step.
+
+**1. Sign in to the app as yourself.** The sign-in picker, no password. This
+matters because the token you are about to mint acts as one person, and that
+person is you.
+
+**2. An admin mints a token** on `/settings/mcp`, choosing its scopes:
+`read` alone, or `read` and `propose`. The secret is shown **once** on the
+page that minted it and only its SHA-256 is kept, so a lost token is revoked
+and replaced rather than recovered.
+
+**3. Paste one line into your coding agent.** The connect page prints the
+exact command or config for Claude Code, Cursor and Codex, with the endpoint
+and the header filled in, plus a `curl` to try it with no client at all. For
+Claude Code it is one `claude mcp add --transport http` command.
+
+**4. Ask questions in plain language.** Your agent now has eight read tools:
+find an account, read one in full with its open commitments and order lines,
+read a commitment and what has been delivered against it, read a part with
+its stock and lead time and twelve months of sales, list the windows that
+closed short with nobody's answer on them, list what is waiting for a person,
+try an automation rule without saving it, and run one read-only SELECT with
+the assistant's own caps. Every one of them runs as **you**, through
+`db.asUser`, so row-level security decides what comes back and the agent can
+never see more than you could see on screen.
+
+**5. Ask for a change, and watch it not happen.** There is no write tool.
+The four `propose_*` tools create an item in the same approval queue the
+people in the app already work from: answer a closed-short commitment, set a
+commitment's confidence, decide an ERP export snapshot, save an automation
+rule. The agent gets back the id of the proposal and the URL of the page to
+decide it on.
+
+**6. Approve it in the app.** Open `/workspace`, read what was proposed and
+the facts it used, then approve, edit and approve, or reject. **The write
+happens under your name, not the agent's**, with your session, your
+authority and an audit row that says a person decided it. That is the whole
+point of the split: the agent did the work, you took the decision.
+
+**7. The agent can follow up.** `list_pending_approvals` shows what it is
+waiting on, and the read tools confirm what changed once you have decided.
+
+**8. Revoke the token when you are done.** Revoking is admin-only and
+audited, and the token stays in the list afterwards as history rather than
+disappearing.
+
+### What this does not let you do
+
+Drive the business unsupervised. A coding agent connected this way can read
+everything you can read and can ask for four specific changes. It cannot
+send an email, release a purchase order, change a policy, promote another
+agent, or add so much as a note: `add_note` and `add_next_step` exist in the
+in-app assistant and are **deliberately not exposed here**, because the
+promise this endpoint makes is that an outside agent changes nothing without
+a person.
+
 ## 1. The endpoint
 
 `POST /api/mcp`, MCP over streamable HTTP, JSON-RPC 2.0. It handles

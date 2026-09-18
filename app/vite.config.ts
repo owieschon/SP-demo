@@ -34,10 +34,24 @@ export default defineConfig({
 					environment: 'node',
 					include: ['src/**/*.{test,spec}.{js,ts}'],
 					exclude: ['src/**/*.svelte.{test,spec}.{js,ts}'],
-					// Each database test file starts its own PGlite (Postgres in
-					// WebAssembly) and builds a small world, which takes a few seconds.
-					testTimeout: 60_000,
-					hookTimeout: 180_000
+					/*
+					  Each database test file starts its own PGlite (Postgres in
+					  WebAssembly), applies every migration and builds a small
+					  world. That was a few seconds when there were a dozen
+					  migrations. There are more than forty now, plus fifteen seed
+					  generators, so one database takes on the order of two minutes
+					  on a loaded machine and the whole suite is the dominant cost
+					  of working here.
+
+					  These numbers are generous on purpose: a timeout here means
+					  the machine was busy, never that the code is wrong, and a
+					  suite that fails for being slow teaches people to ignore red.
+					  The real fix is to build the database once and share it
+					  between files, which is a change worth making deliberately
+					  and not on a deadline. See docs/handoff.md.
+					*/
+					testTimeout: 180_000,
+					hookTimeout: 360_000
 				}
 			}
 		]
