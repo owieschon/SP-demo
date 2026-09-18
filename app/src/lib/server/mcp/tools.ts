@@ -346,11 +346,11 @@ function proposeTool(gated: Tool): McpTool {
 			  is both a missing field and an unknown one, and only the second
 			  reading says what the caller typed.
 			*/
-			const unknown = Object.keys(shape).filter((key) => !accepted.includes(key));
-			if (unknown.length > 0) {
+			const unknownFields = Object.keys(shape).filter((key) => !accepted.includes(key));
+			if (unknownFields.length > 0) {
 				return {
 					ok: false,
-					message: `${unknown.join(', ')}: there is no input by that name. This tool takes ${accepted.join(', ')}.`
+					message: `${unknownFields.join(', ')}: there is no input by that name. This tool takes ${accepted.join(', ')}.`
 				};
 			}
 			const summary = summarySchema.safeParse(shape.summary);
