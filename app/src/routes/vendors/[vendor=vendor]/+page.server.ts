@@ -9,6 +9,7 @@ import {
 	resolveVendorNo,
 	vendorContactInput
 } from '$lib/server/catalog/vendors';
+import { getPromiseMinReceipts, getVendorPartLeadTimes } from '$lib/server/pricing/sheets';
 import { vendorHref } from '$lib/components/catalog/types';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -25,9 +26,19 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	const vendor = await getVendor(db, user.id, vendorNo);
 	if (!vendor) error(404, `Vendor ${vendorNo} is not in the vendor list.`);
 
+	// The promise policy, so the sentence the page prints and the rule the
+	// database follows cannot drift apart.
+	const minReceipts = await getPromiseMinReceipts(db, user.id);
+
 	return {
 		vendor,
 		parts: getVendorParts(db, user.id, vendorNo),
+		// The lead time per part, quoted against what this vendor actually
+		// does. The vendor card's single figure is only a default for a part
+		// with no history of its own, so the page has to show both. Streams in
+		// like the parts list.
+		leadTimes: getVendorPartLeadTimes(db, user.id, { vendorNo }),
+		minReceipts,
 		// Operations and admins keep the vendor list; the database says so too.
 		canAddContact: user.role !== 'account_manager',
 		// A fresh id per page load: sending the same form twice writes once.

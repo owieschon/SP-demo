@@ -85,7 +85,13 @@ async function count(sql: string): Promise<number> {
 	return row.n;
 }
 
-const user = (id: number): SessionUser => ({ id, fullName: 'Test', title: '', role: id === ADMIN ? 'admin' : 'account_manager' });
+const user = (id: number): SessionUser => ({
+	id,
+	fullName: 'Test',
+	title: '',
+	role: id === ADMIN ? 'admin' : 'account_manager',
+	responsibility: ''
+});
 
 const CLEAN_EMAIL = `From: Micah Crowley <micah.crowley@driftlessmachinefab.example>
 Subject: RFQ
