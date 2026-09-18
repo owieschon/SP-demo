@@ -22,6 +22,7 @@ import {
 	readTrustTrend
 } from '$lib/server/harness/trust';
 import { undoAction } from '$lib/server/harness/wake';
+import { isTokenLevel, listTokens, setTokenLevel } from '$lib/server/mcp/tokens';
 import type { Actions, PageServerLoad } from './$types';
 
 /*
@@ -55,6 +56,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const user = locals.user!;
 	const db = await getDb();
 	const agent = agentParam(url.searchParams.get('agent'));
+	// Asked once: it gates both the controls and the token list below.
+	const mayChange = await mayPromote(db, user.id);
 
 	const [row] = await db.asUser(user.id, (tx) =>
 		tx.sql<{ today: string }>`select nl.today() as today`
@@ -81,7 +84,22 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		// Every named check, including the ones that have never had to refuse
 		// anything, so the page answers "what would stop it" as well.
 		roster: guardrailRoster(),
-		mayPromote: await mayPromote(db, user.id),
+		mayPromote: mayChange,
+		/*
+		  The MCP tokens, with the rung each one stands on.
+
+		  They belong on this page rather than only on the connect page, because
+		  a token IS an agent: it acts as a person, it has a level on the same
+		  ladder, and the brake above stops it. The connect page mints and
+		  revokes; this page is where its autonomy is raised and lowered, beside
+		  every other agent's.
+
+		  Shown only to somebody who may change a policy, which is the same gate
+		  the controls have. Reading the rest of this page is open to everybody
+		  (see the note at the top), but who holds a credential is not the same
+		  kind of fact as what an agent is allowed to do.
+		*/
+		mcpTokens: mayChange ? (await listTokens(db, user.id)).filter((t) => t.revokedAt === null) : [],
 		/*
 		  Whether this person may LET a pause go, which is an admin's alone.
 		  Pulling it needs nothing at all, so there is deliberately no flag
@@ -156,6 +174,46 @@ export const actions: Actions = {
 		return run(
 			() => setGrantedAutonomy(db, locals.user!.id, parsed.data),
 			`Saved the autonomy grant${when}.`
+		);
+	},
+
+	/*
+	  The same write, aimed at one token.
+
+	  An MCP token has its own agent-kind principal in nl.users (migration
+	  0044), so raising its level is nl.grant_authority on that principal:
+	  identical call, identical table, identical audit row, identical gate. The
+	  only thing this handler adds is resolving which principal a token id
+	  means, and it does that in the database rather than trusting the form.
+	*/
+	tokenAutonomy: async ({ locals, request }) => {
+		const form = Object.fromEntries(await request.formData());
+		const tokenId = Number(form.tokenId);
+		const level = String(form.level ?? '');
+		const requestId = String(form.requestId ?? '');
+		const startsOn = String(form.startsOn ?? '');
+		if (!Number.isInteger(tokenId) || tokenId <= 0 || requestId.length < 8) {
+			return fail(400, { message: 'The form is out of date. Reload the page and try again.' });
+		}
+		if (!isTokenLevel(level)) {
+			return fail(400, { message: 'A token sits at suggest, act with review, or act.' });
+		}
+		if (startsOn !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(startsOn)) {
+			return fail(400, { message: 'A date is YYYY-MM-DD, or leave it blank for today.' });
+		}
+		const db = await getDb();
+		return run(
+			() =>
+				setTokenLevel(db, locals.user!.id, {
+					tokenId,
+					level,
+					startsOn: startsOn === '' ? null : startsOn,
+					note: String(form.note ?? '').slice(0, 300),
+					requestId
+				}),
+			startsOn === ''
+				? 'Saved. The token is on its new level from its next call.'
+				: `Saved. The token moves on ${startsOn}.`
 		);
 	},
 

@@ -38,6 +38,9 @@
 	import TrustTrend from '$lib/components/agents/TrustTrend.svelte';
 	import { count, moment, percent } from '$lib/format';
 	import { LEVEL_LABEL, LEVEL_MEANING } from '$lib/harness/levels';
+	// The three rungs a token can stand on. 'shadow' is not one of them: a
+	// token that drafts for nobody has nothing to show anyone.
+	const TOKEN_LEVELS = ['suggest', 'auto_review', 'auto'] as const;
 	import { AUTONOMY_LABEL } from '$lib/roles/types';
 	import { routes } from '$lib/routes';
 	import type { AgentTrustRow } from '$lib/server/harness/trust';
@@ -491,11 +494,100 @@
 													tone="danger"
 												/>
 											</form>
+										{:else if data.mayPromote && agent.agent === 'mcp'}
+											<!--
+											  4b. The same write, one token at a time.
+
+											  An outside coding agent is not one agent, it is one
+											  per token, and each token acts as a different person.
+											  So the dial is per token: its own agent-kind row in
+											  nl.users, its own grant, raised through the same
+											  nl.grant_authority as everything else on this page
+											  (migration 0044).
+
+											  The tools a token is offered follow from this and
+											  nothing else. At suggest it sees propose_* and a
+											  person approves; from act with review it sees the
+											  same changes under their own names. Nobody has to
+											  remember to keep a second list in step, because there
+											  is no second list.
+											-->
+											<section class="promote">
+												<h3 class="t-section">How far each token may go</h3>
+												<p class="t-meta muted">
+													A token acts as one named person and can do what that person can do.
+													This is the only thing that says how far it goes without asking. It is
+													the same
+													<span class="mono">nl.grant_authority</span> call as raising a person's
+													ceiling, audited and effective-dated. Mint and revoke tokens on
+													<a href="/settings/mcp">/settings/mcp</a>.
+												</p>
+
+												{#if data.mcpTokens.length === 0}
+													<p class="t-meta muted">
+														No live tokens. Mint one on <a href="/settings/mcp">/settings/mcp</a>;
+														it starts at suggest.
+													</p>
+												{:else}
+													{#each data.mcpTokens as token (token.id)}
+														<form method="POST" action="?/tokenAutonomy" use:enhance>
+															<input type="hidden" name="tokenId" value={token.id} />
+															<input
+																type="hidden"
+																name="requestId"
+																value={reqId('token', String(token.id))}
+															/>
+															<p class="t-meta">
+																<strong>{token.label}</strong>, acting as {token.actsAsName}.
+																{count(token.calls)} calls, {count(token.callsToday)} today.
+																Now at <strong>{LEVEL_LABEL[token.level]}</strong>:
+																{LEVEL_MEANING[token.level]}
+															</p>
+															<div class="controls">
+																<label>
+																	<span class="t-meta muted">Level</span>
+																	<select name="level" value={token.level}>
+																		{#each TOKEN_LEVELS as level (level)}
+																			<option value={level}>{LEVEL_LABEL[level]}</option>
+																		{/each}
+																	</select>
+																</label>
+																<label>
+																	<span class="t-meta muted">From</span>
+																	<input type="date" name="startsOn" placeholder={data.today} />
+																</label>
+																<label class="why">
+																	<span class="t-meta muted">Why</span>
+																	<input
+																		type="text"
+																		name="note"
+																		maxlength="300"
+																		placeholder="What earned it, or what took it away"
+																	/>
+																</label>
+																<SubmitButton
+																	label="Save the grant"
+																	workingLabel="Saving"
+																	tone="primary"
+																/>
+															</div>
+														</form>
+													{/each}
+													<p class="t-meta muted">
+														A stolen token at suggest can read what its person can read and ask
+														for changes nobody has to grant. At act it can make those changes.
+														What limits it either way is the same thing: the person's authority
+														and its ceiling, the policy engine's cap, the undo window at act
+														with review, and the stop button below, which works at every level.
+													</p>
+												{/if}
+											</section>
 										{:else if data.mayPromote}
 											<p class="t-meta muted">
 												{agent.name} has no row in <span class="mono">nl.users</span> yet, so its
 												autonomy is not a grant and there is nothing here to raise. Only the two
-												desk agents are principals. Its per-work-kind level is on the board above.
+												desk agents and the MCP tokens are principals. Its per-work-kind level is
+												on the board above.
 											</p>
 										{/if}
 
