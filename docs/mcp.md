@@ -1,20 +1,86 @@
 # The MCP server
 
-Northline speaks MCP, so a coding agent (Claude Code, Cursor, Codex) can read
-the app and ask for changes. The point of it is that an outside agent gets the
-same safety model as the in-app assistant: read tools answer directly, and
-anything that would change a record becomes a proposal a person approves in
-the app.
+Northline speaks MCP, so a coding agent (Claude Code, Cursor, Codex) can work
+in the app. A token acts as one named person, so what it may do is what that
+person may do. How far it goes without asking is one dial: its rung on the
+same autonomy ladder every other agent in this app stands on.
 
 Files: `app/src/lib/server/mcp/**`, `app/src/routes/api/mcp/+server.ts`, the
-connect page at `app/src/routes/settings/mcp/**`, migration
-`db/migrations/0024_mcp.sql`. The safety model it reuses is in
-[`assistant-gating.md`](assistant-gating.md).
+connect page at `app/src/routes/settings/mcp/**`, migrations
+`db/migrations/0024_mcp.sql` and `db/migrations/0044_mcp_autonomy.sql`. The
+safety model it reuses is in [`assistant-gating.md`](assistant-gating.md), the
+ladder is in [`agent-harness.md`](agent-harness.md), the authority grants are
+in [`roles.md`](roles.md) and the caps are in
+[`policy-engine.md`](policy-engine.md).
 
 **This endpoint is public on the internet.** There is no session cookie on an
 MCP request, so `/api/mcp` is a public path and the bearer token is the only
-thing protecting it. What that means in practice is in
+thing protecting it. What that means in practice, at each rung, is in
 [section 8](#8-what-a-stolen-token-gets-and-what-it-does-not).
+
+## 0. The workflow
+
+1. **Mint a token on `/settings/mcp`.** It acts as you and starts at
+   **suggest**.
+2. **Paste one line into your coding agent.** The page has the exact line for
+   Claude Code, Cursor and Codex, with the token already in it.
+3. **Work in plain language.** It proposes, you approve in `/workspace`. When
+   you trust it, raise its level on `/agents` and stop approving.
+
+### What the level actually changes
+
+Only one thing: whether a change is written down for you to approve, or made.
+
+| Level | A tool that changes a record | Who is asked |
+|---|---|---|
+| **suggest** | offered as `propose_<name>`. Calling it writes a proposal and nothing else | you, in `/workspace` or on `/ask/<id>` |
+| **act with review** | offered under its own name. Calling it makes the change and starts an undo window | nobody, but you can take it back on `/agents` for 60 minutes |
+| **act** | offered under its own name. Calling it makes the change | nobody. One in twenty is reviewed afterwards, and a bad sample drops it back a rung |
+
+The reads never change: they answer at every level and write nothing.
+
+Raising the level is `nl.grant_authority` against the token's own principal in
+`nl.users`, which is the same call, the same table and the same audit row as
+raising a person's approval ceiling. A token is a principal like any other.
+There is no MCP-shaped permission any more.
+
+### What stays enforced at every level
+
+- **Row-level security.** The token runs as its person. It never sees more
+  than they would see signed in.
+- **The person's authority and its ceiling.** Before any change,
+  `nl.mcp_may_act` asks `nl.may_approve` for `approve_agent_proposal` at the
+  value at risk. That one call reads the grant, its effective dates **and the
+  policy engine's cap** (`nl.authority_limit_override` resolves through
+  `nl.resolve_policy`). A request above the ceiling is refused with a message
+  naming the ceiling and the amount. It is never quietly turned back into a
+  proposal: the agent asked to act, and the honest answer is that it may not.
+- **The pause switch.** A live pause on `mcp` (or on `all`) refuses every
+  call that would change anything, at every level including suggest. Anybody
+  signed in can pull it; only an admin can let it go.
+- **The guardrails and the record.** `nl.record_agent_action` re-checks the
+  rung and the pause in the database and stores the level acted at, the person
+  acted as and the undo window, so a caller that got the decision wrong is
+  refused rather than trusted.
+- **The tool's own function.** A change goes through `decideProposal`, which
+  is the identical function the approve button calls. Not a copy of it. There
+  is no check the in-app path makes that this path skips.
+- **The day's cap and the log.** 200 tool calls per token per day, counted in
+  the database, and a row in `nl.mcp_calls` for every call.
+
+### A note on the scopes
+
+There used to be two, `read` and `propose`, and they were a second permission
+system: they answered the same question the level answers, and because every
+gated tool was only ever exposed as `propose_<name>`, the scope that mattered
+was always the smaller one. **Migration 0044 dropped the column.** Nothing
+reads a scope to decide whether a call is allowed. The level decides which
+tools exist for a token, and the database decides whether the write is
+permitted.
+
+`McpTool.gate` (`'read' | 'propose' | 'change'`) survives in the code and is
+a **description**, not a gate: it feeds the annotations an MCP client shows and
+the connect page's three lists. Nothing branches on it for safety.
 
 ## 1. The endpoint
 
@@ -56,7 +122,7 @@ A token has:
 |---|---|
 | `label` | what it is, in a person's words, so it can be recognised later |
 | `user_id` | the person it **acts as**. Every query runs as them |
-| `scopes` | `read`, `propose`, or both |
+| `principal_id` | its own agent-kind row in `nl.users`, whose `agent_autonomy` grant **is** its level. Null on a token minted before 0044, which reads as `suggest` |
 | `last_used_at` | set on every attempt, including an attempt with a revoked token |
 | `revoked_at` | set once, never unset; the token stays in the list as history |
 
@@ -80,56 +146,99 @@ Minting and revoking are admin-only, enforced in `nl.mint_mcp_token` and
 `db.asUser(that person)`, so row-level security decides the rest and an
 outside agent can never see more than the person could see in the app.
 
+**And a token is a principal.** `nl.mint_mcp_token` creates an agent-kind row
+in `nl.users` for it (ids from `nl.mcp_principal_ids`, a band clear of people
+and of the two desk agents) and grants it `agent_autonomy` level 1, which is
+`suggest`. The level is **not** a column on `nl.mcp_tokens`: a column would be
+a copy of the grant, and a copy goes stale the first time somebody dates a
+grant forward, so the token stores the principal's id and the level is
+resolved on read by `nl.mcp_token_level`.
+
+Reading the whole answer at once, which is what `authenticate` does:
+
+```sql
+select nl.mcp_token_autonomy(<token id>);
+-- { level, work_kind, ladder, paused, pause, may_act, undo_window_minutes }
+```
+
+`ladder` in that answer is `nl.agent_autonomy_for('mcp', <work kind>)`, the
+same function every other agent asks. The three rungs are three kinds of MCP
+work (`propose`, `act_with_review`, `act`) so that each one carries the
+parameter its own rung needs: an undo window is only meaningful at
+`auto_review` and a sample rate only at `auto`, which is what the constraints
+on `nl.agent_autonomy` already say.
+
 ## 3. What an agent can do
 
-| Scope | Tool | What it does |
+| From | Tool | What it does |
 |---|---|---|
-| `read` | `search_accounts` | find accounts by name, town or number |
-| `read` | `get_account` | one account in full, with its open commitments and open order lines |
-| `read` | `get_commitment` | one commitment, what has been delivered, the parts in scope |
-| `read` | `list_windows_closed_short` | commitments whose window closed short with no answer yet |
-| `read` | `get_part` | one part: stock, open orders, twelve months of sales, lead time |
-| `read` | `run_sql` | one read-only SELECT, with the assistant's own checks and caps |
-| `read` | `test_automation_rule` | try a rule without saving it |
-| `read` | `list_pending_approvals` | what is waiting for a person, and the page to decide it on |
-| `propose` | `propose_record_outcome` | ask to answer a closed-short commitment |
-| `propose` | `propose_set_confidence` | ask to change a commitment's confidence |
-| `propose` | `propose_decide_export` | ask to apply, release or discard an ERP export snapshot |
-| `propose` | `propose_save_automation_rule` | ask to save an automation rule |
+| every level | `search_accounts` | find accounts by name, town or number |
+| every level | `get_account` | one account in full, with its open commitments and open order lines |
+| every level | `get_commitment` | one commitment, what has been delivered, the parts in scope |
+| every level | `list_windows_closed_short` | commitments whose window closed short with no answer yet |
+| every level | `get_part` | one part: stock, open orders, twelve months of sales, lead time |
+| every level | `run_sql` | one read-only SELECT, with the assistant's own checks and caps |
+| every level | `test_automation_rule` | try a rule without saving it |
+| every level | `list_pending_approvals` | what is waiting for a person, and the page to decide it on |
+| suggest | `propose_record_outcome` | ask to answer a closed-short commitment |
+| suggest | `propose_set_confidence` | ask to change a commitment's confidence |
+| suggest | `propose_decide_export` | ask to apply, release or discard an ERP export snapshot |
+| suggest | `propose_save_automation_rule` | ask to save an automation rule |
+| act with review | `record_outcome` | answer a closed-short commitment, for real |
+| act with review | `set_confidence` | change a commitment's confidence, for real |
+| act with review | `decide_export` | apply, release or discard an ERP export snapshot |
+| act with review | `save_automation_rule` | save an automation rule |
+| act with review | `add_note` | write a note on an account |
+| act with review | `add_next_step` | add a next step on an account |
 
 Every tool has a description written for an agent and a JSON Schema converted
 from its zod schema, so `tools/list` is enough to use the server without
-guessing. `tools/list` shows only the tools the token's scopes cover.
+guessing. **`tools/list` shows only the tools this token's level offers**, so
+it tells an agent the truth about what it can do right now rather than listing
+things it would be refused for. The connect page shows the whole roster, with
+the lowest level each tool appears at.
 
 The list is **built from the assistant's registry**
 (`app/src/lib/server/assistant/tools.ts`), not written a second time. A tool's
-risk class there decides what happens here:
+risk class there, and the token's level, decide the shape it is offered in:
 
-- `read` is exposed as itself;
-- `gated` is exposed as `propose_<name>` and never as itself;
-- `additive` (`add_note`, `add_next_step`) is **deliberately not exposed**.
-  Those two do insert a row, and the promise this endpoint makes is that an
-  outside agent changes nothing without a person. An agent that wants a note
-  written asks a person for one;
-- `propose_action` is the assistant's own plumbing and is not exposed either.
+- `read` is exposed as itself, at every level;
+- `gated` is exposed as `propose_<name>` at `suggest`, and under its own name
+  from `act with review` up;
+- `additive` (`add_note`, `add_next_step`) is not exposed at `suggest`, and is
+  exposed under its own name from `act with review` up;
+- `propose_action` is the assistant's own plumbing and is not exposed at all.
 
 A `propose_*` tool takes the gated tool's own input plus a required `summary`,
-which is the sentence the person deciding reads.
+which is the sentence the person deciding reads. A tool offered under its own
+name takes the same `summary`, and it matters more rather than less there:
+nobody is being asked to approve, so that sentence is the only record of why
+the change was made.
 
-## 4. What an agent cannot do
+## 4. What an agent cannot do, at any level
 
-- **Call a tool that writes.** `record_outcome`, `set_confidence`,
-  `decide_export` and `save_automation_rule` are not in the list at all, so
-  there is no input that could run one. Asking for one by name is `-32602`
-  with a message pointing at the `propose_` tool.
-- **Approve its own proposal.** There is no approve tool, and `propose`
-  scope does not create one. Approval happens on `/ask/<id>` in the app, by a
-  signed-in person, through `assistant/proposals.ts`.
+- **Call a tool its level does not offer.** The lookup in `server.ts` takes
+  the level, so at `suggest` there is no tool called `set_confidence` at all
+  and there is no input that could run one. Asking for it by name is `-32602`,
+  and the message names `propose_set_confidence` instead. This replaced the old
+  scope check: one question, asked in one place, so `tools/list` and
+  `tools/call` cannot fall out of step.
+- **Go above its person's ceiling.** `nl.mcp_may_act` refuses and names the
+  ceiling. There is no downgrade path: an agent that asked to act and may not
+  is told so.
+- **Act while `mcp` is paused.** Checked in `act.ts` before anything is
+  written, and again inside `nl.record_agent_action`.
+- **Raise its own level.** `nl.set_mcp_token_autonomy` goes through
+  `nl.grant_authority`, which calls `nl.require_role_authority()`, and no MCP
+  tool calls it. A level is raised by a person on `/agents`.
+- **Approve a proposal it left for a person.** There is no approve tool.
+  At `suggest`, approval happens in the app, by a signed-in person. At the
+  acting rungs it does not propose in the first place.
 - **Read anything about people through `run_sql`.** That tool runs as role
   `nl_readonly`, which has no grant at all on `nl.users`, `nl.contacts`,
   `nl.activities`, the assistant's tables or `nl.mcp_tokens`.
 - **See more than the person it acts as.** Row-level security is the same as
-  in the app.
+  in the app, at every level.
 
 ## 5. How a proposal works
 
@@ -157,6 +266,45 @@ The tool answers with the proposal's id, the conversation's id, and
 `approve_at: /ask/<conversation id>`, so an agent can tell a person exactly
 where to look. `list_pending_approvals` is how it checks later whether the
 proposal was decided.
+
+## 5b. How acting works
+
+At `auto_review` and `auto`, a gated tool is offered under its own name and
+`mcp/act.ts` runs it. The order is the safety model, and every step is a
+refusal before a write rather than after:
+
+1. **the brake.** `nl.agent_paused('mcp')`, asked of the database rather than
+   of the identity read at the start of the request, because somebody may have
+   pulled it in the seconds since;
+2. **the person's authority.** `nl.mcp_may_act`, which is one call to
+   `nl.may_approve` for `approve_agent_proposal` at
+   `nl.mcp_action_amount(tool, input)`. That amount is the commitment's
+   `committed_value` for a commitment tool and zero for the rest, because
+   those move no money. Refused above the ceiling, with the ceiling and the
+   amount in the message;
+3. **the proposal.** The change is still written down first, through
+   `mcp/propose.ts`, because that is what validates the input against the
+   gated tool's own schema and captures the row version the write is held to;
+4. **the decision.** `decideProposal`, the identical function the approve
+   button on `/ask/<id>` calls. Not a variant of it. This is what makes "the
+   MCP path never skips a check the in-app path makes" a fact about one
+   function rather than a promise about two;
+5. **the record.** `nl.record_agent_action` stores the rung, the person and
+   the undo window (60 minutes at `auto_review`, none at `auto`), re-checks the
+   rung and the pause, and writes the audit row.
+
+So the record afterwards says a proposal was created, approved by this token's
+person, executed, and that no human clicked anything. `/agents` lists it with
+an undo button while its window is open, and `nl.claim_agent_undo` refuses
+once the window has closed.
+
+`add_note` and `add_next_step` take a shorter path: they are additive, so
+there is no proposal to make and no row version to hold, and they run through
+the same gate the in-app assistant runs them through. They were withheld from
+MCP entirely before 0044, and the reason given was that an outside agent must
+change nothing without a person. That reason was really the absence of a dial.
+With one, "a person said this agent may add a note for me" is an authority
+grant like any other, so they are offered from `auto_review` up.
 
 ## 6. The caps
 
@@ -195,7 +343,10 @@ select count(*) from nl.assistant_tool_calls where risk = 'gated' and outcome = 
 ## 8. What a stolen token gets, and what it does not
 
 The endpoint is on the public internet and the token is the only thing in
-front of it. Somebody holding a valid token **could**:
+front of it. **A token at `act` is more dangerous than a token at `suggest`,
+and pretending otherwise would be dishonest.** Here is what each one gets.
+
+**At `suggest`** somebody holding a valid token could:
 
 - read the business book as the person that token acts as: accounts,
   commitments, parts, prices, margins, invoice lines, the ERP export, and
@@ -204,12 +355,37 @@ front of it. Somebody holding a valid token **could**:
   decide. That is noise in one person's queue, attributed to the token by
   label, and a proposal that is rejected is dead.
 
-They **could not**:
+They could **not** write any business record, because no tool at that level
+writes one, and could not approve a proposal, because approval needs a
+signed-in person and a session cookie.
 
-- write any business record. There is no MCP tool that writes, and the gate
-  refuses a gated tool before it parses its input;
-- approve a proposal, including one they created. Approval needs a signed-in
-  person and a session cookie;
+**At `act with review`** they could also make the changes that token's person
+is authorised for: answer a commitment, move a confidence, decide an export
+snapshot, save an automation rule, add a note or a next step. Each one lands
+on `/agents` with an undo button and a 60 minute window, and each one is in
+`nl.agent_actions` and `nl.audit_log` immediately.
+
+**At `act`** they could make the same changes with no window to take them
+back. One in twenty is put in front of a person afterwards, and a bad sample
+drops the rung back automatically (`nl.demote_agents_on_sample`).
+
+**The mitigation is the same at every level**, and it is not the token:
+
+- **the ceiling.** The person's `approve_agent_proposal` grant, at the value
+  at risk. A person with no such grant cannot have an agent act for them at
+  all, whatever their token's level says, and a person with a ceiling of
+  10,000 cannot have one act on a commitment worth more;
+- **the policy engine's cap**, which resolves through the same call;
+- **the undo window** at `act with review`, and the whole action trail on
+  `/agents` at both acting levels;
+- **the pause switch**, which anybody signed in can pull and which refuses
+  every change immediately, at every level;
+- **the day's cap**, 200 calls, and the log of every one of them.
+
+They still could **not**, at any level:
+
+- raise their own level. That is `nl.grant_authority`, gated on
+  `change_policy`, and no MCP tool reaches it;
 - read anything about people: `nl.users`, `nl.contacts`, `nl.activities`, the
   assistant's conversations or `nl.mcp_tokens` are unreachable from `run_sql`,
   and no tool returns contact details;
@@ -218,16 +394,23 @@ They **could not**:
 - spend money. The MCP server never calls the model: it is tools and SQL, and
   Ask Northline's own API key is not on this path.
 
-What to do about one: revoke it at `/settings/mcp`. It stops working on its
+**The demo's tokens stay at `suggest`.** Nothing in the seed grants a token
+more than level 1, and `nl.mint_mcp_token` mints at level 1, so the acting
+rungs exist and are reachable but are not where anything starts.
+
+What to do about a stolen one: revoke it at `/settings/mcp`, and pull the
+brake on `/agents` first if it is at an acting level, because that takes
+effect on the next call without needing an admin. Revoking stops it on its
 next call, `nl.mcp_calls` shows everything it did, and `last_used_at` keeps
 being updated after revocation, so a token that is still being tried is
 visible.
 
 ## 9. Connecting
 
-Mint a token at **`/settings/mcp`** (an admin only), choose the person it acts
-as, and copy the secret on the spot. The page fills the live URL and the fresh
-token into every snippet below.
+[Section 0](#0-the-workflow) is the three steps. This is the exact text for
+each client. Mint a token at **`/settings/mcp`** (an admin only), choose the
+person it acts as, and copy the secret on the spot: the page fills the live URL
+and the fresh token into every snippet below.
 
 **Claude Code**
 
