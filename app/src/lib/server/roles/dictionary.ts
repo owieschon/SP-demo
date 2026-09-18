@@ -34,7 +34,7 @@ export async function columnSource(db: Db): Promise<ColumnSource> {
  * The other half of the same question: has the policy engine landed? If it
  * has, nl.authority_limit_override resolves a ceiling through
  * nl.resolve_policy and nl.authority_grants keeps only the grant. Migration
- * 0027 feature-detects it by name and by argument types; this is so the page
+ * 0031 feature-detects it by name and by argument types; this is so the page
  * can say which one answered.
  */
 export async function policyEnginePresent(db: Db): Promise<boolean> {

@@ -10,8 +10,9 @@
 // reachable by its URL and by search, because a salesperson covering for
 // somebody has to be able to open a warehouse page once without being given a
 // warehouse. Scope narrows what you may change, not what you may read
-// (migration 0027's header says why).
+// (migration 0031's header says why).
 
+import { NAV, type NavItem, type NavSection } from '../nav.ts';
 import type { Authority, PrincipalPolicy, ScopeDimension } from './types.ts';
 import { hasScope, holds } from './types.ts';
 
@@ -88,4 +89,27 @@ export function railAllows(policy: PrincipalPolicy, rule: RailRequirement): bool
 /** The hrefs this principal's rail shows, in the order the rules are written. */
 export function railFor(policy: PrincipalPolicy): string[] {
 	return RAIL_RULES.filter((rule) => railAllows(policy, rule)).map((rule) => rule.href);
+}
+
+/*
+  The two shapes the shell needs, from the one list of hrefs above.
+
+  These keep the filtering in one place rather than in the layout's markup,
+  and they keep the SECTIONS intact: a section whose entries are all hidden
+  comes back empty rather than missing, and nav.visibleSections drops it.
+  That is what lets a group survive being emptied, which is the whole reason
+  the rail can be derived at all.
+*/
+
+/** The rail's sections, holding only the entries this principal may see. */
+export function railSections(allowed: string[], sections: NavSection[] = NAV): NavSection[] {
+	return sections.map((section) => ({
+		...section,
+		items: section.items.filter((item) => allowed.includes(item.href))
+	}));
+}
+
+/** Keep only the entries this principal may see, in the order given. */
+export function railItems(items: NavItem[], allowed: string[]): NavItem[] {
+	return items.filter((item) => allowed.includes(item.href));
 }

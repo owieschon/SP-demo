@@ -1,4 +1,4 @@
--- 0027 Roles: who a person is, said as three separate things.
+-- 0031 Roles: who a person is, said as three separate things.
 --
 -- Before this migration there was one column, nl.users.role, with three
 -- values, and it gated exactly one thing: nl.is_admin(). Everything else was
@@ -79,6 +79,11 @@ as $$
     'planner',
     'warehouse',
     'ops_manager',
+    -- Sees the whole business and may change how it is run. Every other role
+    -- exists to make one person's day small; this one exists to make the
+    -- whole thing legible, which is a different job and needs the widest
+    -- scope, the policy authority and nothing withheld.
+    'ceo',
     -- The original three.
     'account_manager',
     'operations',
@@ -98,9 +103,9 @@ alter table nl.users
   add column responsibility text not null default '';
 
 comment on column nl.users.kind is
-  'person or agent. An agent is a principal with scope, authority and disclosure, and no sign-in (migration 0027).';
+  'person or agent. An agent is a principal with scope, authority and disclosure, and no sign-in (migration 0031).';
 comment on column nl.users.responsibility is
-  'One line: what this person or agent is answerable for. Editable on /people (migration 0027).';
+  'One line: what this person or agent is answerable for. Editable on /people (migration 0031).';
 
 -- Widen the role check to the preset list. The constraint was written inline
 -- in 0001 as check (role in (...)), which Postgres named users_role_check,
@@ -160,7 +165,7 @@ create table nl.user_scope (
 );
 
 comment on table nl.user_scope is
-  'Which accounts, warehouses, vendors, part families and mailboxes are a principal''s own. A row with a null value means every value in that dimension (migration 0027).';
+  'Which accounts, warehouses, vendors, part families and mailboxes are a principal''s own. A row with a null value means every value in that dimension (migration 0031).';
 
 -- One row per (principal, dimension, value). coalesce puts the "all" row in
 -- the same index, so asking for it is the same probe as asking for one value.
@@ -279,7 +284,7 @@ create table nl.authority_grants (
 );
 
 comment on table nl.authority_grants is
-  'What each principal may decide and up to what amount, effective-dated. Raising a person''s ceiling and raising an agent''s autonomy are the same row and the same write (migration 0027).';
+  'What each principal may decide and up to what amount, effective-dated. Raising a person''s ceiling and raising an agent''s autonomy are the same row and the same write (migration 0031).';
 
 create index authority_grants_lookup
   on nl.authority_grants (user_id, authority, starts_on desc);
@@ -462,7 +467,7 @@ create table nl.disclosure_grants (
 );
 
 comment on table nl.disclosure_grants is
-  'What each principal may be shown, in the desk agent''s own three levels. An agent''s row matches its mailbox (migration 0027).';
+  'What each principal may be shown, in the desk agent''s own three levels. An agent''s row matches its mailbox (migration 0031).';
 
 create trigger disclosure_grants_touch before update on nl.disclosure_grants
   for each row execute function nl.touch_updated_at();
@@ -1197,7 +1202,7 @@ begin
 end $$;
 
 comment on function nl.work_waiting_for(int) is
-  'Everything inside a principal''s scope that is waiting on an authority they hold. The home page (migration 0027).';
+  'Everything inside a principal''s scope that is waiting on an authority they hold. The home page (migration 0031).';
 
 -- ---------------------------------------------------------------------------
 -- The policy surface: one row per principal, for /people
@@ -1247,7 +1252,7 @@ select u.id,
 from nl.users u;
 
 comment on view nl.people_policy is
-  'Who exists, what they are responsible for, what they may decide and what they may see. The read side of /people (migration 0027).';
+  'Who exists, what they are responsible for, what they may decide and what they may see. The read side of /people (migration 0031).';
 
 -- ---------------------------------------------------------------------------
 -- Row-level security and grants
