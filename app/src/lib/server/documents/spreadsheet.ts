@@ -7,9 +7,9 @@
 //     the top-left cell of the merge and is blank everywhere else,
 //   * a source reference for every row (sheet name and row number), which
 //     sheet_to_json throws away.
-// It also means no object is ever built out of names taken from the file,
-// which is the shape of the prototype-pollution advisory against the
-// published xlsx package (see docs/documents.md).
+// It also means no object is ever built out of names taken from an untrusted
+// file. The SheetJS version and source are pinned in package.json and the
+// lockfile; see docs/documents.md.
 //
 // Numbers stay numbers. Dates are the interesting case: a spreadsheet
 // stores 2026-10-17 as the number 46312, and only the cell's number format
@@ -19,7 +19,7 @@ import { cellFromValue, dateFromSerial, emptyCell } from './cells.ts';
 import { findGridTable } from './tables.ts';
 import { DocumentError, type DocCell, type DocLine, type DocTable, type ParsedDocument } from './types.ts';
 
-/** A workbook wider or taller than this is not a parts request. */
+/** Post-parse extraction bounds: a larger grid is not a parts request. */
 const MAX_SHEETS = 20;
 const MAX_ROWS = 5000;
 const MAX_COLUMNS = 80;

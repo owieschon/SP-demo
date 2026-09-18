@@ -235,28 +235,28 @@ Truck Parts" would otherwise end the body and start a header of its own.
 |---|---|---|
 | `pdf-lib` | 1.17.1 | writes the quote PDF, no browser, no native module |
 | `unpdf` | 1.8.1 | PDF.js built for serverless, for reading text out of a PDF |
-| `xlsx` | 0.18.5 | SheetJS, for `.xlsx` and `.xls` |
+| `xlsx` | 0.20.3 | SheetJS, for `.xlsx` and `.xls`; installed from the official SheetJS CDN |
 
 `unpdf` rather than `pdfjs-dist` directly: it ships the same PDF.js compiled
 for serverless functions, with no optional native canvas dependency to install
 or skip. `extractTextItems` gives the positions the layout rebuilding needs.
 
-The one thing to know: `npm audit` reports two advisories against the
-published `xlsx` package (prototype pollution and a denial of service by
-regular expression). The fixed versions, 0.19.3 and later, are only published
-on SheetJS's own CDN, not on npm. Two things reduce the exposure here:
+The public npm registry stops at vulnerable `xlsx` 0.18.5. SheetJS publishes
+fixed Community Edition releases on its own CDN and documents that CDN as the
+authoritative source in its [official Node installation
+guide](https://docs.sheetjs.com/docs/getting-started/installation/nodejs/).
+This app pins the exact 0.20.3 tarball URL in `package.json`;
+`package-lock.json` pins its SHA-512 integrity. Version 0.20.3 includes the
+fixes released in 0.19.3 for
+[CVE-2023-30533](https://cdn.sheetjs.com/advisories/CVE-2023-30533) and in
+0.20.2 for [CVE-2024-22363](https://cdn.sheetjs.com/advisories/CVE-2024-22363).
 
-1. Sheets are walked cell by cell rather than through `sheet_to_json`, so no
-   object is ever built out of names taken from the file, which is the shape
-   of the prototype pollution advisory.
-2. A file is capped at ten megabytes, and the reader stops at 20 sheets,
-   5,000 rows and 80 columns per sheet.
-
-That is a reduction, not a fix. If Owen wants the advisory gone, the change is
-to install SheetJS from its own CDN
-(`npm install --save-exact https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz`),
-which is the vendor's documented route and costs a build-time dependency on
-that CDN. Worth a decision either way rather than a silent one.
+That upgrade addresses those two known advisories. It does not make an
+arbitrary workbook safe. The ten-megabyte upload limit is checked before
+`XLSX.read`. Once a file passes that check, SheetJS decodes the workbook
+before this app applies its post-parse extraction limits of 20 sheets, 5,000
+rows and 80 columns per sheet. Those limits bound the retained grid, not all
+parser work or resource-exhaustion behavior.
 
 ## Tests
 
@@ -275,6 +275,7 @@ that CDN. Worth a decision either way rather than a silent one.
 | File | What it is for |
 |---|---|
 | `emailed-spreadsheet-request.xlsx` | three sheets, a header merged over two rows, real date cells, a stated total |
+| `legacy-spreadsheet-request.xls` | synthetic BIFF8 cells written by the prior SheetJS 0.18.5 install, for an independent legacy-reader regression |
 | `emailed-spreadsheet-request.txt` | the same request as text, so a test can prove both read the same |
 | `pdf-request.pdf` | a two-page printed purchase order, text based |
 | `parts-list.csv` | a parts list with a preamble and a trailing note |

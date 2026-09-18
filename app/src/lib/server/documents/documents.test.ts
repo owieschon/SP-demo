@@ -11,6 +11,7 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { extractText } from 'unpdf';
+import { version as sheetJsVersion } from 'xlsx';
 import { findDbDir } from '../db/files.ts';
 import { cellFromText, dateFromSerial, numberFromText } from './cells.ts';
 import { readCsvDocument } from './csv.ts';
@@ -127,6 +128,24 @@ describe('a spreadsheet request', () => {
 		expect(doc.rowCount).toBe(5);
 		expect(doc.summary).toBe('3 sheets, 5 rows');
 		expect(doc.pageCount).toBeNull();
+	});
+
+	it('loads SheetJS 0.20.3', () => {
+		expect(sheetJsVersion).toBe('0.20.3');
+	});
+
+	it('still reads a legacy .xls upload', async () => {
+		// This checked-in synthetic BIFF8 file was written by the prior
+		// SheetJS 0.18.5 install, so the compatibility check does not use the
+		// same library version to write and read its own fixture.
+		const bytes = bytesOf('legacy-spreadsheet-request.xls');
+		const { doc: legacy, stored } = await readUploadedFile(upload('legacy-request.xls', bytes), 2);
+
+		expect(legacy.kind).toBe('xls');
+		expect(legacy.tables[0].header).toEqual(['Item No', 'Qty']);
+		expect(legacy.tables[0].rows[0].cells.map((cell) => cell.text)).toEqual(['SYNTH-001', '4']);
+		expect(legacy.tables[0].rows[0].ref).toEqual({ attachment: 2, sheet: 'Quote', row: 2 });
+		expect(stored.mediaType).toBe(MEDIA_TYPES.xls);
 	});
 
 	it('flattens a header merged over two rows', () => {

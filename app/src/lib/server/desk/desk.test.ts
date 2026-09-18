@@ -172,6 +172,54 @@ describe('the poll', () => {
 		expect(stored).toEqual({ messageId: first.id, duplicate: true });
 	});
 
+	it('stores inbound spreadsheet attachments for display without parsing them', async () => {
+		const bytes = Buffer.from('not a workbook');
+		const stored = await db.asUser(ORDER_DESK_USER, (tx) =>
+			recordMessage(
+				tx,
+				{
+					mailboxId: orders.id,
+					providerMessageId: 'attachment-boundary-1',
+					providerThreadId: null,
+					fromAddress: 'buyer@testshop.example',
+					fromName: 'Sample buyer',
+					to: [orders.address],
+					cc: [],
+					subject: 'Spreadsheet attached',
+					body: 'Please review the attached request.',
+					bodyStripped: 'Please review the attached request.',
+					receivedAt: `${TODAY}T18:00:00Z`,
+					attachments: [
+						{
+							file_name: 'request.xlsx',
+							media_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+							size_bytes: bytes.byteLength,
+							base64: bytes.toString('base64')
+						}
+					]
+				},
+				randomUUID()
+			)
+		);
+		const detail = await getMessage(db, ORDER_DESK_USER, stored.messageId, NO_LIST);
+
+		expect(stored.duplicate).toBe(false);
+		expect(detail?.attachments).toEqual([
+			{
+				id: expect.any(Number),
+				fileName: 'request.xlsx',
+				mediaType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+				sizeBytes: bytes.byteLength,
+				documentAttachmentId: null
+			}
+		]);
+
+		// Let the normal desk flow finish the message so later mailbox counts
+		// keep their no-waiting-mail invariant. The invalid workbook bytes are
+		// ignored because mail attachments are display-only at this boundary.
+		await pollAll(db, { client, mode: 'mock', maxRuns: 20 });
+	});
+
 	it('counts what is waiting per desk', async () => {
 		const views = await listMailboxViews(db, ORDER_DESK_USER);
 		expect(views).toHaveLength(2);
