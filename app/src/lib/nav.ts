@@ -49,6 +49,10 @@ import SunMedium from '@lucide/svelte/icons/sun-medium';
 import Route from '@lucide/svelte/icons/route';
 import Warehouse from '@lucide/svelte/icons/warehouse';
 import Workflow from '@lucide/svelte/icons/workflow';
+import Scale from '@lucide/svelte/icons/scale';
+import BookMarked from '@lucide/svelte/icons/book-marked';
+import ShoppingCart from '@lucide/svelte/icons/shopping-cart';
+import Users from '@lucide/svelte/icons/users';
 import type { Role } from './types';
 import { routes } from './routes';
 
@@ -91,6 +95,12 @@ export const NAV: NavSection[] = [
 				label: 'Order desk',
 				hint: 'Customer email the desk agent read, and the replies it drafted',
 				icon: Mails
+			},
+			{
+				href: routes.procurement(),
+				label: 'Procurement desk',
+				hint: 'What to buy, how much, from whom and by when',
+				icon: ShoppingCart
 			},
 			{
 				href: routes.workspace(),
@@ -146,12 +156,30 @@ export const NAV: NavSection[] = [
 				icon: ShieldCheck
 			},
 			{
+				href: routes.policies(),
+				label: 'Policies',
+				hint: 'The rules everybody and every agent decides by, and why a value won',
+				icon: Scale
+			},
+			{
+				href: routes.people(),
+				label: 'People',
+				hint: 'Who answers for what, what they may approve, and what they may see',
+				icon: Users
+			},
+			{
+				href: routes.dictionary(),
+				label: 'Dictionary',
+				hint: 'Every field the app knows, what it means and who may be shown it',
+				icon: BookMarked
+			},
+			{
 				href: routes.settings(),
 				label: 'Settings',
 				hint: 'What the agents may do, who they may write to, what they cost',
 				icon: Settings
 			}
-			// Reserved: /policies, /dictionary, /context, /people.
+			// Reserved: /context.
 		]
 	}
 ];

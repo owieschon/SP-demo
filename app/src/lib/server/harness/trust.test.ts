@@ -437,8 +437,12 @@ describe('the refusals carry the rule that refused', () => {
 		}
 	});
 
-	it('reads as an empty list on a world where nothing has been refused', async () => {
+	it('reads as a list, empty or not, and every row carries its rule', async () => {
 		const refusals = await readRefusals(db, ADMIN, 12);
+		// An empty list is a legitimate answer and must not throw: a world
+		// where the agents have not had to refuse anything yet is a quiet
+		// world, not a broken page.
+		expect(Array.isArray(refusals)).toBe(true);
 		// Every refusal listed must carry its rule, whether there are none or
 		// twenty. A count with no rule beside it is not an argument.
 		for (const refusal of refusals) {
