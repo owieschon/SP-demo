@@ -2,18 +2,24 @@
 //
 // There is no second tool registry here. The list is built from the
 // assistant's one (assistant/tools.ts), which is where a tool's risk class
-// lives:
+// lives. What has changed since migration 0044 is that the SHAPE a tool is
+// offered in depends on the token's rung on the autonomy ladder, so
+// tools/list tells an agent the truth about what it can do right now:
 //
-//   read     exposed as itself. It answers straight away and writes nothing.
-//   gated    exposed as propose_<name>. Calling it creates a proposal a person
-//            approves in the app. The gated tool itself is never exposed and
-//            never runs from here, whatever the token's scopes are.
-//   additive deliberately NOT exposed. add_note and add_next_step do write a
-//            row, and the promise this endpoint makes is that an outside agent
-//            changes nothing without a person. An agent that wants a note
-//            written asks a person for it.
-//   propose  not exposed either: propose_action is the assistant's own plumbing,
-//            and the propose_* tools below are the door to it.
+//   read     exposed as itself at every rung. It answers and writes nothing.
+//   gated    at suggest, exposed as propose_<name>: calling it creates a
+//            proposal a person approves in the app. At auto_review and auto,
+//            exposed under its OWN name, and calling it makes the change, for
+//            real, bounded by the person's authority, the policy engine's cap,
+//            the pause switch and (at auto_review) an undo window.
+//   additive add_note and add_next_step. Not exposed at suggest, exposed at
+//            auto_review and auto. They used to be withheld at every rung, and
+//            the reason given was that an outside agent must change nothing
+//            without a person. That reason was really the absence of a dial:
+//            with one, "a person said this agent may add a note for me" is an
+//            authority grant like any other.
+//   propose  not exposed at all: propose_action is the assistant's own
+//            plumbing, and the propose_* tools below are the door to it.
 //
 // One tool is new (list_pending_approvals), because an outside agent needs to
 // be able to see what it has left for a person to decide.
@@ -21,8 +27,9 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { runTool } from '../assistant/gate.ts';
 import { outputProblem, TOOLS, type Tool, type ToolContext } from '../assistant/tools.ts';
+import { actFromMcp } from './act.ts';
 import { proposeFromMcp } from './propose.ts';
-import type { McpScope } from './tokens.ts';
+import type { TokenAutonomy, TokenLevel } from './tokens.ts';
 import type { Db, Row } from '../db/types.ts';
 
 /** What a tool call is given. One per call. */
@@ -34,6 +41,12 @@ export interface McpToolContext {
 	today: string;
 	/** Which token asked, for the line a person reads on a proposal. */
 	tokenLabel: string;
+	/**
+	 * The rung this token stands on, read from the ladder when the request was
+	 * authenticated. A tool that acts needs it for the record it writes; a
+	 * read tool ignores it.
+	 */
+	autonomy: TokenAutonomy;
 }
 
 export interface McpToolAnswer {
@@ -51,8 +64,16 @@ export interface McpTool {
 	description: string;
 	/** JSON Schema, converted from the zod schema, so tools/list is usable. */
 	inputSchema: Record<string, unknown>;
-	/** Which scope a token needs to call it. */
-	scope: McpScope;
+	/**
+	 * Does calling it change a record? 'read' answers a question; 'propose'
+	 * writes only a proposal; 'change' writes for real.
+	 *
+	 * This is a DESCRIPTION, not a gate. Nothing decides whether a call is
+	 * allowed by reading it: the rung decides which tools exist for this
+	 * token, and the database decides whether the write is permitted. It is
+	 * here for the annotations an MCP client shows and for the connect page.
+	 */
+	gate: 'read' | 'propose' | 'change';
 	/** For the readOnlyHint an MCP client shows. */
 	readOnly: boolean;
 	/**
@@ -152,7 +173,7 @@ function readTool(tool: Tool): McpTool {
 		title: titleFor(tool.name),
 		description: tool.description,
 		inputSchema: tool.jsonSchema,
-		scope: 'read',
+		gate: 'read',
 		readOnly: true,
 		/*
 		  The same schema the assistant declares, not a second copy of it. If
@@ -195,7 +216,7 @@ const listPendingApprovals: McpTool = {
 	description:
 		'Proposals waiting for a person to decide, newest first: what was proposed, which tool it would run, and the page to approve it on. Use it to check whether something you proposed has been decided yet. Ask for status "executed" to see the ones that went through.',
 	inputSchema: z.toJSONSchema(pendingSchema, { target: 'draft-2020-12', io: 'input' }) as Record<string, unknown>,
-	scope: 'read',
+	gate: 'read',
 	readOnly: true,
 	...outputOf(
 		z.union([
@@ -294,7 +315,7 @@ function proposeTool(gated: Tool): McpTool {
 			`Ask for this change instead of making it. It writes nothing: it creates a proposal that a person approves or rejects in the app, ` +
 			`and you get back the proposal's id and the page to approve it on. What it would do once approved: ${gated.description}`,
 		inputSchema: schemaWithSummary(gated),
-		scope: 'propose',
+		gate: 'propose',
 		readOnly: false,
 		...outputOf(
 			z.union([
@@ -333,26 +354,170 @@ function proposeTool(gated: Tool): McpTool {
 }
 
 // ---------------------------------------------------------------------------
-// The list
+// act tools: the same tool, under its own name, when the rung allows it
 // ---------------------------------------------------------------------------
 
-export const MCP_TOOLS: McpTool[] = [
+/**
+ * A gated or additive tool, offered under its own name.
+ *
+ * The `summary` is still required and still says why, for the same reason a
+ * proposal needs one: the record a person reads afterwards is worth nothing if
+ * it only says which function ran. At these rungs nobody is asked to approve,
+ * which makes the sentence more important rather than less.
+ *
+ * Everything that decides whether the call is allowed is in act.ts and in the
+ * database. This wrapper only shapes the input and the answer.
+ */
+function actTool(inner: Tool): McpTool {
+	const checkInnerInput = checkWith(inner);
+	const acting =
+		inner.risk === 'additive'
+			? 'It adds a row and changes nothing existing.'
+			: 'It makes the change for real, as you, with no approval step.';
+	return {
+		name: inner.name,
+		title: titleFor(inner.name),
+		description:
+			`${acting} It is bounded by what the person this token acts as may do: their authority and its ceiling, ` +
+			`the policy engine's cap, and the pause switch. At the act-with-review level there is also a window ` +
+			`in which a person can take it back. What it does: ${inner.description}`,
+		inputSchema: schemaWithSummary(inner),
+		gate: 'change',
+		readOnly: false,
+		...outputOf(
+			z.union([
+				z.looseObject({
+					acted: z.literal(true),
+					tool: z.string(),
+					level: z.string(),
+					/** Non-null only at act-with-review: when the window closes. */
+					undo_until: z.string().nullable(),
+					sampled: z.boolean(),
+					action_id: z.number()
+				}),
+				mcpRefusal
+			])
+		),
+		check: (input) => {
+			const shape = (input ?? {}) as Record<string, unknown>;
+			const summary = summarySchema.safeParse(shape.summary);
+			if (!summary.success) return { ok: false, message: `summary: ${summary.error.issues[0].message}` };
+			return checkInnerInput(withoutSummary(shape));
+		},
+		run: async (ctx, input) => {
+			const summary = summarySchema.parse(input.summary);
+			const outcome = await actFromMcp(ctx.db, ctx.userId, ctx.today, {
+				tool: inner.name,
+				toolInput: withoutSummary(input),
+				summary,
+				tokenLabel: ctx.tokenLabel,
+				autonomy: ctx.autonomy
+			});
+			return outcome.ok
+				? { payload: outcome.payload, isError: false, rows: null }
+				: {
+						payload: { error: outcome.message, acted: false, ...(outcome.code ? { code: outcome.code } : {}) },
+						isError: true,
+						rows: null
+					};
+		}
+	};
+}
+
+// ---------------------------------------------------------------------------
+// The list, which depends on the rung
+// ---------------------------------------------------------------------------
+
+const READ_TOOLS: McpTool[] = [
 	...TOOLS.filter((tool) => tool.risk === 'read').map(readTool),
-	listPendingApprovals,
-	...TOOLS.filter((tool) => tool.risk === 'gated').map(proposeTool)
+	listPendingApprovals
 ];
 
-const BY_NAME = new Map(MCP_TOOLS.map((tool) => [tool.name, tool]));
+const GATED = TOOLS.filter((tool) => tool.risk === 'gated');
+const ADDITIVE = TOOLS.filter((tool) => tool.risk === 'additive');
 
-export function findMcpTool(name: string): McpTool | undefined {
-	return BY_NAME.get(name);
+/**
+ * Built once per rung rather than per request. The three lists are pure
+ * functions of the registry, so building them on every tools/list would be
+ * the same answer computed again.
+ */
+const BY_LEVEL: Record<TokenLevel, McpTool[]> = {
+	// Exactly what this endpoint offered before there was a dial: reads, and
+	// gated tools as proposals. Nothing an existing token could call has moved.
+	suggest: [...READ_TOOLS, ...GATED.map(proposeTool)],
+	auto_review: [...READ_TOOLS, ...GATED.map(actTool), ...ADDITIVE.map(actTool)],
+	auto: [...READ_TOOLS, ...GATED.map(actTool), ...ADDITIVE.map(actTool)]
+};
+
+const INDEX: Record<TokenLevel, Map<string, McpTool>> = {
+	suggest: new Map(BY_LEVEL.suggest.map((tool) => [tool.name, tool])),
+	auto_review: new Map(BY_LEVEL.auto_review.map((tool) => [tool.name, tool])),
+	auto: new Map(BY_LEVEL.auto.map((tool) => [tool.name, tool]))
+};
+
+/** The tools this rung offers. What tools/list answers with, and nothing else. */
+export function toolsForLevel(level: TokenLevel): McpTool[] {
+	return BY_LEVEL[level] ?? BY_LEVEL.suggest;
 }
 
+/**
+ * The tool this rung knows by that name, or undefined.
+ *
+ * The rung is part of the lookup on purpose. A name that is not in this rung's
+ * list does not exist for this token, so there is no input that could make it
+ * run and no second check to forget: at suggest, `set_confidence` is simply
+ * not a tool, and `propose_set_confidence` is.
+ */
+export function findMcpTool(level: TokenLevel, name: string): McpTool | undefined {
+	return (INDEX[level] ?? INDEX.suggest).get(name);
+}
+
+/**
+ * Every tool this endpoint can ever offer, with the lowest rung it appears at
+ * under its own name. For the connect page, which has to describe the whole
+ * roster rather than one token's slice of it.
+ */
+export interface RosterEntry {
+	name: string;
+	title: string;
+	gate: McpTool['gate'];
+	readOnly: boolean;
+	/** The rung from which it is offered. Reads are offered at all of them. */
+	fromLevel: TokenLevel;
+}
+
+export const MCP_TOOL_ROSTER: RosterEntry[] = [
+	...READ_TOOLS.map((tool) => ({
+		name: tool.name,
+		title: tool.title,
+		gate: tool.gate,
+		readOnly: tool.readOnly,
+		fromLevel: 'suggest' as TokenLevel
+	})),
+	...GATED.map(proposeTool).map((tool) => ({
+		name: tool.name,
+		title: tool.title,
+		gate: tool.gate,
+		readOnly: tool.readOnly,
+		fromLevel: 'suggest' as TokenLevel
+	})),
+	...GATED.map(actTool).map((tool) => ({
+		name: tool.name,
+		title: tool.title,
+		gate: tool.gate,
+		readOnly: tool.readOnly,
+		fromLevel: 'auto_review' as TokenLevel
+	})),
+	...ADDITIVE.map(actTool).map((tool) => ({
+		name: tool.name,
+		title: tool.title,
+		gate: tool.gate,
+		readOnly: tool.readOnly,
+		fromLevel: 'auto_review' as TokenLevel
+	}))
+];
+
+/** Every name this endpoint can answer to, at any rung. */
 export function mcpToolNames(): string[] {
-	return MCP_TOOLS.map((tool) => tool.name);
-}
-
-/** The tools a token with these scopes may call. */
-export function toolsForScopes(scopes: readonly McpScope[]): McpTool[] {
-	return MCP_TOOLS.filter((tool) => scopes.includes(tool.scope));
+	return [...new Set(MCP_TOOL_ROSTER.map((tool) => tool.name))];
 }
