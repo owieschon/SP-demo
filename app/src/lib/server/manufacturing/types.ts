@@ -1,5 +1,5 @@
 // The shapes the manufacturing pages read. Every one of them comes straight
-// out of a view or a function in migrations 0031 to 0034; nothing is worked
+// out of a view or a function in migrations 0035 to 0038; nothing is worked
 // out in TypeScript, because the same figures have to be available to the
 // assistant and the order desk, which do not run this code.
 

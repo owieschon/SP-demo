@@ -2,7 +2,7 @@
 -- overhead pools, the material master, and a bill of materials and a routing
 -- for every part the plant actually makes.
 --
--- Migrations 0031 and 0032 added the tables and the two roll-ups. This file
+-- Migrations 0035 and 0036 added the tables and the two roll-ups. This file
 -- fills them for the catalogue that db/seed.sql already generated, which is
 -- the constraint that shapes everything here: the part numbers, the
 -- families, the descriptions and the costs already exist and are read by

@@ -1,7 +1,7 @@
--- 0034 Capacity in hours, and a shortage explained down to the metal.
+-- 0038 Capacity in hours, and a shortage explained down to the metal.
 --
 -- Two questions the forecast in 0016 cannot answer, because both of them
--- need the routings and the bills of material that 0031 added:
+-- need the routings and the bills of material that 0035 added:
 --
 --   1. Which cell is the bottleneck, in hours rather than in line counts? A
 --      work centre with four late orders and a work centre with four hundred
