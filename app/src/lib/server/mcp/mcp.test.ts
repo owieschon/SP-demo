@@ -1,5 +1,5 @@
-// The MCP server against a real database: the protocol, the token, the
-// scopes, the caps, and the promise that an outside agent cannot write.
+// The MCP server against a real database: the protocol, the token, the one
+// dial, the caps, and what each rung of that dial does and does not allow.
 //
 // One small world for the whole file, "today" pinned to 2026-09-17. The
 // fixtures are a customer, a part and a commitment whose window closed with
@@ -8,14 +8,23 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_LIMITS, readMcpLimits, type McpLimits } from './caps.ts';
 import { handleMcpPost, mcpGetResponse, mcpMetadata, SERVER_NAME } from './server.ts';
-import { hashToken, mintToken, newToken, readBearer, revokeToken, TOKEN_PREFIX } from './tokens.ts';
-import { findMcpTool, mcpToolNames, MCP_TOOLS } from './tools.ts';
+import {
+	hashToken,
+	mintToken,
+	newToken,
+	readBearer,
+	revokeToken,
+	setTokenLevel,
+	TOKEN_PREFIX
+} from './tokens.ts';
+import { findMcpTool, mcpToolNames, MCP_TOOL_ROSTER, toolsForLevel } from './tools.ts';
 import { createTestDb } from '../db/pglite.ts';
 import type { Db } from '../db/types.ts';
 
 const TODAY = '2026-09-17';
 const ADMIN = 1; // Elena Brooks
 const DANA = 2; // owns the fixtures
+const SAM = 3; // a second person, given a low ceiling on purpose
 const CUSTOMER = 'MC-HQ';
 const ITEM = 'MC-100';
 
@@ -25,10 +34,22 @@ const BIG: McpLimits = { perTokenPerDay: 100000 };
 let db: Db;
 /** A commitment whose window closed with nothing delivered. */
 let closedShort: number;
-let readWrite = '';
-let readOnly = '';
+/** At suggest, which is where every token starts and stays unless raised. */
+let suggesting = '';
+/** A second suggest-level token, for the tests that need two. */
+let alsoSuggesting = '';
+/** Raised to auto_review: it acts, and there is a window to undo it. */
+let acting = '';
+/** Raised to auto: it acts outright. */
+let acted = '';
+/** Raised to auto, but acting as somebody with a ceiling below the fixtures. */
+let capped_by_ceiling = '';
 let revoked = '';
 let capped = '';
+
+/** The token ids, for the tests that raise and lower a level. */
+let actingId = 0;
+let suggestingId = 0;
 
 let nextId = 1;
 
@@ -129,28 +150,89 @@ beforeAll(async () => {
 		             values (${closedShort}, ${ITEM}, 400)`;
 	});
 
-	// The tokens every test below uses. Minting is an admin's job.
-	readWrite = (
+	/*
+	  Dana may let an agent act for her. This is the ONE thing that has to be
+	  true before any token of hers can change anything, whatever its level:
+	  the authority is the roles model's own, granted with the same call that
+	  raises a person's approval ceiling, and it is left with no ceiling here
+	  so the ceiling test below can set one deliberately.
+	*/
+	await db.asUser(ADMIN, (tx) => tx.sql`
+		select nl.grant_authority(${DANA}, 'approve_agent_proposal', null, null, null,
+		                          'May let an agent act for her.', 'mcp-test-grant-dana', 'ui')`);
+
+	// The tokens every test below uses. Minting is an admin's job, and every
+	// one of them is minted at suggest, because that is the only level
+	// nl.mint_mcp_token can produce.
+	const first = await mintToken(db, ADMIN, {
+		label: 'Suggesting',
+		actsAs: DANA,
+		requestId: 'mcp-test-mint-suggest'
+	});
+	suggesting = first.secret;
+	suggestingId = first.tokenId;
+
+	alsoSuggesting = (
 		await mintToken(db, ADMIN, {
-			label: 'Read and propose',
+			label: 'Also suggesting',
 			actsAs: DANA,
-			scopes: ['read', 'propose'],
-			requestId: 'mcp-test-mint-both'
+			requestId: 'mcp-test-mint-suggest-2'
 		})
 	).secret;
-	readOnly = (
-		await mintToken(db, ADMIN, {
-			label: 'Read only',
-			actsAs: DANA,
-			scopes: ['read'],
-			requestId: 'mcp-test-mint-read'
-		})
-	).secret;
+
+	const second = await mintToken(db, ADMIN, {
+		label: 'Acting with a window',
+		actsAs: DANA,
+		requestId: 'mcp-test-mint-acting'
+	});
+	acting = second.secret;
+	actingId = second.tokenId;
+	await setTokenLevel(db, ADMIN, {
+		tokenId: second.tokenId,
+		level: 'auto_review',
+		note: 'For the tests that need a token that acts.',
+		requestId: 'mcp-test-raise-acting'
+	});
+
+	const third = await mintToken(db, ADMIN, {
+		label: 'Acting outright',
+		actsAs: DANA,
+		requestId: 'mcp-test-mint-acted'
+	});
+	acted = third.secret;
+	await setTokenLevel(db, ADMIN, {
+		tokenId: third.tokenId,
+		level: 'auto',
+		note: 'For the tests that need a token with no queue step.',
+		requestId: 'mcp-test-raise-acted'
+	});
+
+	/*
+	  A token at the top rung, acting as somebody whose ceiling is below the
+	  fixture commitment's 50,000. It exists to prove that the rung is not what
+	  bounds a change: the person's ceiling is.
+	*/
+	const fourth = await mintToken(db, ADMIN, {
+		label: 'Acting over a ceiling',
+		actsAs: SAM,
+		requestId: 'mcp-test-mint-ceiling'
+	});
+	capped_by_ceiling = fourth.secret;
+	await setTokenLevel(db, ADMIN, {
+		tokenId: fourth.tokenId,
+		level: 'auto',
+		note: 'Top rung, low ceiling.',
+		requestId: 'mcp-test-raise-ceiling'
+	});
+	await db.asUser(ADMIN, (tx) => tx.sql`
+		select nl.grant_authority(${SAM}, 'approve_agent_proposal', 1000, null, null,
+		                          'May let an agent act for him, up to 1000.',
+		                          'mcp-test-grant-sam', 'ui')`);
+
 	capped = (
 		await mintToken(db, ADMIN, {
 			label: 'Tiny daily cap',
 			actsAs: DANA,
-			scopes: ['read'],
 			requestId: 'mcp-test-mint-capped'
 		})
 	).secret;
@@ -158,7 +240,6 @@ beforeAll(async () => {
 	const doomed = await mintToken(db, ADMIN, {
 		label: 'Revoked already',
 		actsAs: DANA,
-		scopes: ['read', 'propose'],
 		requestId: 'mcp-test-mint-revoked'
 	});
 	revoked = doomed.secret;
@@ -179,7 +260,7 @@ describe('the protocol', () => {
 				capabilities: {},
 				clientInfo: { name: 'vitest', version: '1' }
 			}),
-			{ token: readWrite }
+			{ token: suggesting }
 		);
 
 		expect(answer.status).toBe(200);
@@ -191,13 +272,13 @@ describe('the protocol', () => {
 	});
 
 	it('answers ping', async () => {
-		const answer = await post(rpc('ping'), { token: readWrite });
+		const answer = await post(rpc('ping'), { token: suggesting });
 		expect(answer.status).toBe(200);
 		expect(answer.json.result).toEqual({});
 	});
 
 	it('lists every tool with a description and a JSON Schema', async () => {
-		const answer = await post(rpc('tools/list'), { token: readWrite });
+		const answer = await post(rpc('tools/list'), { token: suggesting });
 		expect(answer.status).toBe(200);
 
 		const tools = answer.json.result.tools as {
@@ -205,8 +286,16 @@ describe('the protocol', () => {
 			description: string;
 			inputSchema: { type?: string; properties?: Record<string, unknown> };
 		}[];
-		expect(tools.length).toBe(MCP_TOOLS.length);
-		expect(tools.map((tool) => tool.name).sort()).toEqual([...mcpToolNames()].sort());
+		// The list is this token's rung, not the whole roster: a suggest-level
+		// token sees the reads and the propose_ tools and nothing else.
+		expect(tools.length).toBe(toolsForLevel('suggest').length);
+		expect(tools.map((tool) => tool.name).sort()).toEqual(
+			toolsForLevel('suggest')
+				.map((tool) => tool.name)
+				.sort()
+		);
+		// Every name on the list is one this server can answer to.
+		for (const tool of tools) expect(mcpToolNames()).toContain(tool.name);
 
 		for (const tool of tools) {
 			expect(tool.description.length, `${tool.name} has no real description`).toBeGreaterThan(40);
@@ -215,8 +304,8 @@ describe('the protocol', () => {
 		}
 	});
 
-	it('does not list a tool that writes, under any name', async () => {
-		const answer = await post(rpc('tools/list'), { token: readWrite });
+	it('does not list a tool that writes to a token at suggest, under any name', async () => {
+		const answer = await post(rpc('tools/list'), { token: suggesting });
 		const names = (answer.json.result.tools as { name: string }[]).map((tool) => tool.name);
 
 		// The gated tools, the additive ones and the assistant's own plumbing.
@@ -237,34 +326,34 @@ describe('the protocol', () => {
 	});
 
 	it('answers an unknown method with -32601', async () => {
-		const answer = await post(rpc('tools/kaboom'), { token: readWrite });
+		const answer = await post(rpc('tools/kaboom'), { token: suggesting });
 		expect(answer.json.error.code).toBe(-32601);
 	});
 
 	it('answers a malformed request with a JSON-RPC error, not a stack trace', async () => {
-		const broken = await post('{ this is not json', { token: readWrite });
+		const broken = await post('{ this is not json', { token: suggesting });
 		expect(broken.status).toBe(400);
 		expect(broken.json.jsonrpc).toBe('2.0');
 		expect(broken.json.error.code).toBe(-32700);
 		expect(broken.text).not.toMatch(/\n\s+at /);
 
 		// Valid JSON that is not a JSON-RPC message.
-		const notRpc = await post({ hello: 'there' }, { token: readWrite });
+		const notRpc = await post({ hello: 'there' }, { token: suggesting });
 		expect(notRpc.json.error.code).toBe(-32700);
 		expect(notRpc.text).not.toMatch(/\n\s+at /);
 
 		// A tools/call with no tool named.
-		const noName = await post(rpc('tools/call', { arguments: {} }), { token: readWrite });
+		const noName = await post(rpc('tools/call', { arguments: {} }), { token: suggesting });
 		expect(noName.json.error.code).toBe(-32602);
 		expect(noName.text).not.toMatch(/\n\s+at /);
 	});
 
 	it('works from a client that only accepts JSON, and from one that sends no Accept at all', async () => {
-		const jsonOnly = await post(rpc('tools/list'), { token: readWrite, accept: 'application/json' });
+		const jsonOnly = await post(rpc('tools/list'), { token: suggesting, accept: 'application/json' });
 		expect(jsonOnly.status).toBe(200);
 		expect(jsonOnly.json.result.tools.length).toBeGreaterThan(0);
 
-		const none = await post(rpc('tools/list'), { token: readWrite });
+		const none = await post(rpc('tools/list'), { token: suggesting });
 		expect(none.status).toBe(200);
 	});
 
@@ -283,7 +372,7 @@ describe('the protocol', () => {
 
 describe('the token', () => {
 	it('lets a valid one read', async () => {
-		const answer = await callTool(readWrite, 'get_account', { customer_no: CUSTOMER });
+		const answer = await callTool(suggesting, 'get_account', { customer_no: CUSTOMER });
 		expect(answer.status).toBe(200);
 
 		const { isError, payload } = toolResult(answer);
@@ -326,7 +415,7 @@ describe('the token', () => {
 	});
 
 	it('never stores the token in plain text', async () => {
-		const secret = readWrite;
+		const secret = suggesting;
 		expect(secret.startsWith(TOKEN_PREFIX)).toBe(true);
 
 		// Every column of the table, as text, compared with the secret itself.
@@ -370,37 +459,354 @@ describe('the token', () => {
 
 // ---------------------------------------------------------------------------
 
-describe('scopes', () => {
-	it('refuses a propose tool to a read-only token with 403, and writes nothing', async () => {
+describe('the one dial', () => {
+	/*
+	  The claim this whole migration rests on: a token at suggest proposes and
+	  writes nothing, and the SAME token raised to act writes. Not two tokens,
+	  not two code paths. One dial.
+	*/
+	it('proposes and writes nothing at suggest, and writes once raised to act', async () => {
 		const before = await businessCounts();
 
-		const answer = await callTool(readOnly, 'propose_record_outcome', {
+		// At suggest, the tool does not exist under its own name.
+		const refused = await callTool(alsoSuggesting, 'set_confidence', {
 			commitment_id: closedShort,
-			outcome: 'pushed',
-			summary: 'The buyer moved it into the new year.'
+			confidence: 40,
+			summary: 'Delivery slipped, so the confidence should come down.'
+		});
+		expect(refused.json.error.code).toBe(-32602);
+		expect(refused.json.error.message).toContain('propose_set_confidence');
+
+		// The propose_ form does exist, and writes a proposal and nothing else.
+		const proposed = await callTool(alsoSuggesting, 'propose_set_confidence', {
+			commitment_id: closedShort,
+			confidence: 40,
+			summary: 'Delivery slipped, so the confidence should come down.'
+		});
+		expect(toolResult(proposed).payload.proposed).toBe(true);
+		const afterPropose = await businessCounts();
+		// A proposal and its conversation, and nothing in the business tables.
+		expect(afterPropose.commitments).toBe(before.commitments);
+		expect(afterPropose.outcomes).toBe(before.outcomes);
+		expect(afterPropose.activities).toBe(before.activities);
+		expect(afterPropose.proposals).toBe(before.proposals + 1);
+
+		// Raise that same token, through the same write that raises a person's
+		// approval ceiling, and the tool appears under its own name and acts.
+		await setTokenLevel(db, ADMIN, {
+			tokenId: suggestingId,
+			level: 'auto',
+			note: 'Trusted with confidence changes.',
+			requestId: 'mcp-test-raise-the-same-token'
 		});
 
-		expect(answer.status).toBe(403);
-		expect(answer.json.error.message).toContain('propose');
+		const acted_now = await callTool(suggesting, 'set_confidence', {
+			commitment_id: closedShort,
+			confidence: 35,
+			summary: 'Delivery slipped again.'
+		});
+		const { isError, payload } = toolResult(acted_now);
+		expect(isError, acted_now.text.slice(0, 400)).toBe(false);
+		expect(payload.acted).toBe(true);
+		expect(payload.level).toBe('auto');
+
+		const [after] = await db.asSystem(
+			(tx) => tx.sql<{ confidence: number }>`
+				select confidence from nl.commitments where id = ${closedShort}`
+		);
+		expect(after.confidence).toBe(35);
+
+		// Put it back, so the rest of the file sees a suggest-level token.
+		await setTokenLevel(db, ADMIN, {
+			tokenId: suggestingId,
+			level: 'suggest',
+			note: 'Back to proposing.',
+			requestId: 'mcp-test-lower-the-same-token'
+		});
+		const listed = await post(rpc('tools/list'), { token: suggesting });
+		const names = (listed.json.result.tools as { name: string }[]).map((t) => t.name);
+		expect(names).not.toContain('set_confidence');
+		expect(names).toContain('propose_set_confidence');
+	});
+
+	it('audits the write it made under the person the token acts as', async () => {
+		/*
+		  Every row the change wrote belongs to Dana, because the token acts as
+		  her. What says a human did not choose it is nl.agent_actions: the
+		  rung it acted at, her id as the actor, and the token's label in the
+		  detail.
+		*/
+		const [action] = await db.asSystem(
+			(tx) => tx.sql<{
+				agent: string;
+				work_kind: string;
+				at_level: string;
+				acted_by: number;
+				action: string;
+				undo_until: Date | null;
+				detail: Record<string, unknown>;
+			}>`
+				select agent, work_kind, at_level, acted_by, action, undo_until, detail
+				from nl.agent_actions
+				where agent = 'mcp' and action = 'set_confidence'
+				order by id desc limit 1`
+		);
+		expect(action).toBeTruthy();
+		expect(action.agent).toBe('mcp');
+		expect(action.work_kind).toBe('act');
+		expect(action.at_level).toBe('auto');
+		// Her id, not the admin's and not the token principal's.
+		expect(action.acted_by).toBe(DANA);
+		// At 'auto' there is no window: it went out at once.
+		expect(action.undo_until).toBeNull();
+		expect(action.detail.token_label).toBe('Suggesting');
+
+		// And the audit log names her as the actor for the same change.
+		const [audit] = await db.asSystem(
+			(tx) => tx.sql<{ n: number }>`
+				select count(*)::int as n from nl.audit_log
+				where action = 'agent_acted' and actor_id = ${DANA}`
+		);
+		expect(audit.n).toBeGreaterThan(0);
+	});
+
+	it('tells an agent the truth about what it can do right now', async () => {
+		// The same server, the same tool, two rungs, two answers.
+		const atSuggest = (
+			(await post(rpc('tools/list'), { token: alsoSuggesting })).json.result.tools as { name: string }[]
+		).map((t) => t.name);
+		const atAct = (
+			(await post(rpc('tools/list'), { token: acted })).json.result.tools as { name: string }[]
+		).map((t) => t.name);
+
+		expect(atSuggest).toContain('propose_record_outcome');
+		expect(atSuggest).not.toContain('record_outcome');
+
+		expect(atAct).toContain('record_outcome');
+		expect(atAct).not.toContain('propose_record_outcome');
+
+		// The additive pair was withheld at every level before there was a
+		// dial. It is offered at the acting rungs and not at suggest.
+		expect(atSuggest).not.toContain('add_note');
+		expect(atSuggest).not.toContain('add_next_step');
+		expect(atAct).toContain('add_note');
+		expect(atAct).toContain('add_next_step');
+
+		// The reads are the same at both.
+		for (const read of ['search_accounts', 'get_account', 'run_sql', 'list_pending_approvals']) {
+			expect(atSuggest).toContain(read);
+			expect(atAct).toContain(read);
+		}
+	});
+
+	it("refuses a request above the person's ceiling, and names the ceiling", async () => {
+		const before = await businessCounts();
+		const [was] = await db.asSystem(
+			(tx) => tx.sql<{ confidence: number }>`
+				select confidence from nl.commitments where id = ${closedShort}`
+		);
+
+		/*
+		  This token is at the TOP rung. What refuses it is not its level: it is
+		  that the person it acts as may let an agent act for them only up to
+		  1,000, and the commitment is worth 50,000.
+		*/
+		const answer = await callTool(capped_by_ceiling, 'set_confidence', {
+			commitment_id: closedShort,
+			confidence: 90,
+			summary: 'Trying to move a commitment worth more than the ceiling.'
+		});
+
+		const { isError, payload } = toolResult(answer);
+		expect(isError).toBe(true);
+		// The number is in the message, because "refused" on its own is not
+		// something anybody can act on.
+		expect(payload.error).toContain('1,000');
+		expect(payload.error).toContain('50,000');
+		// And it was NOT quietly downgraded to a proposal.
+		expect(payload.error).not.toContain('proposal at /ask');
 		expect(await businessCounts()).toEqual(before);
+
+		const [now] = await db.asSystem(
+			(tx) => tx.sql<{ confidence: number }>`
+				select confidence from nl.commitments where id = ${closedShort}`
+		);
+		expect(now.confidence).toBe(was.confidence);
 	});
 
-	it('shows a read-only token only the tools it can call', async () => {
-		const answer = await post(rpc('tools/list'), { token: readOnly });
-		const names = (answer.json.result.tools as { name: string }[]).map((tool) => tool.name);
-		expect(names).toContain('search_accounts');
-		expect(names.filter((name) => name.startsWith('propose_'))).toEqual([]);
+	it('refuses a paused agent at every level', async () => {
+		await db.asUser(ADMIN, (tx) => tx.sql`
+			select nl.set_agent_pause('mcp', true, 'Testing the brake.', 'mcp-test-pause-on')`);
+		const before = await businessCounts();
+
+		try {
+			// At suggest: the proposal is refused too. A queue nobody is working
+			// is not a safe place to pile work up while the brake is on.
+			const atSuggest = await callTool(alsoSuggesting, 'propose_record_outcome', {
+				commitment_id: closedShort,
+				outcome: 'pushed',
+				summary: 'While the brake is on.'
+			});
+			expect(toolResult(atSuggest).isError).toBe(true);
+
+			// At act with review.
+			const atReview = await callTool(acting, 'set_confidence', {
+				commitment_id: closedShort,
+				confidence: 10,
+				summary: 'While the brake is on.'
+			});
+			const review = toolResult(atReview);
+			expect(review.isError).toBe(true);
+			expect(review.payload.error).toContain('stopped');
+
+			// At act.
+			const atAct = await callTool(acted, 'add_note', {
+				customer_no: CUSTOMER,
+				body: 'While the brake is on.',
+				summary: 'While the brake is on.'
+			});
+			const act = toolResult(atAct);
+			expect(act.isError).toBe(true);
+			expect(act.payload.error).toContain('stopped');
+
+			// Reads still answer. A pause stops it acting, not seeing.
+			const read = await callTool(acted, 'get_account', { customer_no: CUSTOMER });
+			expect(toolResult(read).isError).toBe(false);
+
+			expect(await businessCounts()).toEqual(before);
+		} finally {
+			// Letting it go is an admin's, which is why this runs as ADMIN.
+			await db.asUser(ADMIN, (tx) => tx.sql`
+				select nl.set_agent_pause('mcp', false, '', 'mcp-test-pause-off')`);
+		}
 	});
 
-	it('records the refusal against the token', async () => {
+	it("raises a token's level through the same write as a person's limit", async () => {
+		/*
+		  Not "a similar write". The same one. nl.set_mcp_token_autonomy calls
+		  nl.grant_authority, which is what /people calls to raise somebody's
+		  approval ceiling, so the row, the audit entry and the effective
+		  dating are all the roles model's.
+		*/
+		await setTokenLevel(db, ADMIN, {
+			tokenId: actingId,
+			level: 'auto',
+			note: 'Earned it.',
+			requestId: 'mcp-test-raise-for-the-audit'
+		});
+
+		// The grant is an ordinary row in nl.authority_grants, on the token's
+		// own principal, with authority 'agent_autonomy' and level 3.
+		const [grant] = await db.asSystem(
+			(tx) => tx.sql<{ authority: string; limit_amount: string; kind: string; note: string }>`
+				select g.authority, g.limit_amount, u.kind, g.note
+				from nl.mcp_tokens t
+				join nl.authority_grants g on g.user_id = t.principal_id
+				join nl.users u on u.id = t.principal_id
+				where t.id = ${actingId}
+				  and g.authority = 'agent_autonomy'
+				  and g.starts_on <= nl.today()
+				  and (g.ends_on is null or g.ends_on >= nl.today())`
+		);
+		expect(grant.authority).toBe('agent_autonomy');
+		expect(Number(grant.limit_amount)).toBe(3);
+		// A principal, not a person.
+		expect(grant.kind).toBe('agent');
+		expect(grant.note).toBe('Earned it.');
+
+		// And the audit row is grant_authority's own, on entity 'user',
+		// exactly as it is when a person's ceiling is raised.
+		const [audit] = await db.asSystem(
+			(tx) => tx.sql<{ n: number }>`
+				select count(*)::int as n from nl.audit_log
+				where action = 'grant_authority'
+				  and request_id = 'mcp-test-raise-for-the-audit'
+				  and entity = 'user'`
+		);
+		expect(audit.n).toBe(1);
+
+		// Put it back where the rest of the file expects it.
+		await setTokenLevel(db, ADMIN, {
+			tokenId: actingId,
+			level: 'auto_review',
+			note: 'Back to a window.',
+			requestId: 'mcp-test-lower-for-the-audit'
+		});
+	});
+
+	it('has no scopes left to decide anything', async () => {
+		// The column is gone, so there is nothing to fall back to.
 		const [row] = await db.asSystem(
 			(tx) => tx.sql<{ n: number }>`
-				select count(*)::int as n
-				from nl.mcp_calls c
-				join nl.mcp_tokens t on t.id = c.token_id
-				where t.label = 'Read only' and c.outcome = 'refused' and c.note like '%scope%'`
+				select count(*)::int as n from information_schema.columns
+				where table_schema = 'nl' and table_name = 'mcp_tokens' and column_name = 'scopes'`
 		);
-		expect(row.n).toBeGreaterThan(0);
+		expect(row.n).toBe(0);
+	});
+});
+
+// ---------------------------------------------------------------------------
+
+describe('acting with a window', () => {
+	let actionId = 0;
+
+	it('makes the change and leaves it reversible inside the window', async () => {
+		const answer = await callTool(acting, 'add_next_step', {
+			customer_no: CUSTOMER,
+			title: 'Call the buyer about the winter run',
+			due_in_days: 3,
+			summary: 'The window closed short and nobody has called.'
+		});
+		const { isError, payload } = toolResult(answer);
+		expect(isError, answer.text.slice(0, 400)).toBe(false);
+		expect(payload.acted).toBe(true);
+		expect(payload.level).toBe('auto_review');
+		// A window, which is the whole difference between this rung and 'auto'.
+		expect(payload.undo_until).toBeTruthy();
+		expect(payload.sampled).toBe(false);
+		actionId = payload.action_id;
+
+		// The window came from the ladder, not from this code: it is the
+		// undo_window_minutes on nl.agent_autonomy for ('mcp','act_with_review').
+		const [row] = await db.asSystem(
+			(tx) => tx.sql<{ minutes: number; at_level: string; entity: string }>`
+				select a.undo_window_minutes as minutes, x.at_level, x.entity
+				from nl.agent_actions x
+				join nl.agent_autonomy a on a.agent = x.agent and a.work_kind = x.work_kind
+				where x.id = ${actionId}`
+		);
+		expect(row.at_level).toBe('auto_review');
+		expect(row.minutes).toBe(60);
+		expect(row.entity).toBe('mcp_change');
+	});
+
+	it('lets a person claim the undo while the window is open', async () => {
+		const [claim] = await db.asUser(DANA, (tx) => tx.sql<{ result: { action_id: number } }>`
+			select nl.claim_agent_undo(${actionId}, 'Not needed after all.',
+			                           'mcp-test-undo-claim') as result`);
+		expect(Number(claim.result.action_id)).toBe(actionId);
+		await db.asUser(DANA, (tx) => tx.sql`
+			select nl.finish_agent_undo(${actionId}, true, 'Taken back in the test.', false,
+			                            'mcp-test-undo-finish')`);
+	});
+
+	it('refuses the undo once the window has closed', async () => {
+		const answer = await callTool(acting, 'add_note', {
+			customer_no: CUSTOMER,
+			body: 'A note whose window will be pushed into the past.',
+			summary: 'For the closed-window test.'
+		});
+		const id = toolResult(answer).payload.action_id as number;
+
+		// Close the window by moving it behind us. The clock is the only thing
+		// being faked here; every check the undo makes is the real one.
+		await db.asSystem((tx) => tx.sql`
+			update nl.agent_actions set undo_until = now() - interval '1 minute' where id = ${id}`);
+
+		await expect(
+			db.asUser(DANA, (tx) => tx.sql`
+				select nl.claim_agent_undo(${id}, 'Too late.', 'mcp-test-undo-too-late') as result`)
+		).rejects.toThrow();
 	});
 });
 
@@ -418,13 +824,13 @@ describe('a gated tool', () => {
 			// The row version is never something a caller supplies, but try it.
 			{ commitment_id: closedShort, outcome: 'kept', expected_updated_at: version }
 		]) {
-			const answer = await callTool(readWrite, 'record_outcome', input);
+			const answer = await callTool(suggesting, 'record_outcome', input);
 			expect(answer.json.error.code).toBe(-32602);
 			expect(answer.json.error.message).toContain('propose');
 		}
 
 		for (const name of ['set_confidence', 'decide_export', 'save_automation_rule', 'propose_action', 'add_note']) {
-			const answer = await callTool(readWrite, name, { customer_no: CUSTOMER, body: 'hello' });
+			const answer = await callTool(suggesting, name, { customer_no: CUSTOMER, body: 'hello' });
 			expect(answer.json.error.code).toBe(-32602);
 		}
 
@@ -433,11 +839,20 @@ describe('a gated tool', () => {
 		expect(await businessCounts()).toEqual(before);
 	});
 
-	it('is not in the registry this server exposes', () => {
+	it('is not in the registry a suggest-level token sees', () => {
 		for (const name of ['record_outcome', 'set_confidence', 'decide_export', 'save_automation_rule']) {
-			expect(findMcpTool(name)).toBeUndefined();
-			expect(findMcpTool(`propose_${name}`)).toBeTruthy();
+			// Not a tool at all at suggest, and a tool at the acting rungs. The
+			// lookup takes the level, so there is no second check to forget.
+			expect(findMcpTool('suggest', name)).toBeUndefined();
+			expect(findMcpTool('suggest', `propose_${name}`)).toBeTruthy();
+			expect(findMcpTool('auto_review', name)).toBeTruthy();
+			expect(findMcpTool('auto', name)).toBeTruthy();
+			// And nothing is offered in both shapes at once.
+			expect(findMcpTool('auto', `propose_${name}`)).toBeUndefined();
 		}
+		// The roster the connect page draws names every shape exactly once.
+		const names = MCP_TOOL_ROSTER.map((tool) => `${tool.name}@${tool.fromLevel}`);
+		expect(new Set(names).size).toBe(names.length);
 	});
 });
 
@@ -451,7 +866,7 @@ describe('proposing a change', () => {
 		const version = await commitmentVersion(closedShort);
 		const before = await businessCounts();
 
-		const answer = await callTool(readWrite, 'propose_record_outcome', {
+		const answer = await callTool(suggesting, 'propose_record_outcome', {
 			commitment_id: closedShort,
 			outcome: 'pushed',
 			note: 'The buyer moved it into the new year.',
@@ -531,7 +946,7 @@ describe('proposing a change', () => {
 	});
 
 	it('shows up in list_pending_approvals with the page to approve it on', async () => {
-		const answer = await callTool(readWrite, 'list_pending_approvals', {});
+		const answer = await callTool(suggesting, 'list_pending_approvals', {});
 		const { payload } = toolResult(answer);
 
 		const mine = payload.rows.find((row: { proposal_id: number }) => row.proposal_id === proposalId);
@@ -543,7 +958,7 @@ describe('proposing a change', () => {
 	});
 
 	it('refuses to propose something about a record that is not there', async () => {
-		const answer = await callTool(readWrite, 'propose_set_confidence', {
+		const answer = await callTool(suggesting, 'propose_set_confidence', {
 			commitment_id: 999999,
 			confidence: 40,
 			summary: 'Two quotes are out and the buyer has gone quiet.'
@@ -556,7 +971,7 @@ describe('proposing a change', () => {
 	});
 
 	it('refuses an input that does not fit the tool it names', async () => {
-		const answer = await callTool(readWrite, 'propose_record_outcome', {
+		const answer = await callTool(suggesting, 'propose_record_outcome', {
 			commitment_id: closedShort,
 			outcome: 'maybe',
 			summary: 'Not one of the three answers.'
@@ -566,7 +981,7 @@ describe('proposing a change', () => {
 	});
 
 	it('refuses a proposal with no reason for a person to read', async () => {
-		const answer = await callTool(readWrite, 'propose_record_outcome', {
+		const answer = await callTool(suggesting, 'propose_record_outcome', {
 			commitment_id: closedShort,
 			outcome: 'pushed'
 		});
@@ -579,7 +994,7 @@ describe('proposing a change', () => {
 
 describe('the SQL tool', () => {
 	async function sql(query: string) {
-		return toolResult(await callTool(readWrite, 'run_sql', { sql: query, why: 'a test' }));
+		return toolResult(await callTool(suggesting, 'run_sql', { sql: query, why: 'a test' }));
 	}
 
 	it('answers a real question', async () => {
@@ -631,7 +1046,7 @@ describe('the SQL tool', () => {
 
 describe('the caps', () => {
 	it('truncates a result over 16 KB and says so', async () => {
-		const answer = await callTool(readWrite, 'run_sql', {
+		const answer = await callTool(suggesting, 'run_sql', {
 			// About 90 KB of rows, which is comfortably over the cap.
 			sql: `select i, repeat('x', 200) as pad from generate_series(1, 400) i`,
 			why: 'a result too big to send'
@@ -710,7 +1125,7 @@ describe('the log', () => {
 				select action, via, actor_id from nl.audit_log
 				where entity = 'mcp_token' order by id`
 		);
-		expect(rows.filter((row) => row.action === 'mint_mcp_token').length).toBe(4);
+		expect(rows.filter((row) => row.action === 'mint_mcp_token').length).toBe(7);
 		expect(rows.filter((row) => row.action === 'revoke_mcp_token').length).toBe(1);
 		for (const row of rows) {
 			expect(row.via).toBe('ui');
