@@ -64,5 +64,7 @@ export const routes = {
 	signin: () => '/signin',
 	/** Who is responsible for what, what they may approve, and what they may see. */
 	people: () => '/people',
+	/** What each agent did, what it refused, and how far it may go on its own. */
+	agents: (agent?: string) => (agent ? `/agents?agent=${encodeURIComponent(agent)}` : '/agents'),
 	search: (q?: string) => (q ? `/search?q=${encodeURIComponent(q)}` : '/search')
 } as const;

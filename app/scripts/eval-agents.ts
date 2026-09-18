@@ -116,6 +116,37 @@ writeFileSync(
 );
 console.log(`\nReport: ${file}`);
 
+// The same summary as a machine-readable file, so /agents can show what the
+// runner reported without re-running four suites on a page load (the desk and
+// assistant suites need a built world, which takes minutes). It holds only
+// the numbers summarize() produced, so the page and this script cannot
+// disagree about a pass count.
+//
+// Written only on a whole run: a --suite= run would leave the other three
+// suites looking as though they had vanished.
+if (only === null) {
+	const latest = join(dir, 'latest.json');
+	writeFileSync(
+		latest,
+		`${JSON.stringify(
+			{
+				ranOn: date,
+				suites: runs.map((run) => ({
+					suite: run.summary.suite,
+					cases: run.summary.cases,
+					passed: run.summary.passed,
+					fields: Object.fromEntries(
+						Object.entries(run.summary.fields).map(([field, score]) => [field, score.f1])
+					)
+				}))
+			},
+			null,
+			2
+		)}\n`
+	);
+	console.log(`Latest run: ${latest}`);
+}
+
 if (writeBaseline) {
 	if (only !== null) {
 		console.error('A baseline is written from a whole run. Drop --suite= and try again.');
