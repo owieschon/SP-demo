@@ -86,7 +86,13 @@
 				reason="Only an admin can mint a token, so these are off for you. Ask an admin for one with your name on it, or ask them to make you an admin of this deployment."
 			/>
 			{#if form?.from === 'connect' && form.secret}
-				<p class="notice" role="status">{form.message}</p>
+				<!-- The block itself is in that provider's panel below, so the
+				     message carries a link to it rather than leaving somebody on a
+				     phone to scroll and guess which panel changed. -->
+				<p class="notice" role="status">
+					<span>{form.message}</span>
+					<a class="button" href={`#provider-${connected}`}>Go to the block</a>
+				</p>
 			{/if}
 			<p class="faint small">
 				Claude Code, Cursor and Codex are third party tools. The marks above are ours, drawn to
@@ -125,7 +131,7 @@
 	{#each data.providers as provider (provider.id)}
 		{@const block = assembleConfig(provider.id, { endpoint: data.endpoint, secret })}
 		{@const link = deepLink(provider.id, { endpoint: data.endpoint, secret })}
-		<section class="panel" class:fresh={connected === provider.id}>
+		<section class="panel" class:fresh={connected === provider.id} id={`provider-${provider.id}`}>
 			<div class="panel-head">
 				<h2><ProviderMark provider={provider.id} /> {provider.name}</h2>
 				{#if connected === provider.id}
@@ -379,6 +385,12 @@
 
 	.fresh {
 		border-color: color-mix(in srgb, var(--warning) 35%, transparent);
+	}
+
+	/* A notice with a link in it wraps on a phone rather than squeezing both. */
+	.notice {
+		justify-content: space-between;
+		flex-wrap: wrap;
 	}
 
 	/* A provider panel's title carries its mark, so the two sit on one line. */
