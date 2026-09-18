@@ -743,6 +743,49 @@ describe('the one dial', () => {
 		);
 		expect(row.n).toBe(0);
 	});
+
+	it("reads the company's cap from the policy engine, and not before one is set", async () => {
+		/*
+		  agents.approval_threshold is the policy type 0034 wrote for "the value
+		  up to which an agent may act without a person". Its built-in default
+		  is 0, and a 0 that came from the built-in means unwired rather than
+		  zero dollars, so nothing is capped until somebody sets a policy.
+		*/
+		const [unset] = await db.asUser(DANA, (tx) => tx.sql<{ cap: string | null }>`
+			select nl.mcp_policy_cap('set_confidence',
+			                         jsonb_build_object('commitment_id', ${closedShort})) as cap`);
+		expect(unset.cap).toBeNull();
+
+		// Set one, company wide, below the fixture commitment's 50,000.
+		await db.asUser(ADMIN, (tx) => tx.sql`
+			select nl.set_policy(null, 'agents.approval_threshold', 'global', '',
+			                     '2500'::jsonb, nl.today(), null, 0,
+			                     'An agent may act on up to 2,500 without a person.',
+			                     null, 'mcp-test-policy-cap')`);
+
+		try {
+			const [set] = await db.asUser(DANA, (tx) => tx.sql<{ cap: string }>`
+				select nl.mcp_policy_cap('set_confidence',
+				                         jsonb_build_object('commitment_id', ${closedShort})) as cap`);
+			expect(Number(set.cap)).toBe(2500);
+
+			// Dana has no ceiling of her own, and her token is at the top rung,
+			// so the only thing that can refuse this is the policy.
+			const answer = await callTool(acted, 'set_confidence', {
+				commitment_id: closedShort,
+				confidence: 80,
+				summary: 'Trying to move a commitment worth more than the company cap.'
+			});
+			const { isError, payload } = toolResult(answer);
+			expect(isError).toBe(true);
+			expect(payload.error).toContain('2,500');
+			expect(payload.error).toContain('agents.approval_threshold');
+		} finally {
+			// Back to unset, so the rest of the file is not capped.
+			await db.asSystem((tx) => tx.sql`
+				delete from nl.policies where policy_type = 'agents.approval_threshold'`);
+		}
+	});
 });
 
 // ---------------------------------------------------------------------------
