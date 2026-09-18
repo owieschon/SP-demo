@@ -1,6 +1,6 @@
 // What the policy engine hands back, shared by the server and the pages.
 //
-// Every one of these is worked out in the database (migration 0031) and only
+// Every one of these is worked out in the database (migration 0034) and only
 // renamed on the way through, so a page, the assistant and an MCP client all
 // see the same answer and the same explanation.
 

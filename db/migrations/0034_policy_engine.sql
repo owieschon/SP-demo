@@ -1,8 +1,8 @@
--- 0031 The policy engine and the data dictionary: one home for the business
+-- 0034 The policy engine and the data dictionary: one home for the business
 -- rules that were scattered through the migrations as literals, and one
 -- machine-readable description of every field a person or an agent reads.
 --
--- Why this exists. By migration 0030 the same kind of decision was written in
+-- Why this exists. By migration 0033 the same kind of decision was written in
 -- six different ways: 0.95 inside nl.kept_ratio(), 0.40 and 14 inside 0010,
 -- 3 inside 0016, 0.20 inside nl.min_margin(), a free freight threshold on a
 -- period table, and "30" pasted into the RFQ approval path. Each was correct
@@ -39,10 +39,12 @@
 --   nl.data_dictionary_gaps  a column nobody documented, or a documented
 --                          field that is not a column any more
 --
--- Four rules move here in this migration (freight terms and the free freight
--- threshold, the margin floor, quote validity, allocation priority). Each
--- keeps its old function as a thin wrapper that resolves with a global
--- context, so every existing caller gets the same answer it got yesterday.
+-- Five rules move here in this migration: freight terms and the free freight
+-- threshold, the margin floor, quote validity, allocation priority, and the
+-- percentile a lead time promise covers (0032 left that seam open on purpose
+-- and said so in a comment). Each keeps its old function as a thin wrapper
+-- that resolves with a global context, so every existing caller gets the same
+-- answer it got yesterday.
 -- A wrapper is a migration step, not the destination; docs/policy-engine.md
 -- lists the call sites still to move.
 --
@@ -318,7 +320,7 @@ create table nl.policy_types (
 );
 
 comment on table nl.policy_types is
-  'Which policies exist: shape, unit, the scopes each may be set at, its default, and who may change it (migration 0031).';
+  'Which policies exist: shape, unit, the scopes each may be set at, its default, and who may change it (migration 0034).';
 
 -- ---------------------------------------------------------------------------
 -- The policies people set
@@ -351,7 +353,7 @@ create table nl.policies (
 );
 
 comment on table nl.policies is
-  'One policy value at one scope for one window. nl.resolve_policy() decides which of them wins (migration 0031).';
+  'One policy value at one scope for one window. nl.resolve_policy() decides which of them wins (migration 0034).';
 
 -- The lookup nl.resolve_policy() makes, in the order it makes it: the type,
 -- then each candidate scope, newest window first. The included columns mean
@@ -1133,7 +1135,7 @@ join nl.policy_types t on t.key = p.policy_type
 left join nl.users u on u.id = p.set_by;
 
 comment on view nl.policy_list is
-  'Policies with their type, scope label, value in words and whether they are in force today (migration 0031).';
+  'Policies with their type, scope label, value in words and whether they are in force today (migration 0034).';
 
 -- ---------------------------------------------------------------------------
 -- Moved rule 1 of 4: the margin floor
@@ -1149,7 +1151,7 @@ set search_path = ''
 as $$ select nl.policy_number('commercial.min_margin', '{}'::jsonb) $$;
 
 comment on function nl.min_margin() is
-  'The company-wide margin floor. A thin wrapper over the commercial.min_margin policy; use nl.min_margin_for() where the account and the part are known (migration 0031).';
+  'The company-wide margin floor. A thin wrapper over the commercial.min_margin policy; use nl.min_margin_for() where the account and the part are known (migration 0034).';
 
 -- The floor for one account and one part, which is the version a quoting
 -- screen wants: a family that never goes below a third, or an account with an
@@ -1242,7 +1244,7 @@ as $$
     limit 1
   ) p
   -- A policy wins when there is one. When there is not, the tariff period is
-  -- the answer, which is what this was before 0031, so a database with no
+  -- the answer, which is what this was before 0034, so a database with no
   -- policy rows in it at all behaves exactly as it used to.
   cross join lateral (
     select
@@ -1293,7 +1295,7 @@ as $$
 $$;
 
 comment on function nl.freight_for(numeric, date) is
-  'Freight for a shipment of this size on this date, company-wide. A thin wrapper over nl.freight_quote(); pass the account to that one to get its own terms and threshold (migration 0031).';
+  'Freight for a shipment of this size on this date, company-wide. A thin wrapper over nl.freight_quote(); pass the account to that one to get its own terms and threshold (migration 0034).';
 
 -- ---------------------------------------------------------------------------
 -- Moved rule 3 of 4: how long a quote holds
@@ -1404,7 +1406,7 @@ select
 from allocated a;
 
 comment on view nl.allocation_plan is
-  'Open lines with stock allocated by the fulfilment.allocation_priority policy first and ship date second (migration 0031).';
+  'Open lines with stock allocated by the fulfilment.allocation_priority policy first and ship date second (migration 0034).';
 
 -- What the priority list actually changes: only the lines that got a
 -- different quantity than ship-date order would have given them. This is the
@@ -1432,7 +1434,89 @@ join nl.open_line_allocation o
 where p.allocated <> o.allocated;
 
 comment on view nl.allocation_priority_effect is
-  'The lines the allocation priority policy moves, against plain ship-date order (migration 0031).';
+  'The lines the allocation priority policy moves, against plain ship-date order (migration 0034).';
+
+-- ---------------------------------------------------------------------------
+-- Moved rule 5 of 5: which percentile a promise uses
+-- ---------------------------------------------------------------------------
+
+/*
+ * Migration 0032 left the seam open and said so: both of these functions read
+ * a session setting first and fall back to a constant, with a comment saying
+ * a policy engine should decide it instead. This is that engine, so they now
+ * read a policy, and the fallback constant is the policy type's default.
+ *
+ * The session setting stays ahead of the policy. It is how 0032 pins a figure
+ * inside one test, and taking it away would break a hook somebody wrote on
+ * purpose.
+ *
+ * The scoped versions are the ones worth having: a vendor whose deliveries
+ * wander needs a promise that covers more of the tail than one whose
+ * deliveries do not, and that is a sentence about that vendor rather than
+ * about the company.
+ */
+create or replace function nl.promise_percentile() returns numeric
+language sql stable
+set search_path = ''
+as $$
+  select coalesce(
+    (select nullif(current_setting('nl.promise_percentile', true), '')::numeric),
+    nl.policy_number('operations.promise_percentile', '{}'::jsonb))
+$$;
+
+comment on function nl.promise_percentile() is
+  'Which percentile of the observed spread a promise covers, company-wide. A thin wrapper over the operations.promise_percentile policy (migration 0034).';
+
+create or replace function nl.promise_min_receipts() returns int
+language sql stable
+set search_path = ''
+as $$
+  select coalesce(
+    (select nullif(current_setting('nl.promise_min_receipts', true), '')::int),
+    nl.policy_int('operations.promise_min_receipts', '{}'::jsonb))
+$$;
+
+comment on function nl.promise_min_receipts() is
+  'How many receipts a vendor and part need before the observed lead time is trusted. A thin wrapper over the operations.promise_min_receipts policy (migration 0034).';
+
+-- The same two for one vendor and one part, which is what nl.promise_lead_days()
+-- should ask once it carries the pair into the question.
+create function nl.promise_percentile_for(p_vendor_no text, p_item_no text) returns numeric
+language sql stable
+set search_path = ''
+as $$
+  select coalesce(
+    (select nullif(current_setting('nl.promise_percentile', true), '')::numeric),
+    nl.policy_number('operations.promise_percentile', jsonb_strip_nulls(jsonb_build_object(
+      'vendor_no', p_vendor_no, 'item_no', p_item_no))))
+$$;
+
+create function nl.promise_min_receipts_for(p_vendor_no text, p_item_no text) returns int
+language sql stable
+set search_path = ''
+as $$
+  select coalesce(
+    (select nullif(current_setting('nl.promise_min_receipts', true), '')::int),
+    nl.policy_int('operations.promise_min_receipts', jsonb_strip_nulls(jsonb_build_object(
+      'vendor_no', p_vendor_no, 'item_no', p_item_no))))
+$$;
+
+-- 0032 declared this immutable while it already read a session setting. Now
+-- that the percentile behind it reads a table, immutable is a promise this
+-- function cannot keep, so it becomes stable. Nothing indexes it, and stable
+-- is what every caller needed anyway.
+create or replace function nl.observed_promise_days(p_median numeric, p_p90 numeric) returns numeric
+language sql stable
+set search_path = ''
+as $$
+  select case
+    when p_p90 is null then p_median
+    when nl.promise_percentile() >= 0.90 then p_p90
+    when nl.promise_percentile() <= 0.50 then p_median
+    -- Straight line between the two published points.
+    else p_median + (p_p90 - p_median) * (nl.promise_percentile() - 0.50) / 0.40
+  end
+$$;
 
 -- ---------------------------------------------------------------------------
 -- What a policy would have done: backtesting the margin floor
@@ -1530,7 +1614,7 @@ as $$
 $$;
 
 comment on function nl.margin_floor_backtest(numeric, date, date) is
-  'What a proposed margin floor would have done to a window of the ledger, per account: what was under it, and what holding to it would have added (migration 0031).';
+  'What a proposed margin floor would have done to a window of the ledger, per account: what was under it, and what holding to it would have added (migration 0034).';
 
 -- ---------------------------------------------------------------------------
 -- The data dictionary
@@ -1556,7 +1640,7 @@ create table nl.data_dictionary (
 );
 
 comment on table nl.data_dictionary is
-  'Every field a person or an agent reads: what it means, its unit, where it comes from, and whether it may leave the building (migration 0031).';
+  'Every field a person or an agent reads: what it means, its unit, where it comes from, and whether it may leave the building (migration 0034).';
 
 create index data_dictionary_entity_idx on nl.data_dictionary (entity);
 
@@ -1595,7 +1679,7 @@ as $$
 $$;
 
 comment on function nl.describe_data(text) is
-  'The data dictionary as rows: every documented field of every documented table, in column order (migration 0031).';
+  'The data dictionary as rows: every documented field of every documented table, in column order (migration 0034).';
 
 /*
  * Where the dictionary and the schema disagree. Three ways they can:
@@ -1637,7 +1721,7 @@ where not exists (
   select 1 from columns c where c.entity = d.entity and c.field = d.field);
 
 comment on view nl.data_dictionary_gaps is
-  'Columns nobody documented, and documented fields that are not columns any more. The tests require it to be empty (migration 0031).';
+  'Columns nobody documented, and documented fields that are not columns any more. The tests require it to be empty (migration 0034).';
 
 -- ---------------------------------------------------------------------------
 -- Access
@@ -1702,6 +1786,8 @@ grant execute on function
   nl.quote_valid_days(text),
   nl.allocation_priority(text),
   nl.margin_floor_backtest(numeric, date, date),
+  nl.promise_percentile_for(text, text),
+  nl.promise_min_receipts_for(text, text),
   nl.describe_data(text)
 to nl_app, nl_readonly;
 
@@ -2145,6 +2231,20 @@ begin
    array['global', 'vendor']::text[],
    '{"purchase": 28, "assembly": 7, "other": 14}'::jsonb,
    'nothing yet: nl.default_lead_days() still has these written in', false, 'operations'),
+
+  ('operations.promise_percentile', 'operations', 'Which percentile a promise uses',
+   'How much of the observed spread of a lead time a customer-facing promise covers. The ninetieth means nine deliveries in ten landed by then.',
+   'number', array[]::text[], 0.5, 0.99, '{}'::jsonb, 'ratio',
+   array['global', 'vendor', 'item', 'item_family']::text[],
+   '0.90'::jsonb,
+   'nl.promise_percentile(), and nl.promise_lead_days() through it', true, 'operations'),
+
+  ('operations.promise_min_receipts', 'operations', 'Receipts before we trust the history',
+   'How many receipts a vendor and part need before the observed lead time is trusted over the lead time the vendor quotes.',
+   'integer', array[]::text[], 1, 50, '{}'::jsonb, '',
+   array['global', 'vendor', 'item']::text[],
+   '4'::jsonb,
+   'nl.promise_min_receipts(), and nl.promise_lead_days() through it', true, 'operations'),
 
   -- Agents -------------------------------------------------------------------
   ('agents.disclosure_level', 'agents', 'How far a desk may go',

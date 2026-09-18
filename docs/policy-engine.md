@@ -24,7 +24,7 @@ By migration 0030 the same kind of decision was written six different ways:
 Every one of them was correct. None could be changed without a deploy, set
 differently for one account, or explained to the person looking at the number.
 
-Migration 0031 gives them a home.
+Migration 0034 gives them a home.
 
 ## What a policy is, and what it is not
 
@@ -216,7 +216,7 @@ is worked out once and the table read once, and that is what
 small table and the big one rather than an absolute time, so it fails when the
 plan regresses and not when the laptop is busy.
 
-## The four rules that moved
+## The five rules that moved
 
 Each one keeps its old function as a thin wrapper that resolves with a global
 context, so every existing caller gets the answer it got yesterday. **A
@@ -268,7 +268,7 @@ on the customer card with nothing reading it.
 | Scopes | none | everyone, price group, account |
 | Recorded | nothing | the audit row carries `valid_days` and the sentence that explains it |
 
-`nl.approve_rfq_draft()` is re-created in 0031, one line changed, because
+`nl.approve_rfq_draft()` is re-created in 0034, one line changed, because
 Postgres replaces a function rather than patching it. Diff it against 0011
 before changing anything in it.
 
@@ -290,6 +290,50 @@ is somebody else's migration rather than a side effect of this one.
 `/policies/allocation` shows the lines that get a different quantity than
 plain ship-date order would have given them, with the reason each one moved,
 and says out loud that a priority does not make stock: it decides who waits.
+
+### 5. Which percentile a lead time promise uses
+
+| | Before | After |
+|---|---|---|
+| The rule | `nl.promise_percentile()` returns 0.90, `nl.promise_min_receipts()` returns 4 | `operations.promise_percentile` and `operations.promise_min_receipts` |
+| Scopes | none | everyone, vendor, part, family |
+| The old functions | a session setting, then a constant | a session setting, then the policy |
+
+Migration 0032 left this seam open and said so in a comment: both functions
+read a session setting first and fall back to a constant, with "a policy
+engine, if this database has one, decides it instead" written above them. The
+session setting still comes first, because it is a hook somebody wrote on
+purpose to pin a figure inside a test.
+
+A test changes the policy from 0.90 to 0.50 and watches a part's promised lead
+time fall from its ninetieth percentile to its median, which is the shortest
+demonstration in this branch that the app reads the policy rather than a
+constant.
+
+`nl.observed_promise_days()` was declared immutable in 0032 while already
+reading a session setting. Now that the percentile behind it reads a table,
+immutable is a promise it cannot keep, so 0034 relaxes it to stable. Nothing
+indexes it.
+
+`nl.promise_lead_days()` still asks the company-wide question.
+`nl.promise_percentile_for(vendor, part)` is there for when it carries the
+pair into the question, which is the version worth having: a vendor whose
+deliveries wander needs a promise that covers more of the tail than one whose
+deliveries do not.
+
+## Who may change a policy
+
+Each policy type names an `edit_role`, and `nl.set_policy()` refuses anybody
+who does not hold it (an admin holds all of them). The whole rule is one
+function, `nl.policy_role_allows(edit_role, actor_role)`, called from exactly
+two places.
+
+That is deliberately a seam rather than a mechanism. The roles branch adds
+`nl.has_authority()` and an authority called `change_policy`, and when it
+lands the right change here is to replace the body of that one function with
+a `change_policy` check, keeping `edit_role` as the thing that says which
+policies a role may touch. It was not on `origin/main` when this branch was
+written, so gating on it would have made this migration fail to apply.
 
 ## Backtesting a policy
 
@@ -354,11 +398,17 @@ have the number written in, in the order worth doing them:
 8. The automation rule builder: let a condition's threshold be a policy key
    rather than a number, so one rule can mean different things for different
    tiers.
-9. The agent harness (`nl.agent_autonomy`): `agents.approval_threshold` and
-   `agents.daily_cap` are declared here and decided there.
+9. The agent harness (`nl.agent_autonomy`, migration 0028):
+   `agents.approval_threshold` and `agents.daily_cap` are declared here and
+   decided there.
 10. The desk's disclosure policy (`app/src/lib/server/desk/policy.ts` and
     `nl.mailboxes.disclosure`): `agents.disclosure_level` is declared here and
     decided there.
+
+11. `nl.promise_lead_days()` asks the company-wide percentile: give it the
+    vendor and the part so `nl.promise_percentile_for()` can answer.
+12. `nl.policy_role_allows()`: replace its body with a `change_policy`
+    authority check once the roles branch lands (see above).
 
 Each of those is a small change plus a test that the answer did not move.
 

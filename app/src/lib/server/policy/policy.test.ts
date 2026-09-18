@@ -123,14 +123,17 @@ describe('the catalog', () => {
 	it('says what reads each policy, and refuses to be edited where nothing does', async () => {
 		const types = await listPolicyTypes(db, DANA);
 		const moved = types.filter((type) => type.readBy !== '' && !type.readBy.startsWith('nothing yet'));
-		// The four this migration moved, plus the freight terms that came with
-		// the free freight threshold.
+		// The five this migration moved, plus the freight terms that came with
+		// the free freight threshold and the receipt count that comes with the
+		// promise percentile.
 		expect(moved.map((type) => type.key).sort()).toEqual([
 			'commercial.min_margin',
 			'commercial.quote_valid_days',
 			'freight.free_over',
 			'freight.terms',
-			'fulfilment.allocation_priority'
+			'fulfilment.allocation_priority',
+			'operations.promise_min_receipts',
+			'operations.promise_percentile'
 		]);
 		// A policy whose old hard-coded reader has not moved is not editable,
 		// because editing it would change a number on screen and nothing else.
@@ -581,6 +584,87 @@ describe('moved rule 1: the margin floor', () => {
 		// Still cost / (1 - 0.20), not cost / (1 - 0.50). Documented as a gap
 		// rather than papered over: see docs/policy-engine.md.
 		expect(priced.floor_price).toBeCloseTo(Math.round((priced.unit_cost / 0.8) * 100) / 100, 2);
+	});
+});
+
+describe('moved rule 5: which percentile a promise uses', () => {
+	/** A part with enough receipts for the observed figure to be in use. */
+	async function partWithHistory(): Promise<{ item_no: string; median: number; p90: number }> {
+		return one<{ item_no: string; median: number; p90: number }>(
+			`select p.item_no, p.median_days as median, p.p90_days as p90
+			 from (
+			   select r.item_no
+			   from nl.purchase_receipts r
+			   group by r.item_no
+			   having count(*) >= 6
+			   order by count(*) desc, r.item_no
+			   limit 10
+			 ) picked
+			 cross join lateral nl.promise_lead_days(picked.item_no) p
+			 where p.basis = 'observed'
+			   and p.p90_days > p.median_days
+			 order by p.p90_days - p.median_days desc, p.item_no
+			 limit 1`
+		);
+	}
+
+	it('still promises the ninetieth percentile when nothing is set', async () => {
+		const [row] = await db.asSystem((tx) =>
+			tx.sql<{ percentile: number; receipts: number }>`
+				select nl.promise_percentile() as percentile, nl.promise_min_receipts() as receipts`
+		);
+		expect(Number(row.percentile)).toBe(0.9);
+		expect(row.receipts).toBe(4);
+	});
+
+	it('changes the promise when the policy changes', async () => {
+		const part = await partWithHistory();
+		// Nothing arranged: the ninetieth percentile, which is the p90 figure.
+		const before = await one<{ lead_days: number }>(
+			`select lead_days from nl.promise_lead_days($1)`,
+			[part.item_no]
+		);
+
+		// The company decides a median promise is enough. This is the whole
+		// point of the engine: the number moves and no code is deployed.
+		await arrange([{ type: 'operations.promise_percentile', scopeKind: 'global', value: 0.5 }]);
+		const after = await one<{ lead_days: number }>(
+			`select lead_days from nl.promise_lead_days($1)`,
+			[part.item_no]
+		);
+
+		expect(Number(before.lead_days)).toBe(Math.round(Number(part.p90)));
+		expect(Number(after.lead_days)).toBe(Math.round(Number(part.median)));
+		expect(Number(after.lead_days)).toBeLessThan(Number(before.lead_days));
+	});
+
+	it('can be set for one vendor, which the constant could not', async () => {
+		const vendor = (
+			await one<{ vendor_no: string }>(
+				`select vendor_no from nl.purchase_receipts group by vendor_no
+				 order by count(*) desc, vendor_no limit 1`
+			)
+		).vendor_no;
+		await arrange([
+			{ type: 'operations.promise_percentile', scopeKind: 'vendor', scopeId: vendor, value: 0.6 }
+		]);
+		const [row] = await db.asSystem((tx) =>
+			tx.sql<{ theirs: number; everyone: number }>`
+				select nl.promise_percentile_for(${vendor}, null) as theirs,
+				       nl.promise_percentile() as everyone`
+		);
+		expect(Number(row.theirs)).toBe(0.6);
+		expect(Number(row.everyone)).toBe(0.9);
+	});
+
+	it('leaves the session hook 0032 wrote in front of the policy', async () => {
+		await arrange([{ type: 'operations.promise_percentile', scopeKind: 'global', value: 0.75 }]);
+		const [row] = await db.asSystem((tx) =>
+			tx.sql<{ pinned: number }>`
+				select (select nl.promise_percentile()
+				        from (select set_config('nl.promise_percentile', '0.55', true)) as pinned) as pinned`
+		);
+		expect(Number(row.pinned)).toBe(0.55);
 	});
 });
 
