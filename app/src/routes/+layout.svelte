@@ -12,6 +12,8 @@
 	import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
 	import ListChecks from '@lucide/svelte/icons/list-checks';
 	import Mails from '@lucide/svelte/icons/mails';
+	import Home from '@lucide/svelte/icons/home';
+	import UsersRound from '@lucide/svelte/icons/users-round';
 	import Package from '@lucide/svelte/icons/package';
 	import LogOut from '@lucide/svelte/icons/log-out';
 	import Truck from '@lucide/svelte/icons/truck';
@@ -19,6 +21,7 @@
 	import Warehouse from '@lucide/svelte/icons/warehouse';
 	import Workflow from '@lucide/svelte/icons/workflow';
 	import { navigating, page } from '$app/state';
+	import { count } from '$lib/format';
 	import Mark from '$lib/components/Mark.svelte';
 	import Settings from '@lucide/svelte/icons/settings';
 	import Sparkles from '@lucide/svelte/icons/sparkles';
@@ -35,7 +38,17 @@
 			'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#0d4a47"/><path d="M10 23V9h2.2l7.6 10V9H22v14h-2.2l-7.6-10v10z" fill="#e6f2f0"/></svg>'
 		);
 
-	const NAV = [
+	/*
+	  Every section the app has. Which of them this person gets is decided in
+	  $lib/roles/rail.ts from what they may decide and what is theirs, worked
+	  out in +layout.server.ts and arriving as data.rail. An entry with nothing
+	  behind it is hidden rather than greyed; the page itself stays reachable
+	  by URL and by search, so hiding the entry never hides the data.
+
+	  Home is always here: it is the derived list of what is waiting on them.
+	*/
+	const SECTIONS = [
+		{ href: '/', label: 'Home', icon: Home },
 		{ href: '/ask', label: 'Ask', icon: Sparkles },
 		{ href: '/workspace', label: 'Workspace', icon: ClipboardCheck },
 		{ href: '/desk', label: 'Desk', icon: Mails },
@@ -47,8 +60,13 @@
 		{ href: '/vendors', label: 'Vendors', icon: Truck },
 		{ href: '/operations', label: 'Operations', icon: Warehouse },
 		{ href: '/warehouse', label: 'Warehouse', icon: Boxes },
-		{ href: '/automations', label: 'Automations', icon: Workflow }
+		{ href: '/automations', label: 'Automations', icon: Workflow },
+		{ href: '/people', label: 'People', icon: UsersRound }
 	];
+
+	const NAV = $derived(
+		SECTIONS.filter((item) => item.href === '/' || data.rail.includes(item.href))
+	);
 
 	// "Pat Doe" -> "PD"
 	const initials = $derived(
@@ -65,9 +83,18 @@
 	// Pages that load `who` (the board and the answer page) get the Mine /
 	// Everyone switch.
 	const who = $derived(page.data.who === 'mine' || page.data.who === 'all' ? page.data.who : null);
+	// A page that knows both sizes passes them; one that does not passes none,
+	// and the switch simply says Mine and Everyone as it always did.
+	const whoCounts = $derived(
+		page.data.whoCounts && typeof page.data.whoCounts.everyone === 'number'
+			? (page.data.whoCounts as { mine: number; everyone: number })
+			: null
+	);
 	const boardHref = $derived(who ? `/commitments?who=${who}` : '/commitments');
 	const crumbs = $derived.by(() => {
 		const route = page.route.id ?? '';
+		if (route === '/') return [{ label: 'Waiting on you', href: null }];
+		if (route === '/people') return [{ label: 'People', href: null }];
 		if (route === '/commitments') return [{ label: 'Commitments', href: null }];
 		if (route === '/commitments/answer') {
 			return [
@@ -216,7 +243,7 @@
 
 	<div class="shell">
 		<nav class="rail" bind:this={rail} aria-label="Sections">
-			<a class="brand item pressable" href="/commitments">
+			<a class="brand item pressable" href="/">
 				<Mark size={24} />
 				<span class="label brand-name">Northline</span>
 			</a>
@@ -276,9 +303,19 @@
 				<div class="tools">
 					<SearchBox />
 					{#if who}
+						<!--
+							The switch says how many are on each side, so choosing the wider
+							view is a decision and not a dare. The counts are of the noun the
+							page lists, before its other filters; the list's own row count
+							says what those left.
+						-->
 						<div class="segmented" role="group" aria-label="Whose records">
-							<a href={whoHref('mine')} aria-current={who === 'mine' ? 'true' : undefined}>Mine</a>
-							<a href={whoHref('all')} aria-current={who === 'all' ? 'true' : undefined}>Everyone</a>
+							<a href={whoHref('mine')} aria-current={who === 'mine' ? 'true' : undefined}>
+								Mine{#if whoCounts}<span class="tally">{count(whoCounts.mine)}</span>{/if}
+							</a>
+							<a href={whoHref('all')} aria-current={who === 'all' ? 'true' : undefined}>
+								Everyone{#if whoCounts}<span class="tally">{count(whoCounts.everyone)}</span>{/if}
+							</a>
 						</div>
 					{/if}
 					<ThemeToggle />
@@ -512,6 +549,12 @@
 		align-items: center;
 		gap: var(--space-2);
 		flex: none;
+	}
+
+	.tally {
+		margin-left: 6px;
+		color: var(--text-faint);
+		font-variant-numeric: tabular-nums;
 	}
 
 	.demo-note {

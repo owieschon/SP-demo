@@ -34,5 +34,11 @@ export const routes = {
 	deskMessage: (id: number) => `/desk/${seg(id)}`,
 	/** The queue an agent's proposal waits in. */
 	workspace: () => '/workspace',
+	/** Sections a row of waiting work is handled from, rather than its own page. */
+	operations: () => '/operations',
+	forecast: () => '/operations/forecast',
+	warehouse: () => '/warehouse',
+	/** Who is responsible for what, what they may approve, what they may see. */
+	people: () => '/people',
 	search: (q: string) => `/search?q=${encodeURIComponent(q)}`
 } as const;
