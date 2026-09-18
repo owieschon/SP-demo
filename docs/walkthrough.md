@@ -130,12 +130,18 @@ And a write, "answer the window-closed question", `POST /commitments/answer`:
 | `0018_cost_and_pricing` | cost over time, freight rates, customer price agreements |
 | `0019_warehouse` | locations and bins, the stock movement ledger, counts, shipments |
 
-## Workflow C: RFQ intake (`/rfq`)
+## Workflow C: quote requests (`/desk`, `/desk/requests/<id>`)
 
-A customer's email becomes a draft quote. The path:
+A customer's email becomes a draft quote. There is no upload screen: the
+request arrives in the order desk's mailbox and the agent reads it. `/rfq`
+and `/rfq/<id>` are 308 redirects to `/desk` and `/desk/requests/<id>` so
+older links keep working. A request that came in on the telephone is typed
+into the "Add a quote request by hand" panel on `/desk`, which makes the same
+desk item with its source recorded as a person. The path:
 
-1. `routes/rfq/+page.server.ts` takes the pasted text (or a `.txt`/`.eml`
-   file) and calls `extract` in `lib/server/rfq/extract.ts`.
+1. The desk agent's run (`lib/server/desk/run.ts`), or hand entry
+   (`lib/server/agentruns/handentry.ts`), calls `extract` in
+   `lib/server/rfq/extract.ts` on what arrived.
 2. **The extractor proposes.** `rules.ts` is a deterministic reader (regexes
    and heuristics) and is the default; `claude.ts` calls the model with a
    structured output schema and is used only when a key is configured and the
@@ -148,10 +154,12 @@ A customer's email becomes a draft quote. The path:
    customer resolves to exactly one account, and any prices the email states
    add up. Each field ends as `ok`, `corrected` or `needs_review` with a
    reason the page shows.
-4. **A person approves.** The draft is stored (`nl.rfq_drafts`); the card says
-   nothing is created until approval. `nl.approve_rfq_draft` takes only the
-   draft id, its row version and a request id, re-checks the stored draft,
-   and creates the quote and a commitment in `quoted` in one transaction.
+4. **A person approves.** The quote request is stored (`nl.rfq_drafts`); the
+   card says nothing is created until approval. `nl.approve_rfq_draft` takes
+   only the request id, its row version and a request id, re-checks the
+   stored record, and creates the quote and a commitment in `quoted` in one
+   transaction. `/workspace` is the one screen where that decision is taken;
+   `/desk` and `/desk/requests/<id>` are where the work is read.
 5. **Evals.** `evals/rfq/` holds 28 invented emails with the answers they
    should produce. `npm run eval:rfq` scores the extractor field by field and
    writes a dated report. A test fails if any score drops below the recorded

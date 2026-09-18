@@ -101,20 +101,21 @@
 				{ label: `C-${page.params.id}`, href: null }
 			];
 		}
-		if (route === '/rfq') return [{ label: 'Quote requests', href: null }];
-		if (route === '/rfq/[id=id]') {
-			return [
-				{ label: 'Quote requests', href: routes.quoteRequests() },
-				{ label: `R-${page.params.id}`, href: null }
-			];
-		}
 		if (route === '/quotes/[id=id]') return [{ label: `Quote SQ-${page.params.id}`, href: null }];
 		if (route === '/workspace') return [{ label: 'Approval queue', href: null }];
 		if (route === '/desk') return [{ label: 'Order desk', href: null }];
 		if (route === '/desk/[id=id]') {
 			return [
 				{ label: 'Order desk', href: routes.desk() },
-				{ label: 'Message', href: null }
+				{ label: 'Item', href: null }
+			];
+		}
+		// Quote requests were a section of their own. They arrive at the desk,
+		// so they live under it.
+		if (route === '/desk/requests/[id=id]') {
+			return [
+				{ label: 'Order desk', href: routes.desk() },
+				{ label: `Quote request R-${page.params.id}`, href: null }
 			];
 		}
 		if (route === '/settings') return [{ label: 'Settings', href: null }];

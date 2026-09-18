@@ -10,6 +10,7 @@
 	import FileText from '@lucide/svelte/icons/file-text';
 	import FileType from '@lucide/svelte/icons/file-type';
 	import Download from '@lucide/svelte/icons/download';
+	import { routes } from '$lib/routes';
 	import type { AttachmentSummary } from '$lib/server/documents/store';
 
 	let { attachments, draftId }: { attachments: AttachmentSummary[]; draftId: number } = $props();
@@ -50,7 +51,11 @@
 					{#if file.pageCount !== null}· {file.pageCount} {file.pageCount === 1 ? 'page' : 'pages'}{/if}
 				</span>
 			</span>
-			<a class="button quiet" href="/rfq/{draftId}/attachments/{file.id}" download={file.fileName}>
+			<a
+				class="button quiet"
+				href={routes.quoteRequestFile(draftId, file.id)}
+				download={file.fileName}
+			>
 				<Download size={13} aria-hidden="true" />
 				Download
 			</a>
