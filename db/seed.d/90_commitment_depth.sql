@@ -7,7 +7,7 @@
 -- nothing to reason from: it cannot say what was promised and missed, what
 -- the last quote said, or what this customer's record actually looks like.
 --
--- Needs migration 0027. Runs after the base world and after
+-- Needs migration 0031. Runs after the base world and after
 -- db/seed.d/10_accounts_depth.sql, so the people and the account activity
 -- are already there. Everything is keyed randomness, so every database
 -- builds the same world, and every count is a per-row draw rather than a
@@ -257,7 +257,7 @@ begin
   -- =========================================================================
   --
   -- A window that was pushed long enough ago got a second look. Some of those
-  -- second answers name the window the business moved to, and migration 0027
+  -- second answers name the window the business moved to, and migration 0031
   -- then opens that follow-on commitment: the same customer, the same parts,
   -- worth what the first window did not deliver.
 
@@ -290,7 +290,7 @@ begin
     -- A second look that has not happened yet is not a second look.
     and a.again_on <= v_today;
 
-  -- "The business moved to this window." The trigger in 0027 opens it.
+  -- "The business moved to this window." The trigger in 0031 opens it.
   insert into nl.commitment_outcomes (commitment_id, outcome, source, answered_by, answered_at, note,
                                       window_starts_on, window_ends_on,
                                       committed_value, delivered_value, reason,
@@ -844,11 +844,13 @@ begin
   -- after a loss, on purpose: silence is the signal, and a world where every
   -- account is equally busy is a world nobody recognises.
 
-  insert into nl.activities (customer_no, commitment_id, kind, call_outcome, body, author_id, via,
+  insert into nl.activities (customer_no, commitment_id, contact_id, kind, call_outcome, body, author_id, via,
                              occurred_at, created_at)
   select
     dq.customer_no,
     dq.commitment_id,
+    -- Activity was with somebody, not with the account in the abstract.
+    who.contact_id,
     case a.kind when 'voicemail' then 'call' else a.kind end,
     case a.kind
       when 'voicemail' then 'voicemail'
@@ -880,6 +882,13 @@ begin
   join nl.quote_revisions rev on rev.quote_id = dq.quote_id
   -- Quiet accounts stay quiet.
   cross join lateral (select nl_seed.chance(0.78, 'depth.busy|' || dq.customer_no) as busy) busy
+  left join lateral (
+    select ct.id as contact_id
+    from nl.contacts ct
+    where ct.customer_no = dq.customer_no
+    order by ct.is_primary desc, ct.id
+    limit 1
+  ) who on true
   cross join lateral generate_series(1,
     case when busy.busy
          then nl_seed.ri(0, 3, 'depth.act.n|' || rev.id) else 0 end) as g(n)
@@ -888,20 +897,26 @@ begin
       'depth.act|' || rev.id || '|' || g.n as key,
       nl_seed.pick(array['call', 'call', 'email', 'email', 'note', 'meeting', 'voicemail'],
                    'depth.act.kind|' || rev.id || '|' || g.n) as kind,
-      ((rev.revised_on + nl_seed.ri(0, 9, 'depth.act.day|' || rev.id || '|' || g.n))
+      -- Up to nine days after the version went out, and never in the future:
+      -- the world is always "as of today".
+      (least(rev.revised_on + nl_seed.ri(0, 9, 'depth.act.day|' || rev.id || '|' || g.n), v_today)
         + time '09:00'
         + make_interval(mins => nl_seed.ri(0, 480, 'depth.act.min|' || rev.id || '|' || g.n)))
         at time zone 'America/Chicago' as at
   ) a
-  where rev.revised_on <= v_today;
+  -- The world carries a year of activity, not seven. A revision from three
+  -- years ago is history; nobody needs the call log behind it, and
+  -- accounts.test.ts holds the whole seed to that window.
+  where rev.revised_on between v_today - 350 and v_today;
 
   -- One note against each answer, in the answerer's own words. This is the
   -- thing a person reads first when they open a settled commitment.
-  insert into nl.activities (customer_no, commitment_id, kind, body, author_id, via,
+  insert into nl.activities (customer_no, commitment_id, contact_id, kind, body, author_id, via,
                              occurred_at, created_at)
   select
     c.customer_no,
     o.commitment_id,
+    who.contact_id,
     'note',
     case o.outcome
       when 'pushed' then 'Window closed short. Buyer says the parts are still wanted, so it moves.'
@@ -914,9 +929,17 @@ begin
     o.answered_at
   from nl.commitment_outcomes o
   join nl.commitments c on c.id = o.commitment_id
+  left join lateral (
+    select ct.id as contact_id
+    from nl.contacts ct
+    where ct.customer_no = c.customer_no
+    order by ct.is_primary desc, ct.id
+    limit 1
+  ) who on true
   where o.source = 'person'
     and nl_seed.chance(0.6, 'depth.answer.note|' || o.id)
-    and o.answered_at::date <= v_today;
+    -- Same window as the rest of the activity: a year, not seven.
+    and o.answered_at::date between v_today - 350 and v_today;
 
   drop table if exists pg_temp.depth_record;
   drop table if exists pg_temp.depth_made;

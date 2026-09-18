@@ -152,7 +152,7 @@ export interface CommitmentDetail extends BoardCard {
 	}[];
 }
 // The quote versions, the conditions, the outcome trail and the next steps
-// come from lib/server/commitments/depth.ts (migration 0027), which the page
+// come from lib/server/commitments/depth.ts (migration 0031), which the page
 // streams in behind this. They used to be three thin lists here.
 
 export async function getCommitment(db: Db, userId: number, id: number): Promise<CommitmentDetail | null> {

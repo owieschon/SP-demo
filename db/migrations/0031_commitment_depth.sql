@@ -1,4 +1,4 @@
--- 0027 Depth behind a commitment: the quotes that shaped it, the conditions
+-- 0031 Depth behind a commitment: the quotes that shaped it, the conditions
 -- those quotes carry, the trail of answers each closed window got, and the
 -- next steps somebody still owes.
 --
@@ -127,7 +127,7 @@ create index quote_revisions_sent_by_idx on nl.quote_revisions (sent_by);
 create index quote_revisions_outcome_idx on nl.quote_revisions (outcome, decided_on);
 
 comment on table nl.quote_revisions is
-  'One version of a quote: what it said, what changed from the version before, and how it ended (migration 0027).';
+  'One version of a quote: what it said, what changed from the version before, and how it ended (migration 0031).';
 
 -- The lines of one version. Prices come from nl.price_for or
 -- nl.desk_price_for, and price_rule records which rule produced them, so a
@@ -214,7 +214,7 @@ create trigger requirements_touch before update on nl.requirements
   for each row execute function nl.touch_updated_at();
 
 comment on table nl.requirements is
-  'Conditions a quote or a commitment carries, as structured rows (migration 0027). Satisfaction is a date and a name, never a flag on its own.';
+  'Conditions a quote or a commitment carries, as structured rows (migration 0031). Satisfaction is a date and a name, never a flag on its own.';
 
 -- ---------------------------------------------------------------------------
 -- An outcome trail rather than one answer

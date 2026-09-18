@@ -171,20 +171,20 @@
 				<p class="notice error" role="alert">The activity could not be loaded.</p>
 			{/await}
 
-			{#await data.deals}
-				<SectionSkeleton title="the commitments" rows={3} wide />
-			{:then deals}
-				<AccountDeals {deals} customerNo={a.customerNo} year={data.year} />
-			{:catch}
-				<p class="notice error" role="alert">The commitments could not be loaded.</p>
-			{/await}
-
 			{#await data.record}
 				<SectionSkeleton title="their record" rows={2} wide />
 			{:then record}
 				<AccountRecordPanel {record} year={data.year} />
 			{:catch}
 				<p class="notice error" role="alert">Their record could not be loaded.</p>
+			{/await}
+
+			{#await data.deals}
+				<SectionSkeleton title="the commitments" rows={3} wide />
+			{:then deals}
+				<AccountDeals {deals} customerNo={a.customerNo} year={data.year} />
+			{:catch}
+				<p class="notice error" role="alert">The commitments could not be loaded.</p>
 			{/await}
 
 			{#await data.orders}
