@@ -440,11 +440,22 @@ describe('agents', () => {
 		expect(figure(section.figures, 'agent-runs').value).toBe(
 			board.reduce((sum, b) => sum + b.runs, 0)
 		);
-		const reviewed = board.reduce((sum, b) => sum + b.reviewed, 0);
-		const approvedEither = board.reduce((sum, b) => sum + b.approved + b.edited, 0);
-		expect(figure(section.figures, 'agent-approval').value).toBe(
-			reviewed === 0 ? 0 : approvedEither / reviewed
-		);
+		/*
+		  A count of runs blends honestly: two desks did forty things between
+		  them. A RATE does not, which is why there is deliberately no
+		  agent-approval figure here and a later test in this file asserts its
+		  absence. An approval rate averaged over two desks describes neither,
+		  and it would be read as though it described both. The per-desk rates
+		  are on the rows below, and on /agents.
+		*/
+		for (const desk of section.desks) {
+			const mine = board.filter((b) => b.agent === desk.agent);
+			const reviewed = mine.reduce((sum, b) => sum + b.reviewed, 0);
+			const approvedEither = mine.reduce((sum, b) => sum + b.approved + b.edited, 0);
+			expect(desk.approvalRate ?? 0, desk.agent).toBe(
+				reviewed === 0 ? 0 : approvedEither / reviewed
+			);
+		}
 	});
 
 	it('gives every value ledger line a count it can point at', async () => {

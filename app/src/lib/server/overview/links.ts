@@ -56,8 +56,12 @@ export const links = {
 	commitments: (who?: 'mine' | 'all') => routes.commitments(who),
 	commitment: (id: number) => routes.commitment(id),
 
-	/** Emailed quote requests, and one of them. */
-	quoteRequests: () => routes.quoteRequests(),
+	/*
+	  Emailed quote requests, and one of them. The list of them is the order
+	  desk itself since the upload page was retired: a quote request is
+	  something the desk handled, not a screen of its own.
+	*/
+	quoteRequests: () => routes.desk(),
 	quoteRequest: (id: number) => routes.quoteRequest(id),
 	quote: (id: number) => routes.quote(id),
 
