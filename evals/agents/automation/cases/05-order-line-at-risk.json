@@ -1,0 +1,24 @@
+{
+  "about": "Open order lines at risk, which reads the morning ERP export rather than the commitments.",
+  "rule": {
+    "name": "Lines at risk",
+    "description": "An eval fixture.",
+    "trigger": "order_line_at_risk",
+    "conditions": [
+      {
+        "field": "short_qty",
+        "op": "gte",
+        "value": 1
+      }
+    ],
+    "action": {
+      "kind": "note",
+      "body": "{customer}: {short_qty} short, {days_to_ship} days to the ship date."
+    },
+    "enabled": false
+  },
+  "expected": {
+    "matches": 46,
+    "recorded": true
+  }
+}

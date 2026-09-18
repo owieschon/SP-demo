@@ -124,7 +124,9 @@ export async function runTurn(options: RunTurnOptions): Promise<TurnResult> {
 					outcome: 'refused',
 					rows: null,
 					ms: 0,
-					note: `Not run: the limit of ${MAX_ROUNDS} lookups for one question was reached.`
+					note: `Not run: the limit of ${MAX_ROUNDS} lookups for one question was reached.`,
+					// Nothing ran, so there is no result to hold to a shape.
+					conforms: null
 				});
 			}
 			answer = reply.text.trim() || CAP_ANSWER;

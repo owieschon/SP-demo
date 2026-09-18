@@ -72,11 +72,21 @@ interface Cached {
 
 // One cache per server process. The dev server reloads modules, so it is kept
 // on globalThis the same way the database handle is (see server/db/index.ts).
-const store = globalThis as typeof globalThis & { __northlineSettings?: Cached };
+// `loading` holds the read that is in flight, so several callers at once share
+// one query instead of each making their own. They also share its decryption,
+// which is right: one server has one session secret.
+const store = globalThis as typeof globalThis & {
+	__northlineSettings?: Cached;
+	__northlineSettingsLoading?: Promise<Map<SettingKey, StoredSetting>>;
+	/** Bumped by every write, so a read that started before it cannot be stored after it. */
+	__northlineSettingsGeneration?: number;
+};
 
 /** Forget what was loaded, so the next read goes to the database. */
 export function invalidateSettings(): void {
 	store.__northlineSettings = undefined;
+	store.__northlineSettingsLoading = undefined;
+	store.__northlineSettingsGeneration = (store.__northlineSettingsGeneration ?? 0) + 1;
 }
 
 /** What is in the cache right now, or an empty map. Never waits. */
@@ -95,10 +105,24 @@ function cached(): Map<SettingKey, StoredSetting> {
  * granted to that role and is the same answer for everyone, which is what
  * lets the scheduled-run endpoint, where nobody is signed in, read its secret.
  */
-export async function loadSettings(db: Db, env: SettingsEnv = currentEnv()): Promise<Map<SettingKey, StoredSetting>> {
+export function loadSettings(db: Db, env: SettingsEnv = currentEnv()): Promise<Map<SettingKey, StoredSetting>> {
 	const held = store.__northlineSettings;
-	if (held && Date.now() - held.at <= CACHE_MS) return held.rows;
+	if (held && Date.now() - held.at <= CACHE_MS) return Promise.resolve(held.rows);
+	// Somebody else is already asking. Wait for their answer rather than
+	// sending the same query again: the Settings page reads this three times
+	// at once.
+	if (store.__northlineSettingsLoading) return store.__northlineSettingsLoading;
 
+	store.__northlineSettingsLoading = load(db, env).finally(() => {
+		store.__northlineSettingsLoading = undefined;
+	});
+	return store.__northlineSettingsLoading;
+}
+
+async function load(db: Db, env: SettingsEnv): Promise<Map<SettingKey, StoredSetting>> {
+	// If a write lands while this read is in the air, the answer is already old
+	// news by the time it arrives, so it is returned but not cached.
+	const generation = store.__northlineSettingsGeneration ?? 0;
 	const rows = await db.asVisitor((tx) => tx.sql<Row>`select * from nl.settings_with_secrets()`);
 	const loaded = new Map<SettingKey, StoredSetting>();
 	for (const row of rows) {
@@ -114,7 +138,9 @@ export async function loadSettings(db: Db, env: SettingsEnv = currentEnv()): Pro
 			unreadable: row.is_secret && plain === null
 		});
 	}
-	store.__northlineSettings = { at: Date.now(), rows: loaded };
+	if ((store.__northlineSettingsGeneration ?? 0) === generation) {
+		store.__northlineSettings = { at: Date.now(), rows: loaded };
+	}
 	return loaded;
 }
 

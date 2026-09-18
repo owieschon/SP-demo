@@ -1,0 +1,32 @@
+{
+  "about": "The same for confidence, which moves the expected value every report reads.",
+  "question": "Put that commitment at 90%.",
+  "script": [
+    {
+      "tools": [
+        {
+          "name": "set_confidence",
+          "input": {
+            "commitment_id": 3009,
+            "confidence": 90
+          }
+        }
+      ]
+    },
+    {
+      "say": "That needs your approval."
+    }
+  ],
+  "expected": {
+    "tools": [
+      {
+        "name": "set_confidence",
+        "ran": false
+      }
+    ],
+    "gated": [
+      "set_confidence"
+    ],
+    "proposal": null
+  }
+}

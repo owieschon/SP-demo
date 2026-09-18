@@ -12,7 +12,7 @@
 
 <main class="page">
 	<header class="head">
-		<h1 class="sr-only">Commitments</h1>
+		<h1>Commitments</h1>
 		<p class="faint">
 			Named buyers' promises to buy specific parts inside a window. Delivery is measured from invoice
 			lines; status is never picked by hand.
