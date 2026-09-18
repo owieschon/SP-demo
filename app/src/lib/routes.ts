@@ -57,6 +57,14 @@ export const routes = {
 	signin: () => '/signin',
 	/** Who is responsible for what, what they may approve, and what they may see. */
 	people: () => '/people',
+	/** The rules the business and its agents run on, and why a value won. */
+	policies: () => '/policies',
+	/** What a policy change would have done to the quarter that already happened. */
+	policyBacktest: () => '/policies/backtest',
+	/** Every field the app knows, what it means and who may see it. */
+	dictionary: () => '/dictionary',
+	/** What to buy, how much, from whom and by when. */
+	procurement: () => '/procurement',
 	/** What each agent did, what it refused, and how far it may go on its own. */
 	agents: (agent?: string) => (agent ? `/agents?agent=${encodeURIComponent(agent)}` : '/agents'),
 	/**
