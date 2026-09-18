@@ -1,4 +1,4 @@
--- 0039 The executive overview: one fast roll-up of the ledger, and the three
+-- 0043 The executive overview: one fast roll-up of the ledger, and the three
 -- named money leaks behind it.
 --
 -- Everything on /overview has to be a link, and the page has to arrive in a
@@ -52,7 +52,7 @@ create table nl.ledger_month (
 );
 
 comment on table nl.ledger_month is
-  'Revenue, cost of goods and line count per calendar month, kept current by triggers (migration 0039). Nobody writes it directly.';
+  'Revenue, cost of goods and line count per calendar month, kept current by triggers (migration 0043). Nobody writes it directly.';
 
 alter table nl.ledger_month enable row level security;
 
@@ -312,7 +312,7 @@ from priced p
 join nl.customers c on c.customer_no = p.customer_no;
 
 comment on view nl.invoice_freight is
-  'Freight billed on each invoice against the tariff of the day, with the shortfall (migration 0039). The same rule as nl.freight_by_month, at invoice grain.';
+  'Freight billed on each invoice against the tariff of the day, with the shortfall (migration 0043). The same rule as nl.freight_by_month, at invoice grain.';
 
 grant select on nl.invoice_freight to nl_app, nl_readonly;
 
@@ -402,7 +402,7 @@ where cp.valid_to is null
   and billed.units > 0;
 
 comment on view nl.overview_price_exceptions is
-  'Open-ended price agreements the cost has risen underneath, with the cost increase the frozen price absorbed on the last year of invoice lines (migration 0039).';
+  'Open-ended price agreements the cost has risen underneath, with the cost increase the frozen price absorbed on the last year of invoice lines (migration 0043).';
 
 grant select on nl.overview_price_exceptions to nl_app, nl_readonly;
 
@@ -493,7 +493,7 @@ where was.lines >= 3
   and r.cost_step > (now_.avg_price - was.avg_price);
 
 comment on view nl.overview_cost_passthrough is
-  'Parts whose cost rose in the last year by more than the selling price did, with the units sold since (migration 0039).';
+  'Parts whose cost rose in the last year by more than the selling price did, with the units sold since (migration 0043).';
 
 grant select on nl.overview_cost_passthrough to nl_app, nl_readonly;
 
@@ -611,7 +611,7 @@ union all select * from families
 union all select * from mailboxes;
 
 comment on view nl.responsibility_gaps is
-  'Accounts, part families and mailboxes nobody is answerable for, with the last year of invoice lines behind each (migration 0039). Holding a whole scope dimension is oversight, not accountability.';
+  'Accounts, part families and mailboxes nobody is answerable for, with the last year of invoice lines behind each (migration 0043). Holding a whole scope dimension is oversight, not accountability.';
 
 grant select on nl.responsibility_gaps to nl_app, nl_readonly;
 
@@ -640,6 +640,6 @@ as $$
 $$;
 
 comment on function nl.highest_ceiling(text) is
-  'The largest amount anybody active can approve for this authority today, or null when somebody holds it with no ceiling (migration 0039).';
+  'The largest amount anybody active can approve for this authority today, or null when somebody holds it with no ceiling (migration 0043).';
 
 grant execute on function nl.highest_ceiling(text) to nl_app, nl_readonly;
