@@ -5,7 +5,10 @@
 export type Intent = 'rfq' | 'purchase_order' | 'price_question' | 'stock_question' | 'order_status' | 'other';
 
 export const INTENT_LABEL: Record<Intent, string> = {
-	rfq: 'Request for quote',
+	// The intent key stays 'rfq', because it is a database value in migrations
+	// 0011 onward and renaming it would be a migration. The words a person
+	// reads are "quote request" everywhere.
+	rfq: 'Quote request',
 	purchase_order: 'Purchase order',
 	price_question: 'Price question',
 	stock_question: 'Stock or lead time',

@@ -31,9 +31,12 @@ page."
 - One sentence on speed: "That board was 11 seconds on the full world. It is
   now 6 to 10 milliseconds, and `docs/sql.md` shows both query plans."
 
-## 2. RFQ intake (70 seconds)
+## 2. Quote requests at the order desk (70 seconds)
 
-- Open **RFQ intake**, load a sample email, run it.
+- Open **Order desk**, pick an item that arrived, and open it.
+- "Nobody uploaded this. It arrived in the desk's mailbox and the agent read
+  it." Expand **What the agent did, step by step**: the lookups with their
+  arguments, and the refusals with the rule that stopped each one.
 - "The model proposes. Then code checks every field against the catalog and
   the customer master." Point at one `corrected` field and one
   `needs review` with its reason, and at a sibling suggestion for a part
