@@ -156,3 +156,18 @@ export async function mayPromote(db: Db, actorId: number): Promise<boolean> {
 	);
 	return row?.may === true;
 }
+
+/**
+ * Is this person an administrator? Asked of the database rather than read off
+ * a role label, because a preset name is only a label in this schema and
+ * nothing resolves from it (migration 0031).
+ *
+ * The page needs it for exactly one thing: letting a pause go. Anybody may
+ * pull the brake, and nl.set_agent_pause refuses the release to anybody else.
+ */
+export async function isAdmin(db: Db, actorId: number): Promise<boolean> {
+	const [row] = await db.asUser(actorId, (tx) =>
+		tx.sql<{ admin: boolean }>`select nl.is_admin() as admin`
+	);
+	return row?.admin === true;
+}

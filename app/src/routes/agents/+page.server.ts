@@ -2,10 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { fail } from '@sveltejs/kit';
 import { getDb } from '$lib/server/db';
 import { toAppError } from '$lib/server/errors';
-import { pauseInput, setPause } from '$lib/server/harness/ladder';
+import { pauseInput, readPauses, setPause } from '$lib/server/harness/ladder';
 import {
 	autonomyGrantInput,
 	autonomyRevokeInput,
+	isAdmin,
 	mayPromote,
 	NotAPrincipal,
 	revokeGrantedAutonomy,
@@ -65,6 +66,15 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		// Awaited: the row per agent and the refusals are the page. Arriving
 		// without them would be arriving without the answer.
 		agents: await readAgentTrust(db, user.id),
+		/*
+		  The global pause, read on its own.
+
+		  Every agent showing as stopped is not the same fact as the global
+		  brake being on: five separate pauses look identical from the agent
+		  rows. The top button lifts the 'all' row specifically, so it has to
+		  know whether that row is live rather than infer it.
+		*/
+		globalPause: (await readPauses(db, user.id)).find((p) => p.agent === 'all') ?? null,
 		// Each refusal with the rule that refused, and where that rule is
 		// really enforced. A count on its own is not an argument.
 		refusals: await readRefusals(db, user.id, 12),
@@ -72,6 +82,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		// anything, so the page answers "what would stop it" as well.
 		roster: guardrailRoster(),
 		mayPromote: await mayPromote(db, user.id),
+		/*
+		  Whether this person may LET a pause go, which is an admin's alone.
+		  Pulling it needs nothing at all, so there is deliberately no flag
+		  for that: the stop button is drawn for everybody.
+		*/
+		mayRelease: await isAdmin(db, user.id),
 		/*
 		  Which of the feature tables the unified run view is actually built
 		  from in this database. It matters on this page: the procurement
