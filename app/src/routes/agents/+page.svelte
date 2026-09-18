@@ -38,15 +38,23 @@
 	import TrustTrend from '$lib/components/agents/TrustTrend.svelte';
 	import { count, moment, percent } from '$lib/format';
 	import { LEVEL_LABEL, LEVEL_MEANING } from '$lib/harness/levels';
-	// The three rungs a token can stand on. 'shadow' is not one of them: a
-	// token that drafts for nobody has nothing to show anyone.
-	const TOKEN_LEVELS = ['suggest', 'auto_review', 'auto'] as const;
 	import { AUTONOMY_LABEL } from '$lib/roles/types';
 	import { routes } from '$lib/routes';
 	import type { AgentTrustRow } from '$lib/server/harness/trust';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
+
+	/*
+	  The three rungs an MCP token can stand on, in order.
+
+	  'shadow' is the fourth rung of the ladder and is deliberately not here: it
+	  means "it drafts and nobody is asked to look", and a coding agent has no
+	  draft to keep, so there would be nothing to show anyone. The labels and
+	  the sentences come from $lib/harness/levels, the same ones every other
+	  level on this page uses.
+	*/
+	const TOKEN_LEVELS = ['suggest', 'auto_review', 'auto'] as const;
 
 	/** A distinct request id per form on the page, from the one the load made. */
 	function reqId(kind: string, key: string): string {
