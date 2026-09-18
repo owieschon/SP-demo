@@ -102,8 +102,9 @@ Empty states say what to do next.
 
 ### Finished and on `main`
 
-`main` is at 4746a4f. Supabase is migrated through 0027 and the world is
-built, every drift check zero.
+`main` is at 2cb58f9, with 904 tests passing and no type errors. Supabase is
+migrated through 0030 and the world is built at full size, every drift check
+zero.
 
 | Feature | Where |
 |---|---|
@@ -124,29 +125,32 @@ built, every drift check zero.
 | Settings and admin, with a health page that has two speeds | `0025`, `0027`, `/settings`, [`docs/settings.md`](settings.md) |
 | One password in front of the whole site | `app/src/lib/server/gate.ts`, `/gate` |
 | UI correctness pass: real totals, labelled headers, distinct action names, a route registry so every agent tool row carries its URL | `app/src/lib/routes.ts`, [`docs/ux-audit.md`](ux-audit.md) |
+| Agent harness: one run record for every agent, guardrails as named checks, the autonomy ladder, 75 scored eval cases over four suites with a baseline a test holds | `0028`, `app/src/lib/server/harness/**`, `evals/agents/`, [`docs/agent-harness.md`](agent-harness.md) |
+| Procurement desk: what to buy, how much, from whom and by when, with internal signals and purchase requests | `0029`, `db/seed.d/80`, `app/src/lib/server/procurement/**`, `/procurement`, [`docs/procurement-agent.md`](procurement-agent.md) |
+| Purchase requests in the one workspace queue, by rebuilding the view rather than editing it | `0030` |
+| Design system: Today as an exception queue, the rail grouped by what a person decides, the shared components | `app/src/lib/components/**`, `docs/ux/` |
+| Declared tool outputs, and every page saying what it is | `app/src/lib/server/assistant/contract.test.ts` |
 | Nightly rebuild, "pushed" with evidence, drift repair (pg_cron) | `0012_nightly.supabase.sql` |
 | Remote database tooling: status, migrate, seed, rebuild, nightly, fresh | `app/scripts/db-remote.ts`, `db/README.md` |
 
 ### Being built right now, on other machines: do not touch
 
-Eleven branches are open. Take the next free migration number after checking
-`db/migrations/`, and the next free `db/seed.d` number, and say in your report
-which you used. Merge `origin/main` into your branch at least once mid-way:
-several of these branches touch components and layout.
+Eight branches are open, all resumed on the morning of the demo with their
+scope cut to what has to be true tonight. Take the next free migration number
+after checking `db/migrations/` (0031 and up), and merge `origin/main` into
+your branch before you touch anything shared: the rail, the components and the
+queue all moved this morning.
 
 | Branch | What it owns |
 |---|---|
-| `policy-engine` | Typed, scoped, effective-dated policy values with an explaining resolver; the data dictionary and `nl.describe_data`; `/policies` and `/dictionary` |
-| `context-engine` | Sources, claims, entity resolution, promotion to fact with citations, staleness, versioned context bundles served to agents and over MCP; `/context` |
-| `agent-harness` | The autonomy ladder (shadow, suggest, auto with review, auto), undo window, pause switch, evals with baselines; `/agents` |
-| `procurement-desk` | Replenishment maths, internal wake signals, purchase requests, vendor drafts; `/procurement` |
-| `manufacturing-model` | The parts taxonomy, bills of material, routings, work centres, labour and machine time, the loaded cost model |
-| `pricing-depth` | Landed inbound cost, outbound carriers and modes, customer price sheets and exceptions, and lead time per vendor-part (quoted, committed, observed) |
-| `design-system` | Tokens and components, the rail reorganised into four groups by intent, "Today" as an exception queue, the command palette, chart doctrine |
-| `roles` | Scope, authority and disclosure as three axes; `nl.work_waiting_for`; agents as principals in the same tables; `/people` |
-| `commitment-depth` | Quote revisions with reasons, requirement-carrying quotes, the outcome trail, next steps that behave like real ones |
-| `desk-depth` | Retires `/rfq` into the order desk as evidence; agent run trails with refusals; replay and diff |
-| `agent-surface` | Output schemas and structured content on the MCP tools, visible page headings, placeholder text a screen reader can hear, column names in write errors |
+| `policy-engine` | Typed, scoped, effective-dated policy values with an explaining resolver; `/policies`; the dictionary if there is time |
+| `context-engine` | Sources, claims, entity resolution, promotion to fact with citations, staleness, compiled context bundles; `/context` |
+| `desk-depth` | Retires `/rfq` into the order desk as evidence; extends the harness run record with the tool calls and refusals a person needs to see |
+| `roles` | Scope, authority and disclosure as three axes; `nl.work_waiting_for`; agents as principals; `/people` |
+| `pricing-depth` | Lead time per vendor-part (quoted, committed, observed from receipts), customer price sheets and exceptions, landed cost |
+| `commitment-depth` | The outcome trail, quote revisions with reasons, next steps that behave like real ones |
+| `manufacturing-model` | Bills of material, a cost roll-up that ties to the cent, lead time through the bill |
+| `design-system` | The rail as new screens arrive, the chart doctrine applied, the command palette reaching actions |
 
 ### Planned, not started: safe to pick up
 

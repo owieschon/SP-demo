@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { error } from '@sveltejs/kit';
 import { getDb } from '$lib/server/db';
 import { getCommitment } from '$lib/server/commitments';
+import { getCommitmentDepth } from '$lib/server/commitments/depth';
 import { listBuyerChoices } from '$lib/server/accounts/account';
 import { addBuyerAction, setBuyerAction } from '$lib/server/accounts/forms';
 import { confidenceAction, outcomeAction } from '$lib/server/forms';
@@ -17,6 +18,10 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		// indexed query, so it is awaited with the commitment rather than
 		// streamed: the buyer sits in the header, above everything else.
 		buyerChoices: await listBuyerChoices(db, locals.user!.id, commitment.id),
+		// The history behind it: quote versions, conditions, the outcome trail
+		// and the open next steps. Handed over as a promise so the page arrives
+		// with its figures and this streams in behind them.
+		depth: getCommitmentDepth(db, locals.user!.id, commitment.id),
 		// Fresh ids for each form on this page load. Submitting the same form
 		// twice sends the same id, so the database writes once.
 		requestIds: {
