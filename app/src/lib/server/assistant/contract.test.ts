@@ -328,7 +328,7 @@ describe('the success branch of each read tool', () => {
 	});
 
 	it('list_windows_closed_short', async () => {
-		await answersItsSchema('list_windows_closed_short', { owner: 'everyone' });
+		await answersItsSchema('list_windows_closed_short', { whose: 'everyone' });
 	});
 
 	it('get_part', async () => {
