@@ -2,19 +2,12 @@
 	import { enhance } from '$app/forms';
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
 	import Mark from '$lib/components/Mark.svelte';
-	import type { Role } from '$lib/types';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
 
 	// Which button is working, so only that one shows it.
 	let pending = $state<number | null>(null);
-
-	const ROLE_NOTE: Record<Role, string> = {
-		admin: 'Sees every book and can answer for any commitment.',
-		account_manager: 'Owns customers and their commitments.',
-		operations: 'Runs the order desk and the daily open-orders export.'
-	};
 
 	// "Pat Doe" -> "PD"
 	function initials(name: string) {
@@ -72,7 +65,7 @@
 								<span class="title muted">{user.title}</span>
 							</span>
 							<span class="role faint">
-								{user.active ? ROLE_NOTE[user.role] : 'Inactive: shows that the database refuses writes from former staff.'}
+								{user.active ? user.responsibility : 'Inactive: shows that the database refuses writes from former staff.'}
 							</span>
 						</span>
 						<span class="go" aria-hidden="true">
