@@ -9,9 +9,11 @@ import { fail } from '@sveltejs/kit';
 import { getDb } from '$lib/server/db';
 import { toAppError } from '$lib/server/errors';
 import { readMcpLimits } from '$lib/server/mcp/caps';
+import { connectProvider } from '$lib/server/mcp/connect';
 import { mcpToolNames, MCP_TOOLS } from '$lib/server/mcp/tools';
 import { listTokens, mintToken, revokeToken, SCOPES, type McpScope } from '$lib/server/mcp/tokens';
 import { listUsers } from '$lib/server/users';
+import { MCP_PROVIDERS, type McpProviderId } from '$lib/mcp/providers';
 import { env } from '$env/dynamic/private';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -26,6 +28,24 @@ type MintResult = {
 
 type RevokeResult = { from: 'revoke'; message: string };
 
+/**
+ * The answer to a provider button. It carries the finished config, assembled
+ * on the server, so the browser never has to put an endpoint and a secret
+ * together itself.
+ */
+type ConnectResult = {
+	from: 'connect';
+	message: string;
+	provider?: McpProviderId;
+	providerName?: string;
+	/** Only ever set on success, and only in this one answer. */
+	secret?: string;
+	config?: string;
+	link?: string | null;
+	label?: string;
+	tokenId?: number;
+};
+
 export const load: PageServerLoad = async ({ locals, url }) => {
 	// hooks.server.ts guarantees a signed-in user on this page.
 	const user = locals.user!;
@@ -35,7 +55,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 	return {
 		isAdmin,
+		/** Whose name goes on a token minted by a provider button. */
+		personName: user.fullName,
 		endpoint: `${url.origin}/api/mcp`,
+		// The three coding agents the connect row offers, in one place so the
+		// page and the form action cannot disagree about the list.
+		providers: MCP_PROVIDERS,
 		limits: readMcpLimits(env),
 		// What the server exposes, so the page can say it without a second list.
 		tools: MCP_TOOLS.map((tool) => ({
@@ -53,11 +78,61 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		// sends the same id, so the database writes once. Revoke needs one per
 		// token, because two revokes on one page load are two different writes.
 		mintId: randomUUID(),
+		// One id for the connect row. A successful connect re-renders the page
+		// and brings a new one, so two connects in a row are two writes.
+		connectId: randomUUID(),
 		revokeIds: Object.fromEntries(tokens.map((token) => [token.id, randomUUID()]))
 	};
 };
 
 export const actions: Actions = {
+	/*
+	  A provider button. The token is minted here, in the click, and the
+	  provider's finished config comes back with it, so nobody types a secret
+	  by hand or assembles a JSON block around one.
+
+	  Admin-only is enforced in nl.mint_mcp_token. The check here is so a
+	  non-admin gets a sentence rather than a database error; the page greys
+	  the buttons out and says the same thing before the click.
+	*/
+	connect: async ({ locals, request, url }) => {
+		const user = locals.user!;
+		if (user.role !== 'admin') {
+			return fail(403, {
+				from: 'connect',
+				message: 'Only an admin can mint a token, so only an admin can connect an agent.'
+			} satisfies ConnectResult);
+		}
+
+		const form = await request.formData();
+		try {
+			const connected = await connectProvider(
+				await getDb(),
+				{ id: user.id, fullName: user.fullName },
+				{
+					provider: form.get('provider'),
+					endpoint: `${url.origin}/api/mcp`,
+					requestId: String(form.get('requestId') ?? '')
+				}
+			);
+			return {
+				from: 'connect',
+				message: `${connected.providerName} is ready. Copy the block below now: the token is not stored and cannot be shown again.`,
+				provider: connected.provider,
+				providerName: connected.providerName,
+				secret: connected.secret,
+				config: connected.config,
+				link: connected.link,
+				label: connected.label,
+				tokenId: connected.tokenId
+			} satisfies ConnectResult;
+		} catch (error) {
+			const refusal = toAppError(error);
+			if (!refusal) throw error;
+			return fail(refusal.status, { from: 'connect', message: refusal.message } satisfies ConnectResult);
+		}
+	},
+
 	mint: async ({ locals, request }) => {
 		const user = locals.user!;
 		if (user.role !== 'admin') {
