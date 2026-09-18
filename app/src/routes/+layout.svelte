@@ -23,12 +23,14 @@
 	import LogOut from '@lucide/svelte/icons/log-out';
 	import UserRoundArrowLeft from '@lucide/svelte/icons/user-round-arrow-left';
 	import { navigating, page } from '$app/state';
+	import { count } from '$lib/format';
 	import CommandPalette from '$lib/components/ui/CommandPalette.svelte';
 	import PaletteButton from '$lib/components/ui/PaletteButton.svelte';
 	import Mark from '$lib/components/Mark.svelte';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import Toast from '$lib/components/ui/Toast.svelte';
 	import { NAV_ITEMS, phoneItems, visibleSections } from '$lib/nav';
+	import { railItems, railSections } from '$lib/roles/rail';
 	import { routes } from '$lib/routes';
 	import type { LayoutProps } from './$types';
 
@@ -41,8 +43,23 @@
 			'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#0d4a47"/><path d="M10 23V9h2.2l7.6 10V9H22v14h-2.2l-7.6-10v10z" fill="#e6f2f0"/></svg>'
 		);
 
-	const sections = $derived(visibleSections());
-	const phone = $derived(data.user ? phoneItems(data.user.role) : []);
+	/*
+	  The rail is DERIVED. +layout.server.ts works out which entries this person
+	  has a reason to see, from what they may decide and what is theirs
+	  ($lib/roles/rail.ts), and nav.ts was written to survive a group being
+	  emptied. An entry with nothing behind it is hidden rather than greyed,
+	  because a greyed control is a question and a missing one is an answer.
+
+	  Hiding an entry hides the ENTRY. Every page stays reachable by its URL
+	  and through the palette, so somebody covering for a colleague can still
+	  open the screen once.
+	*/
+	const sections = $derived(visibleSections(railSections(data.rail)));
+	const phone = $derived(railItems(phoneItems(data.user?.role ?? 'account_manager'), data.rail));
+
+	const NAV = $derived(
+		SECTIONS.filter((item) => item.href === '/' || data.rail.includes(item.href))
+	);
 
 	// "Pat Doe" -> "PD"
 	const initials = $derived(
@@ -59,6 +76,17 @@
 	// Pages that load `who` (the board and the answer page) get the Mine /
 	// Everyone switch.
 	const who = $derived(page.data.who === 'mine' || page.data.who === 'all' ? page.data.who : null);
+	/*
+	  A page that knows both sizes passes them, and the switch says so, because
+	  a switch whose two sides look identical until you press one is a dare
+	  rather than a choice. A page that does not pass them gets the plain
+	  labels it had before.
+	*/
+	const whoCounts = $derived(
+		page.data.whoCounts && typeof page.data.whoCounts.everyone === 'number'
+			? (page.data.whoCounts as { mine: number; everyone: number })
+			: null
+	);
 	const boardHref = $derived(who ? routes.commitments(who) : routes.commitments());
 	const crumbs = $derived.by(() => {
 		const route = page.route.id ?? '';
@@ -280,9 +308,19 @@
 				<div class="tools">
 					<span class="palette-desktop"><PaletteButton /></span>
 					{#if who}
+						<!--
+							The switch says how many are on each side, so choosing the wider
+							view is a decision and not a dare. The counts are of the noun the
+							page lists, before its other filters; the list's own row count
+							says what those left.
+						-->
 						<div class="segmented" role="group" aria-label="Whose records">
-							<a href={whoHref('mine')} aria-current={who === 'mine' ? 'true' : undefined}>Mine</a>
-							<a href={whoHref('all')} aria-current={who === 'all' ? 'true' : undefined}>Everyone</a>
+							<a href={whoHref('mine')} aria-current={who === 'mine' ? 'true' : undefined}>
+								Mine{#if whoCounts}<span class="tally">{count(whoCounts.mine)}</span>{/if}
+							</a>
+							<a href={whoHref('all')} aria-current={who === 'all' ? 'true' : undefined}>
+								Everyone{#if whoCounts}<span class="tally">{count(whoCounts.everyone)}</span>{/if}
+							</a>
 						</div>
 					{/if}
 					<ThemeToggle />
@@ -526,6 +564,12 @@
 		align-items: center;
 		gap: var(--space-2);
 		flex: none;
+	}
+
+	.tally {
+		margin-left: 6px;
+		color: var(--text-faint);
+		font-variant-numeric: tabular-nums;
 	}
 
 	.demo-note {
