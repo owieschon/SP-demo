@@ -17,6 +17,7 @@
 	import LeakList from '$lib/components/overview/LeakList.svelte';
 	import RevenueChart from '$lib/components/overview/RevenueChart.svelte';
 	import AgentTable from '$lib/components/overview/AgentTable.svelte';
+	import DeskCards from '$lib/components/overview/DeskCards.svelte';
 	import ValueLedger from '$lib/components/overview/ValueLedger.svelte';
 	import LoadFailed from '$lib/components/ui/LoadFailed.svelte';
 	import Page from '$lib/components/ui/Page.svelte';
@@ -142,15 +143,24 @@
 				<a class="button sm" href={data.nav.runs}>The run feed</a>
 			{/snippet}
 			<Figures figures={agents.figures} />
-			<div class="table">
-				<AgentTable rows={agents.rows} />
-			</div>
 			{#if agents.rows.every((row) => row.runs === 0)}
 				<p class="t-meta muted">
-					No agent has run in this database yet, so every number above is a zero rather than a verdict.
+					No agent has run in this database yet, so every number here is a zero rather than a verdict.
 					The desks start a run when they read their mail.
 				</p>
 			{/if}
+		</Panel>
+
+		<!--
+			One card per agent, side by side. The order desk and the procurement
+			desk are never added together: they do different work for different
+			counterparties and their trust is earned separately.
+		-->
+		<Panel title="Each agent on its own" source="the harness board, per agent">
+			<DeskCards desks={agents.desks} />
+			<div class="table">
+				<AgentTable rows={agents.rows} />
+			</div>
 		</Panel>
 
 		<Panel title="What the agents did this week" source="the last seven days" flush>
@@ -175,6 +185,22 @@
 		>
 			<Figures figures={risk.figures} asOf={risk.today} year={data.year} />
 		</Panel>
+
+		<!--
+			Left out entirely when the role model is not in this database, rather
+			than shown as four zeros that would read as good news.
+		-->
+		{#if risk.coverage}
+			<Panel
+				title="Who is answering for what"
+				asOf={risk.today}
+				thisYear={data.year}
+				source="named scope, not oversight"
+			>
+				<Figures figures={risk.coverage.figures} asOf={risk.today} year={data.year} />
+				<p class="t-meta muted lede-note">{risk.coverage.note}</p>
+			</Panel>
+		{/if}
 	{:catch}
 		<LoadFailed what="what is at risk" />
 	{/await}
@@ -189,6 +215,11 @@
 
 	.table {
 		margin-top: var(--space-4);
+	}
+
+	.lede-note {
+		margin: var(--space-3) 0 0;
+		max-width: var(--measure);
 	}
 
 	.note {

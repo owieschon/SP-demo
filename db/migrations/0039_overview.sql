@@ -1,4 +1,4 @@
--- 0034 The executive overview: one fast roll-up of the ledger, and the three
+-- 0039 The executive overview: one fast roll-up of the ledger, and the three
 -- named money leaks behind it.
 --
 -- Everything on /overview has to be a link, and the page has to arrive in a
@@ -52,7 +52,7 @@ create table nl.ledger_month (
 );
 
 comment on table nl.ledger_month is
-  'Revenue, cost of goods and line count per calendar month, kept current by triggers (migration 0034). Nobody writes it directly.';
+  'Revenue, cost of goods and line count per calendar month, kept current by triggers (migration 0039). Nobody writes it directly.';
 
 alter table nl.ledger_month enable row level security;
 
@@ -312,7 +312,7 @@ from priced p
 join nl.customers c on c.customer_no = p.customer_no;
 
 comment on view nl.invoice_freight is
-  'Freight billed on each invoice against the tariff of the day, with the shortfall (migration 0034). The same rule as nl.freight_by_month, at invoice grain.';
+  'Freight billed on each invoice against the tariff of the day, with the shortfall (migration 0039). The same rule as nl.freight_by_month, at invoice grain.';
 
 grant select on nl.invoice_freight to nl_app, nl_readonly;
 
@@ -372,10 +372,17 @@ from nl.customer_prices cp
 cross join clock k
 join nl.customers c on c.customer_no = cp.customer_no
 join nl.items i on i.item_no = cp.item_no
+-- Two lookups per agreement, not three: nl.item_cost_on pins its search_path
+-- and so cannot be inlined, which makes every call a real call. The floor is
+-- derived from the cost this subquery already has.
 cross join lateral (
   select nl.item_cost_on(cp.item_no, cp.valid_from) as cost_when_agreed,
-         nl.item_cost_on(cp.item_no, k.today)       as cost_today,
-         round(nl.item_cost_on(cp.item_no, k.today) / (1 - nl.min_margin()), 2) as floor_today
+         nl.item_cost_on(cp.item_no, k.today)       as cost_today
+) costs
+cross join lateral (
+  select costs.cost_when_agreed,
+         costs.cost_today,
+         round(costs.cost_today / (1 - nl.min_margin()), 2) as floor_today
 ) cost
 cross join lateral (
   -- Credit memo lines are left out: a return does not give a price back, and
@@ -395,7 +402,7 @@ where cp.valid_to is null
   and billed.units > 0;
 
 comment on view nl.overview_price_exceptions is
-  'Open-ended price agreements the cost has risen underneath, with the cost increase the frozen price absorbed on the last year of invoice lines (migration 0034).';
+  'Open-ended price agreements the cost has risen underneath, with the cost increase the frozen price absorbed on the last year of invoice lines (migration 0039).';
 
 grant select on nl.overview_price_exceptions to nl_app, nl_readonly;
 
@@ -486,6 +493,153 @@ where was.lines >= 3
   and r.cost_step > (now_.avg_price - was.avg_price);
 
 comment on view nl.overview_cost_passthrough is
-  'Parts whose cost rose in the last year by more than the selling price did, with the units sold since (migration 0034).';
+  'Parts whose cost rose in the last year by more than the selling price did, with the units sold since (migration 0039).';
 
 grant select on nl.overview_cost_passthrough to nl_app, nl_readonly;
+
+-- ---------------------------------------------------------------------------
+-- 3. Coverage of responsibility
+-- ---------------------------------------------------------------------------
+
+-- What nobody is answerable for.
+--
+-- This is the question an executive asks that no dashboard answers, and it is
+-- not the same question as scope. Scope says who MAY see or touch a thing, and
+-- the chief executive holds every dimension, so by scope nothing is
+-- uncovered. Accountability is narrower: it is somebody named against that
+-- particular account, part family or mailbox. A principal holding the whole
+-- dimension (a nl.user_scope row with a null value) is oversight, not
+-- accountability, so it does not cover anything on its own. That distinction
+-- is the whole view, and it is said on the page as well as here.
+--
+-- Three kinds, one shape:
+--
+--   account       a live account with no owner and nobody holding it by name
+--   part_family   a family of parts with nobody named against it
+--   mailbox       a live inbox whose reviewer is gone, or who does not hold it
+--
+-- The money on each row is the last year of invoice lines, so the list sorts
+-- by what is actually at stake rather than by row count. Agents are excluded
+-- from "somebody": an inbox whose only holder is the agent that drafts from it
+-- has nobody answering for it, which is exactly the gap.
+create view nl.responsibility_gaps with (security_invoker = true) as
+with accountable as (
+  -- One row per (dimension, value) that a named, active person holds.
+  select s.dimension, s.value
+  from nl.user_scope s
+  join nl.users u on u.id = s.user_id
+  where s.value is not null
+    and u.active
+    and u.kind = 'person'
+  group by s.dimension, s.value
+),
+year as (select nl.today() - 365 as since, nl.today() as until),
+accounts as (
+  select
+    'account'::text                           as kind,
+    c.customer_no                             as ref,
+    c.name                                    as subject,
+    case when c.owner_id is null
+         then 'No account owner, and nobody holds this account by name.'
+         else 'The owner is no longer an active person, and nobody holds this account by name.'
+    end                                       as why,
+    coalesce(rev.amount, 0)                   as amount,
+    coalesce(rev.lines, 0)                    as lines
+  from nl.customers c
+  cross join year y
+  left join lateral (
+    select sum(il.amount) as amount, count(*)::int as lines
+    from nl.invoice_lines il
+    where il.customer_no = c.customer_no
+      and il.posted_on > y.since and il.posted_on <= y.until
+  ) rev on true
+  where not c.closed
+    and not exists (
+      select 1 from nl.users o where o.id = c.owner_id and o.active and o.kind = 'person')
+    and not exists (
+      select 1 from accountable a where a.dimension = 'account' and a.value = c.customer_no)
+),
+families as (
+  select
+    'part_family'::text                       as kind,
+    f.family                                  as ref,
+    f.family                                  as subject,
+    'No planner or buyer is named against this part family.'::text as why,
+    coalesce(rev.amount, 0)                   as amount,
+    f.parts                                   as lines
+  from (
+    select i.family, count(*)::int as parts
+    from nl.items i
+    where not i.blocked
+    group by i.family
+  ) f
+  cross join year y
+  left join lateral (
+    select sum(il.amount) as amount
+    from nl.invoice_lines il
+    join nl.items i2 on i2.item_no = il.item_no
+    where i2.family = f.family
+      and il.posted_on > y.since and il.posted_on <= y.until
+  ) rev on true
+  where not exists (
+    select 1 from accountable a where a.dimension = 'part_family' and a.value = f.family)
+),
+mailboxes as (
+  select
+    'mailbox'::text                           as kind,
+    m.id::text                                as ref,
+    m.label                                   as subject,
+    case when r.id is null
+         then 'The reviewer on this inbox is not an active person.'
+         else 'Its reviewer does not hold this inbox in scope, so nobody is named against it.'
+    end                                       as why,
+    0::numeric                                as amount,
+    coalesce(waiting.drafts, 0)               as lines
+  from nl.mailboxes m
+  left join nl.users r on r.id = m.reviewer_id and r.active and r.kind = 'person'
+  left join lateral (
+    select count(*)::int as drafts
+    from nl.mail_drafts d
+    where d.mailbox_id = m.id and d.status = 'draft'
+  ) waiting on true
+  where m.active
+    and not exists (
+      select 1 from accountable a where a.dimension = 'mailbox' and a.value = m.id::text)
+)
+select * from accounts
+union all select * from families
+union all select * from mailboxes;
+
+comment on view nl.responsibility_gaps is
+  'Accounts, part families and mailboxes nobody is answerable for, with the last year of invoice lines behind each (migration 0039). Holding a whole scope dimension is oversight, not accountability.';
+
+grant select on nl.responsibility_gaps to nl_app, nl_readonly;
+
+-- The highest live ceiling for an amount authority, across every active
+-- person. A decision above this one is a decision nobody in the building can
+-- make, which is the fourth coverage gap and the only one that is about
+-- authority rather than scope.
+--
+-- "No ceiling" wins over any number, the same way nl.authority_limit reads it,
+-- so this returns null when somebody holds the authority without a limit.
+create function nl.highest_ceiling(p_authority text) returns numeric
+language sql stable
+set search_path = ''
+as $$
+  select case
+    when bool_or(g.limit_amount is null) then null
+    else max(g.limit_amount)
+  end
+  from nl.authority_grants g
+  join nl.users u on u.id = g.user_id
+  where g.authority = p_authority
+    and u.active
+    and u.kind = 'person'
+    and nl.today() >= g.starts_on
+    and (g.ends_on is null or nl.today() <= g.ends_on)
+$$;
+
+comment on function nl.highest_ceiling(text) is
+  'The largest amount anybody active can approve for this authority today, or null when somebody holds it with no ceiling (migration 0039).';
+
+grant execute on function nl.highest_ceiling(text) to nl_app, nl_readonly;

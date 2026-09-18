@@ -20,9 +20,16 @@
   nl.account_cadence cannot work out a usual gap from two orders. So the
   figure is accounts that had a rhythm and stopped, not every dead account.
 */
-import type { Db } from '../db/types.ts';
+import type { Db, Tx } from '../db/types.ts';
 import { links } from './links.ts';
-import type { Figure, RiskSection } from './types.ts';
+import type {
+	BeyondAuthorityRow,
+	CoverageDetail,
+	CoverageSection,
+	Figure,
+	GapRow,
+	RiskSection
+} from './types.ts';
 
 interface RiskRow {
 	today: string;
@@ -42,30 +49,50 @@ interface RiskRow {
 }
 
 /*
-  One trip. Each subquery is a count over a view this app already reads
-  elsewhere, and every one of them is meant to be a small number: if "what is
-  at risk" is a big number then the page has done its job and the business
-  has not.
+  One trip, and one pass per view.
+
+  The first version asked each view once per figure: four scans of
+  nl.open_line_projection, three of nl.procurement_late_supply and three of
+  nl.account_list, all of which are expensive views. That was 1,371 ms on the
+  small world, nearly all of it the same rows read ten times. Each view now
+  gets one CTE and the figures are `filter` clauses over it.
+
+  Every one of these is meant to be a small number: if "what is at risk" is a
+  big number then the page has done its job and the business has not.
 */
 const RISK_SQL = `
-	select
-		nl.today()::text                                                             as today,
-		(select count(*) from nl.open_line_projection)::int                          as open_lines,
-		(select count(*) from nl.open_line_projection where status = 'no_supply')::int
-		                                                                             as no_supply,
-		(select coalesce(sum(open_value), 0) from nl.open_line_projection
-		  where status = 'no_supply')                                                as no_supply_value,
-		(select count(*) from nl.procurement_late_supply)::int                        as late_supply_docs,
-		(select count(*) from nl.procurement_late_supply where past_due)::int         as late_supply_past_due,
-		(select count(*) from nl.procurement_late_supply where slipped)::int          as late_supply_slipped,
-		(select max(days_late) from nl.procurement_late_supply)                       as worst_days_late,
-		(select count(*) from nl.agent_queue)::int                                    as queue_waiting,
-		(select min(created_at)::date::text from nl.agent_queue)                      as queue_oldest,
-		(select count(*) from nl.account_list where gone_quiet)::int                   as quiet_accounts,
-		(select coalesce(sum(revenue_last_year), 0) from nl.account_list
-		  where gone_quiet)                                                          as quiet_revenue,
-		(select max(days_quiet) from nl.account_list where gone_quiet)                as quiet_worst_days,
-		(select count(*) from nl.account_list where not closed)::int                  as accounts`;
+	with lines as (
+		select count(*)::int                                            as open_lines,
+		       count(*) filter (where status = 'no_supply')::int          as no_supply,
+		       coalesce(sum(open_value) filter (where status = 'no_supply'), 0) as no_supply_value
+		from nl.open_line_projection
+	),
+	supply as (
+		select count(*)::int                                            as docs,
+		       count(*) filter (where past_due)::int                     as past_due,
+		       count(*) filter (where slipped)::int                      as slipped,
+		       max(days_late)                                            as worst_days_late
+		from nl.procurement_late_supply
+	),
+	queue as (
+		select count(*)::int                                            as waiting,
+		       min(created_at)::date::text                               as oldest
+		from nl.agent_queue
+	),
+	book as (
+		select count(*) filter (where gone_quiet)::int                   as quiet_accounts,
+		       coalesce(sum(revenue_last_year) filter (where gone_quiet), 0) as quiet_revenue,
+		       max(days_quiet) filter (where gone_quiet)                 as quiet_worst_days,
+		       count(*) filter (where not closed)::int                   as accounts
+		from nl.account_list
+	)
+	select nl.today()::text as today,
+	       l.open_lines, l.no_supply, l.no_supply_value,
+	       s.docs as late_supply_docs, s.past_due as late_supply_past_due,
+	       s.slipped as late_supply_slipped, s.worst_days_late,
+	       q.waiting as queue_waiting, q.oldest as queue_oldest,
+	       b.quiet_accounts, b.quiet_revenue, b.quiet_worst_days, b.accounts
+	from lines l, supply s, queue q, book b`;
 
 function money(value: number): string {
 	const size = Math.abs(value);
@@ -81,7 +108,10 @@ function daysBetween(fromIso: string, toIso: string): number {
 }
 
 export async function readRisk(db: Db, userId: number): Promise<RiskSection> {
-	const [r] = await db.asUser(userId, (tx) => tx.query<RiskRow>(RISK_SQL));
+	const { risk: r, coverage } = await db.asUser(userId, async (tx) => ({
+		risk: (await tx.query<RiskRow>(RISK_SQL))[0],
+		coverage: await readCoverageFigures(tx)
+	}));
 
 	const noSupply = Number(r.no_supply);
 	const openLines = Number(r.open_lines);
@@ -158,7 +188,219 @@ export async function readRisk(db: Db, userId: number): Promise<RiskSection> {
 		}
 	];
 
-	return { today: r.today, figures };
+	return { today: r.today, figures, coverage };
+}
+
+// ---------------------------------------------------------------------------
+// Coverage of responsibility: who is answering for what
+// ---------------------------------------------------------------------------
+
+/*
+  The kinds of gap, in the order an executive would ask about them, with the
+  authority question last because it is the only one that is not about scope.
+
+  Feature detection first. nl.responsibility_gaps is this migration's own view
+  and nl.highest_ceiling its own function, but both read the roles model
+  (nl.user_scope, nl.authority_grants), and a roles-gaps branch is adding the
+  same idea as kinds on nl.work_waiting_for. So: if the view is not there, the
+  whole section is left out silently rather than shown as four zeros, which
+  would read as good news.
+*/
+const GAP_KINDS = [
+	{ kind: 'account' as const, one: 'account', many: 'Accounts nobody is answerable for' },
+	{ kind: 'part_family' as const, one: 'part family', many: 'Part families nobody plans' },
+	{ kind: 'mailbox' as const, one: 'inbox', many: 'Inboxes nobody reads' }
+];
+
+/** The amount authorities, and the queue each one decides. */
+const AMOUNT_AUTHORITIES = [
+	{
+		authority: 'approve_quote',
+		label: 'Approve a quote',
+		what: 'drafted quotes waiting in the approval queue',
+		source: 'rfq' as const
+	},
+	{
+		authority: 'release_purchase_order',
+		label: 'Release a purchase order',
+		what: 'purchase requests the procurement desk proposed',
+		source: 'purchase' as const
+	}
+];
+
+interface GapCount {
+	kind: string;
+	count: number;
+	amount: number;
+}
+
+/** Is the roles model, and this migration's view over it, in this database? */
+async function gapsPresent(tx: Tx): Promise<boolean> {
+	const [row] = await tx.sql<{ ok: boolean }>`
+		select pg_catalog.to_regclass('nl.responsibility_gaps') is not null
+		   and pg_catalog.to_regprocedure('nl.highest_ceiling(text)') is not null as ok`;
+	return row?.ok === true;
+}
+
+/** The counts behind each amount authority: what is waiting above every ceiling. */
+async function beyondAuthority(tx: Tx): Promise<BeyondAuthorityRow[]> {
+	const out: BeyondAuthorityRow[] = [];
+	for (const item of AMOUNT_AUTHORITIES) {
+		const [row] = await tx.sql<{ ceiling: number | null; waiting: number; value: number }>`
+			with top as (select nl.highest_ceiling(${item.authority}) as ceiling),
+			items as (
+				select q.value
+				from nl.agent_queue q, top
+				where q.source = ${item.source}
+				  and top.ceiling is not null
+				  and coalesce(q.value, 0) > top.ceiling
+			)
+			select (select ceiling from top)                        as ceiling,
+			       (select count(*) from items)::int                as waiting,
+			       (select coalesce(sum(value), 0) from items)      as value`;
+		out.push({
+			authority: item.authority,
+			label: item.label,
+			ceiling: row.ceiling === null ? null : Number(row.ceiling),
+			waiting: Number(row.waiting),
+			value: Number(row.value),
+			what: item.what,
+			href: links.queue(item.source)
+		});
+	}
+	return out;
+}
+
+/** The four coverage figures, or null when the model is not here. */
+async function readCoverageFigures(tx: Tx): Promise<CoverageSection | null> {
+	if (!(await gapsPresent(tx))) return null;
+
+	const counts = await tx.sql<GapCount>`
+		select kind, count(*)::int as count, coalesce(sum(amount), 0) as amount
+		from nl.responsibility_gaps
+		group by kind`;
+	const beyond = await beyondAuthority(tx);
+
+	const figures: Figure[] = GAP_KINDS.map(({ kind, one, many }) => {
+		const found = counts.find((c) => c.kind === kind);
+		const count = found ? Number(found.count) : 0;
+		const amount = found ? Number(found.amount) : 0;
+		return {
+			id: `coverage-${kind}`,
+			label: many,
+			value: count,
+			unit: 'count' as const,
+			compare:
+				count === 0
+					? `every live ${one} has somebody named against it`
+					: amount > 0
+						? `worth ${money(amount)} of invoice lines in the last year`
+						: 'nothing has been billed against them in the last year',
+			source: 'named scope, not oversight',
+			href: links.coverage(kind),
+			hrefLabel: 'Which ones',
+			tone: count > 0 ? 'warn' : 'plain',
+			toneWord: count > 0 ? 'nobody answers for them' : undefined
+		};
+	});
+
+	// The authority gap, as one figure across the amount authorities, because
+	// "a decision nobody can make" is one problem however it arrives.
+	const stuck = beyond.reduce((sum, row) => sum + row.waiting, 0);
+	const stuckValue = beyond.reduce((sum, row) => sum + row.value, 0);
+	const uncapped = beyond.filter((row) => row.ceiling === null).map((row) => row.label);
+	figures.push({
+		id: 'coverage-authority',
+		label: 'Decisions above every ceiling',
+		value: stuck,
+		unit: 'count',
+		compare:
+			stuck === 0
+				? uncapped.length === beyond.length
+					? 'somebody holds every amount authority with no ceiling, so nothing can be stuck above one'
+					: 'nothing waiting is above the highest ceiling anybody active holds'
+				: `worth ${money(stuckValue)}, waiting on an amount nobody active can approve`,
+		source: 'live authority grants',
+		href: links.coverage(),
+		hrefLabel: 'What is stuck',
+		tone: stuck > 0 ? 'danger' : 'plain',
+		toneWord: stuck > 0 ? 'nobody can decide them' : undefined
+	});
+
+	return {
+		figures,
+		note:
+			'Scope says who may see and touch a thing; this counts who is answerable for it. Holding a whole ' +
+			'dimension is oversight, so the chief executive holding every account does not make an unowned ' +
+			'account covered.'
+	};
+}
+
+/** The list behind the coverage figures. `kind` opens one of the three. */
+export async function readCoverage(
+	db: Db,
+	userId: number,
+	kind: 'account' | 'part_family' | 'mailbox' | null
+): Promise<CoverageDetail | null> {
+	return db.asUser(userId, async (tx) => {
+		if (!(await gapsPresent(tx))) return null;
+		const [{ today }] = await tx.sql<{ today: string }>`select nl.today()::text as today`;
+
+		const counts = await tx.sql<GapCount>`
+			select kind, count(*)::int as count, coalesce(sum(amount), 0) as amount
+			from nl.responsibility_gaps
+			group by kind`;
+
+		const rows = kind
+			? await tx.sql<{
+					kind: GapRow['kind'];
+					ref: string;
+					subject: string;
+					why: string;
+					amount: number;
+					lines: number;
+				}>`
+					select kind, ref, subject, why, amount, lines
+					from nl.responsibility_gaps
+					where kind = ${kind}
+					order by amount desc, lines desc, ref
+					limit 200`
+			: [];
+
+		return {
+			today,
+			kind,
+			counts: GAP_KINDS.map(({ kind: k, many }) => {
+				const found = counts.find((c) => c.kind === k);
+				return {
+					kind: k,
+					label: many,
+					count: found ? Number(found.count) : 0,
+					amount: found ? Number(found.amount) : 0,
+					href: links.coverage(k)
+				};
+			}),
+			rows: rows.map(
+				(r): GapRow => ({
+					kind: r.kind,
+					ref: r.ref,
+					subject: r.subject,
+					why: r.why,
+					amount: Number(r.amount),
+					lines: Number(r.lines),
+					// A part family and an inbox have no record page of their own;
+					// an account does, and that is where somebody is assigned.
+					href: r.kind === 'account' ? links.account(r.ref) : null,
+					hrefLabel: r.kind === 'account' ? 'The account' : null
+				})
+			),
+			beyondAuthority: await beyondAuthority(tx),
+			note:
+				'Named scope, not oversight. A principal who holds a whole dimension can see everything in it and ' +
+				'is answerable for none of it, which is the right way round and is why this list is not empty.',
+			peopleHref: links.people()
+		};
+	});
 }
 
 // ---------------------------------------------------------------------------

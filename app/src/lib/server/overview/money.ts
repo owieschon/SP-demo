@@ -1,7 +1,7 @@
 /*
   Question one: is the money where it should be, and where is it leaking?
 
-  Revenue and gross margin come from nl.ledger_month (migration 0034), which
+  Revenue and gross margin come from nl.ledger_month (migration 0039), which
   is the invoice ledger rolled up per calendar month and kept current by
   triggers. The definition is the one nl.item_margin_history and
   nl.customer_margin already use, so the top of this page and the part page
@@ -15,7 +15,7 @@
   starts lying. The month in progress is on the chart, marked as partial, and
   in none of the figures.
 
-  Then the leaks. Each one is a view in migration 0034, each names the
+  Then the leaks. Each one is a view in migration 0039, each names the
   customers or parts behind it, and each reaches the invoice lines that prove
   it. They are reported one by one and never added up: the frozen-agreement
   leak and the cost-passthrough leak can count the same dollar from two sides.
@@ -125,30 +125,47 @@ interface LeakTotals {
 }
 
 /*
-  The three leak headlines. Each subquery is the view's own filter, so the
-  number at the top of the page and the number on the leak page are the same
-  query with a different projection.
+  The three leak headlines, in one trip and one pass per view.
+
+  The first version asked each view once per figure: four scans of
+  nl.invoice_freight and three of nl.overview_price_exceptions. On the small
+  world that was 1,790 ms, and nearly all of it was the same rows read seven
+  times. Each view is now read once, in its own CTE, and the figures are
+  `filter` clauses over that one pass. The numbers are identical; the page is
+  two orders of magnitude cheaper (see docs/overview.md).
 */
 const LEAK_SQL = `
-	select
-		(select count(*) from nl.overview_price_exceptions)::int                    as agreements,
-		(select count(*) from nl.overview_price_exceptions where below_floor_now)::int
-		                                                                           as agreements_below_floor,
-		(select coalesce(sum(absorbed), 0) from nl.overview_price_exceptions)       as agreements_absorbed,
-		(select count(*) from nl.invoice_freight f
-		  where not f.ships_own_carrier and f.shortfall > 0
-		    and f.posted_on > nl.today() - 365 and f.posted_on <= nl.today())::int  as freight_invoices,
-		(select coalesce(sum(f.shortfall), 0) from nl.invoice_freight f
-		  where not f.ships_own_carrier
-		    and f.posted_on > nl.today() - 365 and f.posted_on <= nl.today())       as freight_shortfall,
-		(select coalesce(sum(f.freight_billed), 0) from nl.invoice_freight f
-		  where not f.ships_own_carrier
-		    and f.posted_on > nl.today() - 365 and f.posted_on <= nl.today())       as freight_billed,
-		(select coalesce(sum(f.freight_at_rate), 0) from nl.invoice_freight f
-		  where not f.ships_own_carrier
-		    and f.posted_on > nl.today() - 365 and f.posted_on <= nl.today())       as freight_at_rate,
-		(select count(*) from nl.overview_cost_passthrough)::int                    as parts,
-		(select coalesce(sum(shortfall), 0) from nl.overview_cost_passthrough)      as parts_shortfall`;
+	with clock as (select nl.today() as today),
+	agreements as (
+		select count(*)::int                                          as rows_count,
+		       count(*) filter (where below_floor_now)::int            as below_floor,
+		       coalesce(sum(absorbed), 0)                              as absorbed
+		from nl.overview_price_exceptions
+	),
+	freight as (
+		select count(*) filter (where f.shortfall > 0)::int            as invoices,
+		       coalesce(sum(f.shortfall), 0)                           as shortfall,
+		       coalesce(sum(f.freight_billed), 0)                      as billed,
+		       coalesce(sum(f.freight_at_rate), 0)                     as at_rate
+		from nl.invoice_freight f, clock k
+		where not f.ships_own_carrier
+		  and f.posted_on > k.today - 365 and f.posted_on <= k.today
+	),
+	parts as (
+		select count(*)::int                                          as rows_count,
+		       coalesce(sum(shortfall), 0)                             as shortfall
+		from nl.overview_cost_passthrough
+	)
+	select a.rows_count      as agreements,
+	       a.below_floor     as agreements_below_floor,
+	       a.absorbed        as agreements_absorbed,
+	       f.invoices        as freight_invoices,
+	       f.shortfall       as freight_shortfall,
+	       f.billed          as freight_billed,
+	       f.at_rate         as freight_at_rate,
+	       p.rows_count      as parts,
+	       p.shortfall       as parts_shortfall
+	from agreements a, freight f, parts p`;
 
 /** "up 8%", "down 3%", or "level with" when the two are the same to the dollar. */
 function movement(now: number, before: number): string {
