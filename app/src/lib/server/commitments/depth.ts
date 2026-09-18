@@ -2,7 +2,7 @@
 // version ended, the conditions those quotes carry, the trail of answers its
 // closed windows got, and the next steps somebody still owes.
 //
-// Everything here is a read. The shapes come from migration 0027's views, and
+// Everything here is a read. The shapes come from migration 0031's views, and
 // the one piece of work done in JavaScript is comparing two versions of a
 // quote to say what changed between them, because that reads better as plain
 // code than as SQL.

@@ -672,7 +672,7 @@ describe.each(SIZES)('the seeded %s world', (size) => {
 	});
 
 	it('leaves the stored delivered figure in agreement with a fresh count', async () => {
-		// Migration 0027 adds commitments and answers during the build, which
+		// Migration 0031 adds commitments and answers during the build, which
 		// the 0008 triggers have to keep up with.
 		const drift = await world.asSystem((tx) => tx.sql<{ n: number }>`select count(*)::int as n from nl.delivery_drift()`);
 		expect(drift[0].n).toBe(0);
