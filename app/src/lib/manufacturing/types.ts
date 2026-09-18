@@ -2,6 +2,15 @@
 // out of a view or a function in migrations 0035 to 0038; nothing is worked
 // out in TypeScript, because the same figures have to be available to the
 // assistant and the order desk, which do not run this code.
+//
+// This file is OUTSIDE $lib/server on purpose. It holds types and one list of
+// nine words, touches no database and carries no secret, and a page needs
+// COST_ELEMENTS to order a breakdown. SvelteKit refuses to bundle anything
+// under $lib/server into the browser, which is the right rule, and it failed
+// the production build rather than the type check: `npm run check` passed
+// while `npm run build` did not, so a broken deployment was served for hours
+// looking like a database fault. Client-safe shapes live here; anything that
+// reads the database stays in $lib/server/manufacturing.
 
 /** The nine cost elements, in the order the breakdown shows them. */
 export const COST_ELEMENTS = [

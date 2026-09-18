@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { count, day, moneyExact, percent } from '$lib/format';
-	import { COST_ELEMENTS } from '$lib/server/manufacturing/types';
+	import { COST_ELEMENTS } from '$lib/manufacturing/types';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
