@@ -31,9 +31,10 @@
 	import Page from '$lib/components/ui/Page.svelte';
 	import Panel from '$lib/components/ui/Panel.svelte';
 	import SkeletonRows from '$lib/components/ui/SkeletonRows.svelte';
-	import Stat from '$lib/components/ui/Stat.svelte';
 	import SubmitButton from '$lib/components/ui/SubmitButton.svelte';
+	import Tabs from '$lib/components/ui/Tabs.svelte';
 	import LoadFailed from '$lib/components/ui/LoadFailed.svelte';
+	import Refusals from '$lib/components/agents/Refusals.svelte';
 	import TrustTrend from '$lib/components/agents/TrustTrend.svelte';
 	import { count, moment, percent } from '$lib/format';
 	import { LEVEL_LABEL, LEVEL_MEANING } from '$lib/harness/levels';
@@ -53,23 +54,16 @@
 	const anyPaused = $derived(agents.some((a) => a.paused));
 	const everythingStopped = $derived(agents.length > 0 && agents.every((a) => a.paused));
 
-	/** The page-wide totals. Each one is a sum of the rows below it, nothing new. */
-	const total = $derived({
-		runs: agents.reduce((sum, a) => sum + a.runs, 0),
-		reviewed: agents.reduce((sum, a) => sum + a.reviewed, 0),
-		approved: agents.reduce((sum, a) => sum + a.approved, 0),
-		edited: agents.reduce((sum, a) => sum + a.edited, 0),
-		rejected: agents.reduce((sum, a) => sum + a.rejected, 0),
-		refusals: agents.reduce((sum, a) => sum + a.refusals, 0),
-		actedAlone: agents.reduce((sum, a) => sum + a.actedAlone, 0),
-		undone: agents.reduce((sum, a) => sum + a.undone, 0)
-	});
+	/*
+	  There is deliberately NO row of page-wide totals here.
 
-	const overallApproval = $derived(
-		total.approved + total.edited + total.rejected === 0
-			? null
-			: (total.approved + total.edited) / (total.approved + total.edited + total.rejected)
-	);
+	  A merged "agents handled N runs, approval rate X" hides the one thing a
+	  person came to find out, which is that one desk may be ready for more
+	  autonomy and the other is not. The order desk has volume and the
+	  procurement desk has almost none; averaged together they produce a figure
+	  that describes neither and would be quoted as though it described both.
+	  Every figure on this page belongs to one named agent.
+	*/
 
 	/** "nothing yet" and not "0%". An agent nobody has reviewed is not an agent at zero. */
 	function rate(value: number | null): string {
@@ -100,6 +94,27 @@
 	const toggle = (key: string) => (open = open === key ? null : key);
 
 	const evalsBeaten = $derived(data.evals.suites.filter((s) => s.beatBaseline).length);
+
+	/*
+	  Which sources the unified run view is built from in this database.
+
+	  nl.agent_runs is assembled by a function from the tables that exist, so a
+	  feature whose table has not landed contributes no rows. The procurement
+	  desk is the live case: its own table is not in the view yet, so its row
+	  reads as nothing yet. Saying which sources are in beats letting an agent
+	  look idle when it is really unrecorded.
+	*/
+	const missingSources = $derived(
+		Object.entries(data.sources)
+			.filter(([, present]) => !present)
+			.map(([name]) => name)
+	);
+
+	/** The tabs for the one chart. The URL carries the choice, so a view can be linked. */
+	const trendTabs = $derived([
+		{ value: 'all', label: 'Everything' },
+		...agents.map((a) => ({ value: a.agent, label: a.name }))
+	]);
 </script>
 
 <Page
@@ -137,104 +152,54 @@
 		</p>
 	{/if}
 
-	<!-- 1. The four figures that decide the question, each against something. -->
-	<dl class="figures">
-		<Stat
-			label="Runs on the record"
-			value={count(total.runs)}
-			unit="runs"
-			compare="every run every agent has made, not a sample"
-			source="agent run log"
-			asOf={data.today}
-		/>
-		<Stat
-			label="Approval rate"
-			value={rate(overallApproval)}
-			compare={total.reviewed === 0
-				? 'nobody has decided one yet'
-				: `${count(total.approved + total.edited)} let through of ${count(total.reviewed)} a person decided`}
-			source="agent run log"
-			asOf={data.today}
-		/>
-		<Stat
-			label="Corrected first"
-			value={rate(
-				total.approved + total.edited === 0 ? null : total.edited / (total.approved + total.edited)
-			)}
-			compare={total.approved + total.edited === 0
-				? 'nothing has been let through yet'
-				: `${count(total.edited)} of the ${count(total.approved + total.edited)} let through were edited`}
-			source="agent run log"
-			asOf={data.today}
-		/>
-		<Stat
-			label="Refused by a guardrail"
-			value={count(total.refusals)}
-			unit="runs"
-			compare={total.runs === 0
-				? 'no runs yet'
-				: `${percent(total.refusals / Math.max(total.runs, 1))} of ${count(total.runs)} runs stopped themselves`}
-			source="named guardrail checks"
-			asOf={data.today}
-			tone={total.refusals > 0 ? 'plain' : 'warn'}
-			toneWord={total.refusals > 0 ? undefined : 'nothing has been refused, which is worth a look'}
-		/>
-	</dl>
+	<!--
+		1. The refusals, high on the page and on purpose.
 
-	<!-- 2. The refusals, high on the page and on purpose. -->
+		Each row carries the rule in a person's words and the file the rule is
+		really enforced in, not just the check's id. A count of refusals with no
+		rule beside it is a number nobody can argue with, which is the opposite
+		of what this page is for. Under it, the checks that have not had to
+		refuse anything yet, because "what would stop it" gets asked as often as
+		"what has stopped it".
+	-->
 	<Panel
 		title="What they refused to do"
 		asOf={data.today}
 		source="the named guardrail checks, counted from nl.agent_events"
-		flush
 	>
-		{#if data.refusals.length === 0}
-			<div class="panel-body">
-				<EmptyState
-					line="Nothing has been refused yet. On a page about trust that is a question, not a clean bill: either nothing has run, or the checks are not being reached."
-				/>
-			</div>
-		{:else}
-			<div class="table-wrap">
-				<table>
-					<caption class="sr-only">
-						Every guardrail refusal, by check, with how often it fired and what it last said
-					</caption>
-					<thead>
-						<tr>
-							<th scope="col">The rule</th>
-							<th scope="col">Agent</th>
-							<th scope="col">On what</th>
-							<th scope="col" class="num">Times</th>
-							<th scope="col">What it said, last time</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each data.refusals as refusal (`${refusal.agent}-${refusal.workKind}-${refusal.checkId}`)}
-							<tr>
-								<th scope="row"><span class="mono">{refusal.checkId}</span></th>
-								<td>{agents.find((a) => a.agent === refusal.agent)?.name ?? refusal.agent}</td>
-								<td class="muted">{refusal.workKind}</td>
-								<td class="num">{count(refusal.times)}</td>
-								<td class="said">
-									{refusal.lastDetail || 'no detail recorded'}
-									<span class="t-meta muted">{moment(refusal.lastAt)}</span>
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
-		{/if}
+		<Refusals
+			refusals={data.refusals}
+			roster={data.roster}
+			agentName={(id) => agents.find((a) => a.agent === id)?.name ?? id}
+		/>
 	</Panel>
 
-	<!-- 3. One row per agent. -->
+	<!-- 2. One row per agent, never a merged figure across them. -->
 	<Panel
 		title="One row per agent"
 		asOf={data.today}
 		source="the agent run log and the autonomy board, both read once"
 		flush
 	>
+		<div class="panel-body">
+			<p class="t-meta muted prose">
+				Every agent separately, and no combined figure anywhere on this page. One desk may have
+				earned more room and the other may not, and an average across them would describe
+				neither.
+				{#if missingSources.length > 0}
+					<!--
+						Straight from nl.agent_runs_sources(). An agent whose feature
+						table is not in the unified view yet has no runs to show, and
+						that is a different statement from an agent that never works.
+					-->
+					Not every source is in the run log in this database yet:
+					<span class="mono">{missingSources.join(', ')}</span>
+					{missingSources.length === 1 ? 'is' : 'are'} missing, so any agent that writes only
+					there reads as nothing yet.
+				{/if}
+			</p>
+		</div>
+
 		<div class="table-wrap">
 			<table>
 				<caption class="sr-only">
@@ -388,23 +353,36 @@
 										<!--
 										  THE RUN TRAIL MOUNTS HERE.
 
-										  A separate branch (desk-depth) is building a run trail
-										  component: the individual runs for one agent, what woke
-										  each, the tools it called and what a person decided. It
-										  belongs inside this open detail, under the kinds of work,
-										  because that is the one place on the page where a person
-										  has already chosen an agent and wants to see the runs
+										  The branch called desk-depth builds it, and it is
+										  deliberately not duplicated here. Two components on one
+										  page listing the same runs would be exactly the second
+										  count of one thing this page exists to avoid.
+
+										  It belongs INSIDE this open detail, under the kinds of
+										  work: this is the one place on the page where a person
+										  has already chosen an agent and now wants the runs
 										  themselves rather than a rate.
 
-										  Drop it in as:
+										  On desk-depth the two components are
 
-										    <RunTrail agent={agent.agent} />
+										    app/src/lib/components/agentruns/RunList.svelte
+										    app/src/lib/components/agentruns/RunTrail.svelte
 
-										  and give it its own {#await} in +page.server.ts keyed on
-										  the open agent, so the rest of this page does not wait on
-										  it. Nothing here counts runs a second way, so the trail
-										  can read nl.agent_run_log directly through
-										  $lib/server/harness/runs listRuns().
+										  and RunList's own header says it takes rows and renders
+										  them and knows nothing about where they came from, so it
+										  mounts as it is:
+
+										    <RunList runs={runs} showAgent={false} />
+
+										  Give it its own promise in +page.server.ts, keyed on the
+										  open agent and NOT awaited, with RunListSkeleton behind
+										  an {#await}, so the rest of this page never waits on it.
+										  Its rows come from the same view everything here reads:
+										  $lib/server/agentruns/read.ts on that branch, or
+										  listRuns() in $lib/server/harness/runs.ts on this one.
+										  Whichever it is, it must stay a read of
+										  nl.agent_run_log, so the trail and the rates above it
+										  cannot disagree.
 										-->
 
 										{#if data.mayPromote && agent.granted}
@@ -539,19 +517,17 @@
 		source="the agent run log, bucketed by week"
 	>
 		{#snippet actions()}
-			<nav class="segmented" aria-label="Whose trend to show">
-				<a href={routes.agents()} aria-current={data.agent === null ? 'page' : undefined}>
-					Everything
-				</a>
-				{#each agents as agent (agent.agent)}
-					<a
-						href={routes.agents(agent.agent)}
-						aria-current={data.agent === agent.agent ? 'page' : undefined}
-					>
-						{agent.name}
-					</a>
-				{/each}
-			</nav>
+			<!--
+				The house Tabs component rather than a hand-rolled nav: it keeps
+				every other query parameter when it switches, which a plain set
+				of links does not, and it is anchors so copy-link still works.
+			-->
+			<Tabs
+				param="agent"
+				current={data.agent ?? 'all'}
+				label="Whose trend to show"
+				tabs={trendTabs}
+			/>
 		{/snippet}
 
 		{#await data.trend}
@@ -567,20 +543,41 @@
 	<Panel
 		title="The eval suites"
 		asOf={data.evals.ranOn ?? data.today}
-		source={data.evals.ranOn ? 'the last eval run' : 'nothing has run yet'}
+		source={data.evals.source === 'run'
+			? 'the last whole eval run'
+			: data.evals.source === 'baseline'
+				? 'the recorded baseline, not a fresh run'
+				: 'nothing on file'}
 		flush
 	>
-		{#if data.evals.ranOn === null}
+		{#if data.evals.source === 'none'}
 			<div class="panel-body">
 				<EmptyState
-					line="No eval run on file. Run npm run eval:agents to write one; the baseline is on file either way."
+					line="No eval baseline and no run on file. Run npm run eval:agents to write both."
 				/>
 			</div>
 		{:else}
+			{#if data.evals.source === 'baseline'}
+				<!--
+					The run artifact is written by the runner and is not committed,
+					so a fresh checkout has a baseline and no artifact. Showing the
+					baseline is honest; showing zeros would say the evals do not
+					exist, which is the worst lie this page could tell. It is
+					labelled either way.
+				-->
+				<div class="panel-body">
+					<p class="t-meta muted prose">
+						These are the <strong>recorded baseline</strong> figures, which is the floor
+						<span class="mono">npm test</span> holds the suites to, not the result of a run made
+						just now. Running <span class="mono">npm run eval:agents</span> writes a fresh result
+						beside the baseline and this panel then shows both and compares them.
+					</p>
+				</div>
+			{/if}
 			<div class="table-wrap">
 				<table>
 					<caption class="sr-only">
-						Each eval suite: cases fully right in the last run, against the baseline
+						Each eval suite: cases fully right, against the baseline, with a link into a case
 					</caption>
 					<thead>
 						<tr>
@@ -589,6 +586,7 @@
 							<th scope="col" class="num">Baseline</th>
 							<th scope="col">Against the baseline</th>
 							<th scope="col">Fields scored</th>
+							<th scope="col">A case</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -604,7 +602,9 @@
 									{/if}
 								</td>
 								<td>
-									{#if suite.baselinePassed === null}
+									{#if data.evals.source !== 'run'}
+										<span class="muted">This IS the baseline.</span>
+									{:else if suite.baselinePassed === null}
 										<span class="muted">Nothing to beat yet.</span>
 									{:else if suite.beatBaseline}
 										<span class="chip">At or above it</span>
@@ -617,6 +617,27 @@
 										<span>{field} {f1.toFixed(2)}</span>
 									{/each}
 								</td>
+								<td>
+									<!--
+										A real link into a real case, built from the first case
+										name on disk rather than from a filename typed into the
+										markup. A page that names a case file that does not
+										exist is worse than one that names none.
+									-->
+									{#if suite.caseNames.length > 0}
+										<a
+											class="link"
+											href={routes.agentEvalCase(suite.folder, suite.caseNames[0])}
+										>
+											Read one
+										</a>
+										<span class="t-meta muted wrap">
+											{count(suite.caseNames.length)} on file
+										</span>
+									{:else}
+										<span class="muted">no case files</span>
+									{/if}
+								</td>
 							</tr>
 						{/each}
 					</tbody>
@@ -626,10 +647,7 @@
 				<p class="t-meta muted prose">
 					{data.evals.caveat}
 					{#if data.evals.reportPath}
-						The run itself is written up in
-						<span class="mono">{data.evals.reportPath}</span>, and each case is a file:
-						<span class="mono">evals/agents/guardrails/cases/01-refuses-cost-to-a-customer.json</span>
-						is one.
+						The last run is written up in <span class="mono">{data.evals.reportPath}</span>.
 					{/if}
 				</p>
 			</div>
@@ -764,8 +782,10 @@
 		padding: var(--space-3) 0;
 	}
 
-	.said {
-		max-width: 44ch;
+	/* A cell's supporting line goes under its value, not beside it. */
+	.wrap {
+		display: block;
+		white-space: normal;
 	}
 
 	.ready {
