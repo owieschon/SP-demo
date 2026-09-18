@@ -7,7 +7,7 @@
 // is the trail's half of the shape, plus the few run fields the trail is read
 // beside.
 
-import type { Disclosure } from '$lib/desk/types';
+import type { Disclosure, FactKind } from '$lib/desk/types';
 
 export const AGENT_LABEL: Record<string, string> = {
 	order_desk: 'Order desk agent',
@@ -64,10 +64,17 @@ export const STEP_LABEL: Record<StepKind, string> = {
 /**
  * One step of a run.
  *
- * `withheld` means the disclosure policy would not let this trail's reader
- * see the detail, so the detail was never stored. The label and the reason
- * are still here, because a step that vanished would be worse than a step
- * that says what it is keeping back.
+ * `withheld` means the detail is not here, for one of two reasons, and
+ * `withheldReason` says which:
+ *
+ *   * the level the run's own output was drafted at could not hold it, so it
+ *     was never stored (app/src/lib/server/agentruns/trail.ts), or
+ *   * the person reading this trail may not be shown a kind of fact the step
+ *     rests on, so it was left out of the payload assembled for them
+ *     (app/src/lib/server/agentruns/read.ts, through nl.may_see).
+ *
+ * Either way the label and the reason are still here, because a step that
+ * vanished would be worse than a step that says what it is keeping back.
  */
 export interface RunStep {
 	id: number;
@@ -82,6 +89,13 @@ export interface RunStep {
 	/** On a refusal: which rule, and what it says. */
 	rule: string | null;
 	ruleNote: string;
+	/**
+	 * Which kinds of fact this step's detail rests on, in the disclosure
+	 * policy's own vocabulary. Empty on a step that rests on no business fact
+	 * (a row count, a timing, a rule). Kept on a withheld step too, so the
+	 * page can say what is being held back rather than only that something is.
+	 */
+	factKinds: FactKind[];
 	withheld: boolean;
 	withheldReason: string;
 }
@@ -190,6 +204,10 @@ export const RULES = {
 	trailDisclosure: {
 		id: 'trail.same_check_as_a_draft',
 		note: 'A step of the trail goes through the same disclosure check as a draft reply, so reading the record cannot leak what sending the reply could not.'
+	},
+	readerDisclosure: {
+		id: 'trail.reader_may_not_see_it',
+		note: 'A trail is written once and read by many people, so every step is checked again against the disclosure grant of whoever opens it (nl.may_see). The step stays, the detail does not.'
 	}
 } as const;
 

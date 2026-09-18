@@ -92,7 +92,18 @@
 				<span class="body">
 					<span class="label">{step.label}</span>
 					{#if step.withheld}
+						<!--
+							The withholding is the point of showing it. The step is
+							still numbered and still labelled; this line says what
+							is missing and why, so a reader knows to ask rather
+							than never knowing there was anything to ask about.
+						-->
 						<span class="withheld">Withheld: {step.withheldReason}</span>
+						{#if step.factKinds.length > 0}
+							<span class="kinds faint">
+								Rests on: {step.factKinds.join(', ')}
+							</span>
+						{/if}
 					{:else}
 						{#if step.args}
 							<code class="args">{JSON.stringify(step.args)}</code>
@@ -229,9 +240,15 @@
 
 	.result,
 	.withheld,
+	.kinds,
 	.rule {
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
+	}
+
+	.kinds {
+		font-family: var(--font-mono);
+		font-size: 0.78rem;
 	}
 
 	.result {

@@ -41,7 +41,7 @@ export interface ItemSource {
 }
 
 /**
- * How one desk item arrived. Two columns migration 0031 added, read on their
+ * How one desk item arrived. Two columns migration 0039 added, read on their
  * own rather than widening the desk's own query.
  */
 export async function readItemSource(

@@ -9,6 +9,16 @@
 // leaked what a reply could not would make the whole disclosure story
 // worthless, and the trail is the part nobody reads carefully.
 //
+// There are TWO readers, though, and this file can only answer for one of
+// them. The check here is against the level the run's own output was drafted
+// at, which is the mailbox's. The other reader is the person who opens the
+// trail afterwards, and their disclosure grant (migration 0031) is a
+// different question: one trail is read by many people. This file cannot
+// answer that one, because a trail is written once and nobody knows yet who
+// will read it. What it does instead is record on every step which KINDS of
+// fact its detail rests on, so that ./read.ts can answer it at read time
+// through nl.may_see. That is the whole reason fact_kinds exists.
+//
 // The amount rule applies here too, and it is the one that bites: every
 // dollar figure in a step has to trace back to a fact the step carries. So a
 // step that names money attaches the facts that money came from, and a step
@@ -17,7 +27,7 @@
 // Rule two. A refusal is a step, with a rule reference and the rule's own
 // sentence on it, never a silence. `refusal()` will not build one without a
 // rule, and the database will not store one either.
-import type { Disclosure, Fact } from '$lib/desk/types';
+import type { Disclosure, Fact, FactKind } from '$lib/desk/types';
 import { RULES, type RuleKey, type StepKind } from '$lib/agentruns/types';
 import { checkDraft } from '../desk/policy.ts';
 import type { Tx } from '../db/types.ts';
@@ -56,6 +66,17 @@ function stepText(step: DraftStep): string {
 	return parts.filter(Boolean).join('\n');
 }
 
+/**
+ * The kinds of fact a step's detail rests on, deduplicated and in a stable
+ * order. This is the step's own declaration of what is in it, and it is what
+ * the READ-time check reads: a trail is written once against the mailbox's
+ * level and then read by people whose own disclosure grants differ, and only
+ * the reader knows who is reading. See ./read.ts.
+ */
+function factKindsOf(step: DraftStep): FactKind[] {
+	return [...new Set((step.facts ?? []).map((fact) => fact.kind))].sort();
+}
+
 /** One step, checked against the policy and turned into a row. */
 export function checkStep(step: DraftStep, who: TrailReader): StepInput {
 	const verdict = checkDraft({
@@ -73,7 +94,11 @@ export function checkStep(step: DraftStep, who: TrailReader): StepInput {
 		rows: step.rows ?? null,
 		ms: step.ms ?? null,
 		rule: step.rule ? RULES[step.rule].id : null,
-		rule_note: step.rule ? RULES[step.rule].note : ''
+		rule_note: step.rule ? RULES[step.rule].note : '',
+		// Kept even when the step is withheld below: "there was a step here
+		// about unit cost and you may not see it" is the visible withholding,
+		// and a step that dropped its kinds could never be explained.
+		fact_kinds: factKindsOf(step)
 	};
 
 	if (verdict.ok) {

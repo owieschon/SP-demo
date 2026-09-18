@@ -7,7 +7,26 @@
 //
 // The `inputs` column is never selected here. It is the recorded material a
 // replay needs, not something a page shows.
-import type { Disclosure } from '$lib/desk/types';
+//
+// DISCLOSURE. Every step was already checked when it was written, against the
+// level the run's own output was drafted at (the mailbox's). That is not the
+// same question as "may THIS person see it". One trail is read by many
+// people, and their disclosure grants differ: migration 0031 gives every
+// principal a level, and nl.disclosure_for defaults a principal with no grant
+// to 'customer' rather than to everything. So the check is run again here,
+// against the person asking, using the kinds of fact each step recorded about
+// itself. A step naming a kind they may not be shown comes back with its
+// detail dropped and `withheld` true.
+//
+// It happens here and not in the components on purpose: a value narrowed in
+// markup is still in the JSON the browser received. The narrowing belongs
+// where the payload is assembled, which is this file.
+//
+// The withholding is visible, never silent. The step stays in the list, keeps
+// its sequence number, its kind and its label, and says which kind of fact
+// was held back and why. A trail that quietly dropped steps would be worth
+// less than no trail, because a reader would not know to ask.
+import type { Disclosure, FactKind } from '$lib/desk/types';
 import type { RunStep, RunSummary, RunTrail, StepKind, WokeBy } from '$lib/agentruns/types';
 import type { Db, Tx } from '../db/types.ts';
 
@@ -112,35 +131,86 @@ interface StepRow {
 	ms: number | null;
 	rule: string | null;
 	rule_note: string;
+	fact_kinds: FactKind[];
 	withheld: boolean;
 	withheld_reason: string;
+	/** The kinds on this step that THIS reader may not be shown. */
+	unseen: FactKind[];
+	/** This reader's own disclosure level, for the sentence explaining it. */
+	reader_level: Disclosure;
+}
+
+/** What to tell somebody about a step their level does not reach. */
+function withheldForReader(kinds: FactKind[], level: Disclosure): string {
+	const list = kinds.join(', ');
+	const plural = kinds.length === 1 ? 'a kind of fact' : 'kinds of fact';
+	return (
+		`This step rests on ${plural} you are not shown at the ${level} disclosure level: ${list}. ` +
+		'The step, what it was and where it came in the run are all still here; only the detail is held back. ' +
+		'Ask whoever holds your disclosure grant if you need it.'
+	);
 }
 
 function toStep(row: StepRow): RunStep {
+	// Withheld when it was written (the mailbox's level could not hold it), or
+	// withheld now (this reader's level cannot). Either way the shape a
+	// component sees is the same one, so there is one branch in the markup and
+	// not two.
+	const hiddenNow = row.unseen.length > 0;
 	return {
 		id: row.id,
 		seq: row.seq,
 		kind: row.kind,
 		label: row.label,
 		tool: row.tool,
-		args: row.args,
-		result: row.result,
+		args: hiddenNow ? null : row.args,
+		result: hiddenNow ? '' : row.result,
 		rows: row.row_count,
 		ms: row.ms,
 		rule: row.rule,
 		ruleNote: row.rule_note,
-		withheld: row.withheld,
-		withheldReason: row.withheld_reason
+		factKinds: row.fact_kinds ?? [],
+		withheld: row.withheld || hiddenNow,
+		withheldReason: hiddenNow
+			? withheldForReader(row.unseen, row.reader_level)
+			: row.withheld_reason
 	};
 }
 
-async function readSteps(tx: Tx, runKey: string): Promise<RunStep[]> {
-	const rows = await tx.sql<StepRow>`
-		select id, seq, kind, label, tool, args, result, row_count, ms, rule, rule_note,
-		       withheld, withheld_reason
-		from nl.agent_run_steps
-		where run_key = ${runKey}
-		order by seq`;
+/**
+ * The steps of one run, as this person may see them.
+ *
+ * The database decides, not this file: nl.may_see (migration 0031) is asked
+ * about every kind of fact every step declared, so the app cannot drift from
+ * the grants. The query is run as this person too, so row-level security has
+ * already had its say before disclosure gets a turn.
+ */
+async function readSteps(tx: Tx, userId: number, runKey: string): Promise<RunStep[]> {
+	const rows = await tx.query<StepRow>(
+		`with step as (
+		   select s.*,
+		          -- The kinds this reader may not be shown, in a stable order
+		          -- so the sentence explaining it does not shuffle.
+		          array(
+		            select k from unnest(s.fact_kinds) as k
+		            where not nl.may_see($2, k)
+		            order by k
+		          ) as unseen
+		   from nl.agent_run_steps s
+		   where s.run_key = $1
+		 )
+		 select id, seq, kind, label, tool, row_count, ms, rule, rule_note,
+		        fact_kinds, withheld, withheld_reason, unseen,
+		        -- Dropped in the query, not after it: the detail of a step this
+		        -- reader may not see never leaves the database, so it cannot be
+		        -- logged or serialised on the way past.
+		        case when cardinality(unseen) = 0 then args end as args,
+		        case when cardinality(unseen) = 0 then result else '' end as result,
+		        nl.disclosure_for($2) as reader_level
+		 from step
+		 order by seq`,
+		[runKey, userId]
+	);
 	return rows.map(toStep);
 }
 
@@ -179,7 +249,7 @@ export async function getTrail(db: Db, userId: number, runKey: string): Promise<
 			[runKey]
 		);
 		if (!row) return null;
-		return { ...toRun(row), steps: await readSteps(tx, runKey) };
+		return { ...toRun(row), steps: await readSteps(tx, userId, runKey) };
 	});
 }
 
@@ -200,7 +270,7 @@ export async function getTrailsOn(
 		);
 		const trails: RunTrail[] = [];
 		for (const row of rows) {
-			trails.push({ ...toRun(row), steps: await readSteps(tx, row.run_key) });
+			trails.push({ ...toRun(row), steps: await readSteps(tx, userId, row.run_key) });
 		}
 		return trails;
 	});
@@ -228,7 +298,7 @@ export async function getTrailForQuoteRequest(
 			[draftId]
 		);
 		if (!row) return null;
-		return { ...toRun(row), steps: await readSteps(tx, row.run_key) };
+		return { ...toRun(row), steps: await readSteps(tx, userId, row.run_key) };
 	});
 }
 
