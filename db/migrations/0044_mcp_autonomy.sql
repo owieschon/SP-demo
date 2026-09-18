@@ -581,6 +581,13 @@ begin
   -- A token minted before this migration has no principal yet. Making one on
   -- the way past is the migrate-on-read rule: nothing was rewritten in bulk,
   -- and the row grows the first time somebody needs it to.
+  --
+  -- One consequence, written down rather than discovered later: creating a
+  -- principal needs an admin, and raising a level needs change_policy, so
+  -- somebody holding change_policy but not admin can raise any token minted
+  -- since 0044 and not one minted before it. Every token this app mints from
+  -- now on has its principal already, so this only ever bites on a token that
+  -- predates the migration, and the fix is for an admin to move it once.
   v_principal := nl.ensure_mcp_principal(p_token_id);
 
   v_grant := case p_level when 'suggest' then 1 when 'auto_review' then 2 else 3 end;
