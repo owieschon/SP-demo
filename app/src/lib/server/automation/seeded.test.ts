@@ -35,7 +35,18 @@ describe('the example rules in the world', () => {
 		);
 		expect(rules.length).toBe(4);
 		for (const rule of rules) {
-			const parsed = ruleSchema.safeParse(rule);
+			// The rule's own six fields, not the whole row: id and owner_id
+			// belong to the record, not to the rule, and ruleSchema is strict
+			// so handing it the row would fail on them. This is the same
+			// narrowing toRule() in rules.ts does.
+			const parsed = ruleSchema.safeParse({
+				name: rule.name,
+				description: rule.description,
+				trigger: rule.trigger,
+				conditions: rule.conditions,
+				action: rule.action,
+				enabled: rule.enabled
+			});
 			expect(parsed.success, `${rule.name}: ${JSON.stringify(parsed.error?.issues)}`).toBe(true);
 			if (!parsed.success) continue;
 			await testRule(db, rule.owner_id, parsed.data, rule.id);

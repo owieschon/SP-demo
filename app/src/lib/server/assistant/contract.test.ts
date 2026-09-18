@@ -155,6 +155,19 @@ describe('every tool input refuses a field it does not have', () => {
 		}
 	});
 
+	it('names a field nested inside one, with the path to it', () => {
+		// A rule is an object inside an input, and a drafting agent types more
+		// field names in there than anywhere else, so it is strict too.
+		const parsed = findTool('test_automation_rule')!.parse({
+			rule: { ...A_RULE, notify: true }
+		});
+		expect(parsed.ok).toBe(false);
+		if (parsed.ok) return;
+		expect(parsed.message).toContain('rule.notify');
+		// And it says what the rule object does take, not what the tool takes.
+		expect(parsed.message).toContain('trigger');
+	});
+
 	it('says so in the JSON Schema it publishes, not only on the server', () => {
 		// A client that reads the schema should see the same rule the server
 		// runs, so it can refuse the call itself rather than learn by error.
