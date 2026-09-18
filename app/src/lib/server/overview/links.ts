@@ -63,8 +63,19 @@ export const links = {
 
 	// --------------------------------------------------------- 3. the agents
 
-	/** The run feed. Every filter here is one nl.agent_run_log can take. */
-	runs: (options: { agent?: string; workKind?: string; refused?: boolean; acted?: boolean } = {}) =>
+	/*
+	  The run feed. Every filter here is one nl.agent_run_log can take. The
+	  names are nullable because a caller usually passes the filters it was
+	  given, and "no agent" arrives as null from a query string.
+	*/
+	runs: (
+		options: {
+			agent?: string | null;
+			workKind?: string | null;
+			refused?: boolean;
+			acted?: boolean;
+		} = {}
+	) =>
 		`/overview/runs${query({
 			agent: options.agent,
 			work: options.workKind,
