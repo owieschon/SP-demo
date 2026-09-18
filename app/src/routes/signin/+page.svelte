@@ -2,7 +2,7 @@
 	import { enhance } from '$app/forms';
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
 	import Mark from '$lib/components/Mark.svelte';
-	import type { Role } from '$lib/types';
+	import { PRESET_LABEL } from '$lib/roles/types';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -10,11 +10,15 @@
 	// Which button is working, so only that one shows it.
 	let pending = $state<number | null>(null);
 
-	const ROLE_NOTE: Record<Role, string> = {
-		admin: 'Sees every book and can answer for any commitment.',
-		account_manager: 'Owns customers and their commitments.',
-		operations: 'Runs the order desk and the daily open-orders export.'
-	};
+	/*
+	  What each person is responsible for now comes from the database
+	  (nl.users.responsibility), not from a map in this file keyed on a role.
+	  The old map could say what a ROLE does and nothing about a person, so
+	  the four people on the same role all read identically, and it could not
+	  be edited. Switching between these people is how the role model is
+	  demonstrated, so the line beside each of them has to be true of them.
+	*/
+	const INACTIVE_NOTE = 'No longer here: the database refuses writes in this name.';
 
 	// "Pat Doe" -> "PD"
 	function initials(name: string) {
@@ -72,7 +76,7 @@
 								<span class="title muted">{user.title}</span>
 							</span>
 							<span class="role faint">
-								{user.active ? ROLE_NOTE[user.role] : 'Inactive: shows that the database refuses writes from former staff.'}
+								{user.active ? user.responsibility || PRESET_LABEL[user.role] : INACTIVE_NOTE}
 							</span>
 						</span>
 						<span class="go" aria-hidden="true">

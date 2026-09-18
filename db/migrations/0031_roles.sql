@@ -1,4 +1,4 @@
--- 0027 Roles: who a person is, said as three separate things.
+-- 0031 Roles: who a person is, said as three separate things.
 --
 -- Before this migration there was one column, nl.users.role, with three
 -- values, and it gated exactly one thing: nl.is_admin(). Everything else was
@@ -36,10 +36,27 @@
 --    and every created_by column point at nl.users, so a separate principals
 --    table would have meant a nullable second foreign key on every one of
 --    them and a polymorphic key on all three tables below. With one table,
---    an agent's mailbox is a scope row, its autonomy level is an authority
---    grant, its disclosure level is a disclosure row, and one sentence is
---    literally true: raising an agent's autonomy is the same write as
---    raising a person's approval limit. Both call nl.grant_authority.
+--    an agent's mailbox is a scope row, its disclosure level is a disclosure
+--    row, and its authority is resolved by the same two functions that answer
+--    for a person, nl.has_authority and nl.authority_ceiling.
+--
+--    Its autonomy is NOT a grant in nl.authority_grants. The agent harness
+--    (migration 0028) already owns that, at a finer grain than a principal:
+--    one level per agent per KIND OF WORK, on a four-rung ladder, where a
+--    promotion has to be earned against measured behaviour and a demotion is
+--    always allowed. That is a better model than a number somebody types, so
+--    this migration adapts to it rather than competing with it. The authority
+--    'act_unreviewed' therefore has no row in nl.authority_grants: its
+--    ceiling is resolved out of nl.agent_autonomy through
+--    nl.authority_limit_override, the same seam the policy engine will use
+--    for a person's approval limit.
+--
+--    So the honest version of the sentence this branch set out to prove: a
+--    person and an agent are asked the same question, through the same
+--    resolver, in the same shape. Where the number is kept differs, and it is
+--    behind a seam on purpose. They are not the same WRITE: raising a
+--    person's ceiling is a decision somebody makes, and raising an agent's is
+--    a decision the numbers have to support first (docs/roles.md says more).
 --    The cost of the choice is that "a user" no longer means "a person", so
 --    anything that lists people has to say `kind = 'person'`. The sign-in
 --    picker and nl.find_active_user's caller do (see app/src/lib/server/
@@ -50,7 +67,8 @@
 -- 0002 (customers, items, vendors), 0003 (commitments, quotes),
 -- 0010 (export snapshots), 0016 (open line projection), 0018 (item costs),
 -- 0019 (locations, shipments, transfers, counts), 0021 (mailboxes),
--- 0023 (nl.agent_queue). Each of those later sources is optional to
+-- 0023 (nl.agent_queue), 0028 (the agent harness and its autonomy ladder),
+-- 0029 and 0030 (the procurement desk and its place in that queue). Each of those later sources is optional to
 -- nl.work_waiting_for only in the sense that the migration order guarantees
 -- them; nothing here feature-detects them.
 
@@ -95,12 +113,20 @@ alter table nl.users
   -- sign-in picker and on /people. It used to be a map in the picker's
   -- markup, keyed on the role, so it could not say anything about a
   -- particular person and could not be edited.
-  add column responsibility text not null default '';
+  add column responsibility text not null default '',
+  -- For a principal of kind 'agent': which agent in the harness it is
+  -- (nl.agent_work_kinds.agent, migration 0028). It is how the resolver finds
+  -- the autonomy ladder for this row. Null on a person.
+  add column agent_key text
+    check (agent_key is null or agent_key in
+      ('order_desk', 'procurement_desk', 'assistant', 'automation', 'mcp'));
 
 comment on column nl.users.kind is
-  'person or agent. An agent is a principal with scope, authority and disclosure, and no sign-in (migration 0027).';
+  'person or agent. An agent is a principal with scope, authority and disclosure, and no sign-in (migration 0031).';
 comment on column nl.users.responsibility is
-  'One line: what this person or agent is answerable for. Editable on /people (migration 0027).';
+  'One line: what this person or agent is answerable for. Editable on /people (migration 0031).';
+comment on column nl.users.agent_key is
+  'For an agent principal: its name in the harness, so its autonomy resolves out of nl.agent_autonomy (migration 0031).';
 
 -- Widen the role check to the preset list. The constraint was written inline
 -- in 0001 as check (role in (...)), which Postgres named users_role_check,
@@ -160,7 +186,7 @@ create table nl.user_scope (
 );
 
 comment on table nl.user_scope is
-  'Which accounts, warehouses, vendors, part families and mailboxes are a principal''s own. A row with a null value means every value in that dimension (migration 0027).';
+  'Which accounts, warehouses, vendors, part families and mailboxes are a principal''s own. A row with a null value means every value in that dimension (migration 0031).';
 
 -- One row per (principal, dimension, value). coalesce puts the "all" row in
 -- the same index, so asking for it is the same probe as asking for one value.
@@ -232,7 +258,11 @@ as $$
     'review_exception',        -- yes/no: handle what an agent could not
     'change_policy',           -- yes/no: edit these three tables
     'run_import',              -- yes/no: stage and apply an ERP export
-    'agent_autonomy'           -- amount: an agent's autonomy LEVEL, 0 to 3
+    -- amount, and an agent's only one: how far up the harness ladder it is
+    -- allowed to act without a person. The number is the level's ordinal
+    -- (nl.agent_level_ordinal: shadow 1, suggest 2, auto_review 3, auto 4).
+    -- It is NOT stored here; see nl.authority_limit_override below.
+    'act_unreviewed'
   ]
 $$;
 
@@ -240,26 +270,27 @@ $$;
 -- function rather than in prose means the table can refuse a nonsense row:
 -- a dollar limit on "may change a policy" would be meaningless.
 --
--- agent_autonomy is in the amount list and that is the whole point. An
--- autonomy level is a limit like any other, so raising it is nl.grant_authority
--- with a bigger number, exactly as it is for a person's approval ceiling.
--- The levels: 0 watch only, 1 draft for a person, 2 send routine replies,
--- 3 send everything its disclosure level allows.
+-- act_unreviewed is in the amount list because an autonomy level IS a limit:
+-- "how far may this principal go before a person has to look". That is what
+-- makes a person's ceiling and an agent's ladder answerable by one resolver.
+-- Where the number is kept differs, and deliberately: an agent's comes from
+-- the harness (migration 0028), which earns a promotion against measured
+-- behaviour instead of taking a typed number.
 create function nl.authority_is_amount(p_authority text) returns boolean
 language sql immutable
 set search_path = ''
 as $$
   select p_authority in (
-    'approve_quote', 'release_purchase_order', 'accept_price_increase', 'agent_autonomy')
+    'approve_quote', 'release_purchase_order', 'accept_price_increase', 'act_unreviewed')
 $$;
 
 create table nl.authority_grants (
   id           bigint generated always as identity (start with 1001) primary key,
   user_id      int not null references nl.users (id) on delete cascade,
   authority    text not null,
-  -- The ceiling, in dollars, or the level for agent_autonomy. NULL on a
-  -- yes/no authority, where it is simply unused. NULL on an amount authority
-  -- means no ceiling; only the ops manager preset is seeded that way.
+  -- The ceiling, in dollars. NULL on a yes/no authority, where it is simply
+  -- unused, and NULL on an amount authority means no ceiling. There is never
+  -- a row here for act_unreviewed: that ceiling lives in the harness.
   limit_amount numeric(14, 2),
   -- Effective dating, both ends inclusive. A grant that starts tomorrow does
   -- not apply today, which is the point: a limit can be raised for a covering
@@ -279,7 +310,7 @@ create table nl.authority_grants (
 );
 
 comment on table nl.authority_grants is
-  'What each principal may decide and up to what amount, effective-dated. Raising a person''s ceiling and raising an agent''s autonomy are the same row and the same write (migration 0027).';
+  'What each principal may decide and up to what amount, effective-dated. Raising a person''s ceiling and raising an agent''s autonomy are the same row and the same write (migration 0031).';
 
 create index authority_grants_lookup
   on nl.authority_grants (user_id, authority, starts_on desc);
@@ -293,20 +324,44 @@ create unique index authority_grants_one_per_day
 create trigger authority_grants_touch before update on nl.authority_grants
   for each row execute function nl.touch_updated_at();
 
--- A seam for the policy engine. When branch policy-engine lands, limits for
--- these authorities belong in nl.resolve_policy and this table keeps only the
--- grant. The DO block below feature-detects that function by name AND by
--- argument types: a wrapper built against a guessed signature would create
--- fine (a plpgsql body is not resolved until it runs) and then fail at
--- request time, which is worse than not having it.
+-- The seam: an authority whose limit is kept somewhere else.
 --
--- Until then this returns null, meaning "the policy engine has nothing to say
--- about this one", and nl.authority_limit falls back to the table.
+-- Two of them, one real today and one waiting.
+--
+--   act_unreviewed  REAL. An agent's autonomy is owned by the harness
+--                   (migration 0028) at a finer grain than a principal: one
+--                   level per agent per kind of work. The ceiling here is the
+--                   LOWEST rung across that agent's work kinds, because "how
+--                   far may it go without a person" has to be the most
+--                   cautious answer, not the most flattering one. Nothing is
+--                   written here when the harness promotes an agent; the next
+--                   read simply says something different.
+--
+--   the rest       WAITING. When branch policy-engine lands, a person's
+--                  approval limits belong in nl.resolve_policy and
+--                  nl.authority_grants keeps only the grant. The DO block
+--                  below feature-detects that function by name AND by
+--                  argument types: a wrapper built against a guessed
+--                  signature would create fine (a plpgsql body is not
+--                  resolved until it runs) and then fail at request time,
+--                  which is worse than not having it.
+--
+-- A null means "nothing else has an opinion", and nl.authority_limit falls
+-- back to the grant table.
 create function nl.authority_limit_override(p_user_id int, p_authority text, p_on date)
 returns numeric
 language sql stable
 set search_path = ''
-as $$ select null::numeric $$;
+as $$
+  select case
+    when p_authority <> 'act_unreviewed' then null::numeric
+    else (
+      select min(nl.agent_level_ordinal(a.level))::numeric
+      from nl.users u
+      join nl.agent_autonomy a on a.agent = u.agent_key
+      where u.id = p_user_id and u.agent_key is not null)
+  end
+$$;
 
 do $$
 begin
@@ -361,6 +416,10 @@ as $$
       and g.authority = p_authority
       and coalesce(p_on, nl.today()) >= g.starts_on
       and (g.ends_on is null or coalesce(p_on, nl.today()) <= g.ends_on))
+    -- An authority whose limit is kept elsewhere is held when that elsewhere
+    -- has an answer. An agent on the harness ladder holds act_unreviewed
+    -- without anybody writing a grant row for it.
+    or nl.authority_limit_override(p_user_id, p_authority, coalesce(p_on, nl.today())) is not null
 $$;
 
 -- My ceiling for it: the highest of my grants in force, where "no ceiling"
@@ -462,7 +521,7 @@ create table nl.disclosure_grants (
 );
 
 comment on table nl.disclosure_grants is
-  'What each principal may be shown, in the desk agent''s own three levels. An agent''s row matches its mailbox (migration 0027).';
+  'What each principal may be shown, in the desk agent''s own three levels. An agent''s row matches its mailbox (migration 0031).';
 
 create trigger disclosure_grants_touch before update on nl.disclosure_grants
   for each row execute function nl.touch_updated_at();
@@ -708,17 +767,17 @@ begin
   if p_limit is not null and p_limit < 0 then
     raise exception 'A limit cannot be negative.' using errcode = 'NL422';
   end if;
-  if p_authority = 'agent_autonomy' and p_limit is not null and p_limit > 3 then
-    raise exception 'Autonomy runs from 0 to 3.' using errcode = 'NL422';
+  -- An agent's autonomy is the harness's to set, and it earns a promotion
+  -- against measured behaviour rather than taking a number somebody typed.
+  -- Refusing here means there is exactly one way to move it.
+  if p_authority = 'act_unreviewed' then
+    raise exception 'Autonomy is set by the agent harness, with nl.set_agent_autonomy, one rung at a time.'
+      using errcode = 'NL422';
   end if;
 
   select * into v_target from nl.users where id = p_user_id;
   if not found then
     raise exception 'There is nobody with id %.', p_user_id using errcode = 'NL404';
-  end if;
-  if p_authority = 'agent_autonomy' and v_target.kind <> 'agent' then
-    raise exception 'Autonomy is an agent''s limit; a person has approval limits instead.'
-      using errcode = 'NL422';
   end if;
 
   v_starts := coalesce(p_starts_on, nl.today());
@@ -792,6 +851,10 @@ begin
   end if;
   if p_authority = 'change_policy' and not nl.is_admin() then
     raise exception 'Only an admin may change who holds change_policy.' using errcode = 'NL403';
+  end if;
+  if p_authority = 'act_unreviewed' then
+    raise exception 'Autonomy is set by the agent harness, with nl.set_agent_autonomy.'
+      using errcode = 'NL422';
   end if;
 
   delete from nl.authority_grants
@@ -1047,7 +1110,32 @@ begin
               and sc.value = p.customer_no));
   end if;
 
-  -- 6. A short line whose supply would be a purchase order: the buyer's.
+  -- 6. What the procurement desk proposed buying, waiting for the buyer to
+  --    release it. Migration 0030 put it in the one queue with everything
+  --    else an agent proposes, so it is read the same way.
+  if nl.has_authority(p_user_id, 'release_purchase_order') then
+    v_ceiling := nl.authority_ceiling(p_user_id, 'release_purchase_order');
+
+    return query
+    select 'purchase_request'::text,
+           q.source_id::text,
+           q.summary,
+           q.value::numeric,
+           q.created_at,
+           (v_today - q.created_at::date)::int,
+           'The procurement desk proposed this and is waiting for you to release it.'::text
+    from nl.agent_queue q
+    where q.source = 'purchase'
+      and q.status in ('waiting', 'needs_review')
+      and coalesce(q.value, 0) <= v_ceiling
+      and (v_all_vendors or q.subject_kind is distinct from 'vendor'
+           or exists (
+             select 1 from nl.user_scope sc
+             where sc.user_id = p_user_id and sc.dimension = 'vendor'
+               and sc.value = q.subject_no));
+  end if;
+
+  -- 7. A short line whose supply would be a purchase order: the buyer's.
   --    Inside the month only. A line that ships in eight weeks is not waiting
   --    on anybody today, and putting it on a home page is how a home page
   --    stops being read.
@@ -1075,7 +1163,7 @@ begin
       and coalesce(l.open_value, 0) <= v_ceiling;
   end if;
 
-  -- 7. The same shortage when the part is made here: the planner's.
+  -- 8. The same shortage when the part is made here: the planner's.
   if nl.has_authority(p_user_id, 'resolve_shortage') then
     return query
     select 'coverage_production'::text,
@@ -1096,7 +1184,7 @@ begin
               and sc.value = i.family));
   end if;
 
-  -- 8. A supplier's new cost above the one before it. A material rise in the
+  -- 9. A supplier's new cost above the one before it. A material rise in the
   --    last fortnight: rounding noise on a cost revision is not a decision.
   if nl.has_authority(p_user_id, 'accept_price_increase') then
     v_ceiling := nl.authority_ceiling(p_user_id, 'accept_price_increase');
@@ -1122,7 +1210,7 @@ begin
       and c.unit_cost <= v_ceiling;
   end if;
 
-  -- 9. A shipment on the floor waiting to be picked.
+  -- 10. A shipment on the floor waiting to be picked.
   if nl.has_authority(p_user_id, 'confirm_pick') then
     return query
     select 'pick'::text,
@@ -1140,7 +1228,7 @@ begin
               and sc.value = s.location_code));
   end if;
 
-  -- 10. A transfer due in that has not been received.
+  -- 11. A transfer due in that has not been received.
   if nl.has_authority(p_user_id, 'receive_stock') then
     return query
     select 'receipt'::text,
@@ -1159,7 +1247,7 @@ begin
               and sc.value = t.to_location));
   end if;
 
-  -- 11. A cycle count that is due.
+  -- 12. A cycle count that is due.
   if nl.has_authority(p_user_id, 'count_stock') then
     return query
     select 'count'::text,
@@ -1178,7 +1266,7 @@ begin
               and sc.value = c.location_code));
   end if;
 
-  -- 12. A daily ERP export staged or held, waiting to be applied. No scope
+  -- 13. A daily ERP export staged or held, waiting to be applied. No scope
   --     dimension: there is one company and one load.
   if nl.has_authority(p_user_id, 'run_import') then
     return query
@@ -1197,7 +1285,7 @@ begin
 end $$;
 
 comment on function nl.work_waiting_for(int) is
-  'Everything inside a principal''s scope that is waiting on an authority they hold. The home page (migration 0027).';
+  'Everything inside a principal''s scope that is waiting on an authority they hold. The home page (migration 0031).';
 
 -- ---------------------------------------------------------------------------
 -- The policy surface: one row per principal, for /people
@@ -1247,7 +1335,7 @@ select u.id,
 from nl.users u;
 
 comment on view nl.people_policy is
-  'Who exists, what they are responsible for, what they may decide and what they may see. The read side of /people (migration 0027).';
+  'Who exists, what they are responsible for, what they may decide and what they may see. The read side of /people (migration 0031).';
 
 -- ---------------------------------------------------------------------------
 -- Row-level security and grants

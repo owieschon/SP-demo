@@ -83,7 +83,7 @@ export type Authority =
 	| 'review_exception'
 	| 'change_policy'
 	| 'run_import'
-	| 'agent_autonomy';
+	| 'act_unreviewed';
 
 export const AUTHORITIES: Authority[] = [
 	'approve_quote',
@@ -100,7 +100,7 @@ export const AUTHORITIES: Authority[] = [
 	'review_exception',
 	'change_policy',
 	'run_import',
-	'agent_autonomy'
+	'act_unreviewed'
 ];
 
 /** True when the grant carries a number. The others are a plain yes. */
@@ -108,7 +108,7 @@ export const AUTHORITY_IS_AMOUNT: Record<Authority, boolean> = {
 	approve_quote: true,
 	release_purchase_order: true,
 	accept_price_increase: true,
-	agent_autonomy: true,
+	act_unreviewed: true,
 	approve_reply: false,
 	approve_agent_proposal: false,
 	answer_commitment: false,
@@ -137,15 +137,19 @@ export const AUTHORITY_LABEL: Record<Authority, string> = {
 	review_exception: 'Handle what an agent stopped on',
 	change_policy: 'Change who may decide what',
 	run_import: 'Stage and apply a load',
-	agent_autonomy: 'Autonomy level'
+	act_unreviewed: 'Act without a person looking'
 };
 
-/** The autonomy levels an agent's amount grant means. */
+/*
+  An agent's ceiling for act_unreviewed is a rung on the harness ladder
+  (migration 0028, nl.agent_level_ordinal), not a number anybody typed here.
+  The resolver hands it back as that ordinal, and these are its names.
+*/
 export const AUTONOMY_LABEL: Record<number, string> = {
-	0: 'Watches only',
-	1: 'Drafts, a person sends',
-	2: 'Sends routine replies',
-	3: 'Sends everything its disclosure allows'
+	1: 'Shadow: drafts, nobody sees it',
+	2: 'Suggest: a person reviews every one',
+	3: 'Auto with undo: acts, a person can undo inside a window',
+	4: 'Auto: acts, a sampled share is reviewed after'
 };
 
 export const DISCLOSURE_LABEL: Record<Disclosure, string> = {
@@ -163,6 +167,7 @@ export type WorkKind =
 	| 'quote_expiring'
 	| 'agent_proposal'
 	| 'commitment_answer'
+	| 'purchase_request'
 	| 'coverage_purchase'
 	| 'coverage_production'
 	| 'price_increase'
@@ -179,6 +184,7 @@ export const WORK_LABEL: Record<WorkKind, string> = {
 	quote_expiring: 'Quote running out',
 	agent_proposal: 'Proposal to decide',
 	commitment_answer: 'Window to answer',
+	purchase_request: 'Purchase to release',
 	coverage_purchase: 'Nothing on order',
 	coverage_production: 'Nothing planned',
 	price_increase: 'Cost gone up',

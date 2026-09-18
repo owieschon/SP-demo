@@ -29,7 +29,7 @@ function hrefFor(kind: WorkKind, ref: string): string {
 	switch (kind) {
 		case 'mail_draft':
 		case 'mail_exception':
-			return routes.workspace();
+			return routes.workspace('mail');
 		case 'mail_unanswered':
 			return routes.deskMessage(Number(ref));
 		case 'quote_request':
@@ -37,7 +37,9 @@ function hrefFor(kind: WorkKind, ref: string): string {
 		case 'quote_expiring':
 			return routes.quote(Number(ref));
 		case 'agent_proposal':
-			return routes.workspace();
+			return routes.workspace('assistant');
+		case 'purchase_request':
+			return routes.workspace('purchase');
 		case 'commitment_answer':
 			return routes.commitmentAnswer(Number(ref));
 		case 'coverage_purchase':
