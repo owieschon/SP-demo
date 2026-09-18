@@ -353,16 +353,35 @@ same behaviour the assistant gets.
 
 Every call gets a row in `nl.mcp_calls`: the token, the method, the tool, how
 long it took, how many rows, and how it ended (`ok`, `refused`, `capped`,
-`failed`) with a note. Minting and revoking a token are in `nl.audit_log`. A
-proposal's own trail is the assistant's: `nl.assistant_tool_calls` for the
-`propose_action` call, and `nl.audit_log` for the turn, the decision and the
-write.
+`failed`) with a note. Minting and revoking a token are in `nl.audit_log`,
+along with every change of a token's level (as `grant_authority`, on entity
+`user`, naming the token's principal). A proposal's own trail is the
+assistant's: `nl.assistant_tool_calls` for the `propose_action` call, and
+`nl.audit_log` for the turn, the decision and the write.
 
-That is what makes "a gated tool never ran" a query rather than a claim:
+**A change an outside agent made is a query, not a claim.** Everything it
+wrote is its person's in `nl.audit_log`, exactly as if they had clicked
+approve, and what says they did not is `nl.agent_actions`:
 
 ```sql
-select count(*) from nl.assistant_tool_calls where risk = 'gated' and outcome = 'ran';
+select a.acted_at, a.action, a.at_level, u.full_name as acted_as,
+       a.undo_until, a.status, a.detail ->> 'token_label' as token
+from nl.agent_actions a
+join nl.users u on u.id = a.acted_by
+where a.agent = 'mcp'
+order by a.acted_at desc;
 ```
+
+`at_level` is the rung it acted at, stored rather than looked up, so a level
+changed tomorrow does not rewrite why something was allowed today.
+
+The old version of this section claimed "a gated tool never ran" and offered
+`select count(*) from nl.assistant_tool_calls where risk = 'gated' and
+outcome = 'ran'` as the proof. That claim was true when every token could
+only propose and it is **not** true any more, so it has been taken out rather
+than left to mislead. What replaced it is the query above: not "nothing was
+written" but "here is everything that was, at whose authority, and whether it
+was taken back."
 
 ## 8. What a stolen token gets, and what it does not
 
