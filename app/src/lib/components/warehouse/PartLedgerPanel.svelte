@@ -6,6 +6,7 @@
 	// since, and the closing figure, which has to be the same number. If it is
 	// not, the panel says so rather than hiding it, because a stock figure
 	// nobody can explain is worse than one that is visibly wrong.
+	import Blank from '$lib/components/ui/Blank.svelte';
 	import { enhance } from '$app/forms';
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import Equal from '@lucide/svelte/icons/equal';
@@ -126,8 +127,8 @@
 				{#each ledger.bins as b (b.locationCode)}
 					<tr>
 						<td class="nowrap">{b.locationCode} <span class="faint">{b.locationName}</span></td>
-						<td class="nowrap">{b.zone || '·'}</td>
-						<td class="mono nowrap">{b.bin || '·'}</td>
+						<td class="nowrap">{#if b.zone}{b.zone}{:else}<Blank word="no zone" />{/if}</td>
+						<td class="mono nowrap">{#if b.bin}{b.bin}{:else}<Blank word="no bin" />{/if}</td>
 						<td class="num">{count(b.quantity)}</td>
 						<td class="nowrap faint">{b.countedOn ? day(b.countedOn, year) : 'never'}</td>
 						{#if canRun}
@@ -219,7 +220,7 @@
 							</td>
 							<td class="nowrap">{m.locationCode}</td>
 							<td class="num">{m.quantity > 0 ? '+' : ''}{count(m.quantity)}</td>
-							<td class="mono nowrap faint">{m.reference || '·'}</td>
+							<td class="mono nowrap faint">{#if m.reference}{m.reference}{:else}<Blank word="no reference" />{/if}</td>
 							<td class="nowrap">{m.actorName ?? 'ERP'}</td>
 						</tr>
 					{/each}

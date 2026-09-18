@@ -2,6 +2,7 @@
 	// Orders: what is on order and not shipped yet (from the morning's ERP
 	// export, with the bucket operations sees), then the last twenty
 	// invoices with their biggest parts.
+	import Blank from '$lib/components/ui/Blank.svelte';
 	import { count, day, money, moneyExact } from '$lib/format';
 	import { BUCKET_LABEL } from '$lib/components/exports/types';
 	import RowCount from '$lib/components/ui/RowCount.svelte';
@@ -56,7 +57,7 @@
 								<a class="link" href="/parts/{encodeURIComponent(line.itemNo)}">{line.itemNo}</a>
 							</td>
 							<td class="num">{count(line.quantity)}</td>
-							<td class="num" class:short={line.short > 0}>{line.short > 0 ? count(line.short) : '·'}</td>
+							<td class="num" class:short={line.short > 0}>{#if line.short > 0}{count(line.short)}{:else}<Blank word="nothing short" />{/if}</td>
 							<td class="num">{money(line.openValue)}</td>
 							<td>
 								<span class="swatch" style:--tone="var(--bucket-{line.bucket})" aria-hidden="true"></span>
@@ -104,14 +105,14 @@
 								{invoice.invoiceNo}
 								{#if invoice.docType === 'credit_memo'}<span class="chip">credit</span>{/if}
 							</td>
-							<td class="mono faint">{invoice.customerPo ?? '·'}</td>
+							<td class="mono faint">{#if invoice.customerPo}{invoice.customerPo}{:else}<Blank word="no purchase order" />{/if}</td>
 							<td class="parts">
 								{#each invoice.topParts as part (part)}
 									<a class="mono link" href="/parts/{encodeURIComponent(part)}">{part}</a>
 								{/each}
 							</td>
 							<td class="num">{invoice.lines}</td>
-							<td class="num faint">{invoice.freight > 0 ? moneyExact(invoice.freight) : '·'}</td>
+							<td class="num faint">{#if invoice.freight > 0}{moneyExact(invoice.freight)}{:else}<Blank word="no freight" />{/if}</td>
 							<td class="num" class:negative={invoice.subtotal < 0}>{moneyExact(invoice.subtotal)}</td>
 						</tr>
 					{/each}

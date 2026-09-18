@@ -3,6 +3,7 @@
 	// first, each with its lines in bin order so a picker walks the aisle
 	// once. The button moves the shipment one step along and carries the row
 	// version, so two people cannot both succeed on the same shipment.
+	import Blank from '$lib/components/ui/Blank.svelte';
 	import { enhance } from '$app/forms';
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
@@ -119,7 +120,7 @@
 								<tbody>
 									{#each s.lines as l (l.lineNo)}
 										<tr>
-											<td class="mono nowrap">{l.bin || '·'}</td>
+											<td class="mono nowrap">{#if l.bin}{l.bin}{:else}<Blank word="no bin" />{/if}</td>
 											<td>
 												<a class="link mono" href="/parts/{encodeURIComponent(l.itemNo)}">{l.itemNo}</a>
 												<span class="faint desc">{l.description}</span>

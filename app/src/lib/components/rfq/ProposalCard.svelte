@@ -3,6 +3,7 @@
 	// created until a person presses Approve. Approve sends only the draft id,
 	// its row version and a request id: the server takes everything else from
 	// the stored, validated draft.
+	import Blank from '$lib/components/ui/Blank.svelte';
 	import { enhance } from '$app/forms';
 	import CircleCheck from '@lucide/svelte/icons/circle-check';
 	import { day, moneyExact } from '$lib/format';
@@ -51,7 +52,7 @@
 					<span>
 						A quote for <strong>{customerName}</strong>, {lineCount}
 						{lineCount === 1 ? 'line' : 'lines'} totaling
-						<strong class="num">{total === null ? '·' : moneyExact(total)}</strong>, valid for 30 days.
+						<strong class="num">{#if total === null}<Blank word="not priced yet" />{:else}{moneyExact(total)}{/if}</strong>, valid for 30 days.
 					</span>
 				</li>
 				<li>
