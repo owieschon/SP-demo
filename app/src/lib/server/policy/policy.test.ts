@@ -451,7 +451,7 @@ describe('values have to fit their policy', () => {
 	});
 });
 
-describe('who may change what', () => {
+describe('who may change a policy', () => {
 	async function attempt(userId: number, type: string, value: string) {
 		const account = await plainAccount();
 		return setPolicy(db, userId, {
@@ -466,22 +466,77 @@ describe('who may change what', () => {
 		});
 	}
 
-	it('lets an account manager set quote validity and nothing else', async () => {
-		await expect(attempt(DANA, 'commercial.quote_valid_days', '21')).resolves.toMatchObject({ replayed: false });
-		await expect(attempt(DANA, 'commercial.min_margin', '0.3')).rejects.toThrow(/is for admins/i);
-		await expect(attempt(DANA, 'freight.terms', '"collect"')).rejects.toThrow(/for operations and admins/i);
+	/** Does this person hold the authority in the world as the seed left it? */
+	async function holds(userId: number): Promise<boolean> {
+		const [row] = await db.asUser(userId, (tx) =>
+			tx.sql<{ may: boolean }>`select nl.may_change_policy() as may`
+		);
+		return row.may;
+	}
+
+	it('asks the change_policy authority, not the person title', async () => {
+		// The roles seed gives it to operations and to the admin, and not to an
+		// account manager. This test states that rather than assuming it, so a
+		// change over there fails here rather than silently changing the rule.
+		expect(await holds(PRIYA)).toBe(true);
+		expect(await holds(ADMIN)).toBe(true);
+		expect(await holds(DANA)).toBe(false);
 	});
 
-	it('lets operations set freight and fulfilment', async () => {
+	it('lets somebody who holds it change any policy that is editable', async () => {
 		await expect(attempt(PRIYA, 'freight.terms', '"collect"')).resolves.toMatchObject({ replayed: false });
-		await expect(attempt(PRIYA, 'fulfilment.allocation_priority', '50')).resolves.toMatchObject({ replayed: false });
-		await expect(attempt(PRIYA, 'commercial.payment_terms', '"net 60"')).rejects.toThrow(/is for admins/i);
+		await expect(attempt(PRIYA, 'fulfilment.allocation_priority', '50')).resolves.toMatchObject({
+			replayed: false
+		});
+		await expect(attempt(PRIYA, 'commercial.min_margin', '0.3')).resolves.toMatchObject({ replayed: false });
 	});
 
-	it('lets an admin set anything that is editable, and nothing that is not', async () => {
-		await expect(attempt(ADMIN, 'commercial.min_margin', '0.3')).resolves.toMatchObject({ replayed: false });
-		await expect(attempt(ADMIN, 'freight.terms', '"third party"')).resolves.toMatchObject({ replayed: false });
-		await expect(attempt(ADMIN, 'operations.kept_ratio', '0.9')).rejects.toThrow(/not something the app can change/i);
+	it('refuses somebody who does not hold it, whatever their title', async () => {
+		await expect(attempt(DANA, 'commercial.quote_valid_days', '21')).rejects.toThrow(
+			/needs the change_policy authority/i
+		);
+		await expect(attempt(DANA, 'freight.terms', '"collect"')).rejects.toThrow(
+			/needs the change_policy authority/i
+		);
+	});
+
+	it('follows the authority when it is granted and when it runs out', async () => {
+		// Granted from a week and a half ago, so the window can be closed
+		// yesterday further down without ending before it began.
+		await db.asSystem((tx) =>
+			tx.query(
+				`insert into nl.authority_grants (user_id, authority, starts_on, note, granted_by)
+				 values ($1, 'change_policy', nl.today() - 10, 'arranged by a test', $2)
+				 on conflict do nothing`,
+				[DANA, ADMIN]
+			)
+		);
+		await expect(attempt(DANA, 'commercial.quote_valid_days', '21')).resolves.toMatchObject({
+			replayed: false
+		});
+
+		// Ended yesterday: refused again, without anything else changing.
+		await db.asSystem((tx) =>
+			tx.query(
+				`update nl.authority_grants set ends_on = nl.today() - 1
+				 where user_id = $1 and authority = 'change_policy'`,
+				[DANA]
+			)
+		);
+		await expect(attempt(DANA, 'commercial.min_margin', '0.3')).rejects.toThrow(
+			/needs the change_policy authority/i
+		);
+		await db.asSystem((tx) =>
+			tx.query(`delete from nl.authority_grants where user_id = $1 and authority = 'change_policy'`, [
+				DANA
+			])
+		);
+	});
+
+	it('refuses a policy nothing reads yet, even to somebody who holds it', async () => {
+		await expect(attempt(ADMIN, 'operations.kept_ratio', '0.9')).rejects.toThrow(
+			/not something the app can change/i
+		);
 	});
 
 	it('refuses a scope id that is not anything', async () => {
@@ -512,13 +567,13 @@ describe('who may change what', () => {
 			note: 'arranged by a test',
 			requestId
 		};
-		const first = await setPolicy(db, DANA, input);
-		const again = await setPolicy(db, DANA, input);
+		const first = await setPolicy(db, PRIYA, input);
+		const again = await setPolicy(db, PRIYA, input);
 		expect(again.replayed).toBe(true);
 		expect(again.policyId).toBe(first.policyId);
 
 		await expect(
-			setPolicy(db, DANA, {
+			setPolicy(db, PRIYA, {
 				...input,
 				policyId: first.policyId,
 				value: '22',
