@@ -5,6 +5,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import AccountDeals from '$lib/components/accounts/AccountDeals.svelte';
 	import AccountOrders from '$lib/components/accounts/AccountOrders.svelte';
+	import AccountRecordPanel from '$lib/components/commitments/AccountRecordPanel.svelte';
 	import ContactList from '$lib/components/accounts/ContactList.svelte';
 	import NextStepList from '$lib/components/accounts/NextStepList.svelte';
 	import RevenueBars from '$lib/components/accounts/RevenueBars.svelte';
@@ -176,6 +177,14 @@
 				<AccountDeals {deals} customerNo={a.customerNo} year={data.year} />
 			{:catch}
 				<p class="notice error" role="alert">The commitments could not be loaded.</p>
+			{/await}
+
+			{#await data.record}
+				<SectionSkeleton title="their record" rows={2} wide />
+			{:then record}
+				<AccountRecordPanel {record} year={data.year} />
+			{:catch}
+				<p class="notice error" role="alert">Their record could not be loaded.</p>
 			{/await}
 
 			{#await data.orders}
