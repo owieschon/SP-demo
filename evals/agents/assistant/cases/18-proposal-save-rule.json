@@ -1,0 +1,129 @@
+{
+  "about": "Try the rule out first, then propose saving it. The trial writes nothing.",
+  "question": "Can you set up a nightly reminder for accounts that have gone quiet?",
+  "script": [
+    {
+      "tools": [
+        {
+          "name": "test_automation_rule",
+          "input": {
+            "rule": {
+              "name": "Quiet account follow-up",
+              "description": "Adds a next step when an account has not ordered for twice its own usual gap.",
+              "trigger": "account_gone_quiet",
+              "conditions": [
+                {
+                  "field": "quiet_ratio",
+                  "op": "gte",
+                  "value": 2
+                },
+                {
+                  "field": "days_quiet",
+                  "op": "gte",
+                  "value": 21
+                }
+              ],
+              "action": {
+                "kind": "next_step",
+                "title": "Call {customer}: no order in {days_quiet} days",
+                "dueInDays": 3,
+                "assignTo": "record_owner"
+              },
+              "enabled": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "tools": [
+        {
+          "name": "propose_action",
+          "input": {
+            "summary": "Save a rule that follows up accounts that have gone quiet.",
+            "options": [
+              {
+                "label": "Save it and switch it on",
+                "tool": "save_automation_rule",
+                "input": {
+                  "rule": {
+                    "name": "Quiet account follow-up",
+                    "description": "Adds a next step when an account has not ordered for twice its own usual gap.",
+                    "trigger": "account_gone_quiet",
+                    "conditions": [
+                      {
+                        "field": "quiet_ratio",
+                        "op": "gte",
+                        "value": 2
+                      },
+                      {
+                        "field": "days_quiet",
+                        "op": "gte",
+                        "value": 21
+                      }
+                    ],
+                    "action": {
+                      "kind": "next_step",
+                      "title": "Call {customer}: no order in {days_quiet} days",
+                      "dueInDays": 3,
+                      "assignTo": "record_owner"
+                    },
+                    "enabled": true
+                  },
+                  "rule_id": null
+                }
+              },
+              {
+                "label": "Save it switched off",
+                "tool": "save_automation_rule",
+                "input": {
+                  "rule": {
+                    "name": "Quiet account follow-up",
+                    "description": "Adds a next step when an account has not ordered for twice its own usual gap.",
+                    "trigger": "account_gone_quiet",
+                    "conditions": [
+                      {
+                        "field": "quiet_ratio",
+                        "op": "gte",
+                        "value": 2
+                      },
+                      {
+                        "field": "days_quiet",
+                        "op": "gte",
+                        "value": 21
+                      }
+                    ],
+                    "action": {
+                      "kind": "next_step",
+                      "title": "Call {customer}: no order in {days_quiet} days",
+                      "dueInDays": 3,
+                      "assignTo": "record_owner"
+                    },
+                    "enabled": false
+                  },
+                  "rule_id": null
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "say": "Two options above."
+    }
+  ],
+  "expected": {
+    "tools": [
+      {
+        "name": "test_automation_rule",
+        "ran": true
+      },
+      {
+        "name": "propose_action",
+        "ran": true
+      }
+    ],
+    "proposal": "save_automation_rule"
+  }
+}

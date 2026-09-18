@@ -55,6 +55,17 @@ export interface ToolDef<I> {
 	/** Written for the model: what it does, and when to reach for it. */
 	description: string;
 	schema: z.ZodType<I>;
+	/**
+	 * What this tool promises to answer with. Only the tools that actually run
+	 * have one: a gated tool never runs from a model, so an output schema on
+	 * it would describe something a caller can never receive.
+	 *
+	 * The shapes use looseObject on purpose. The named fields are the
+	 * contract, so dropping one from a query breaks the schema test in
+	 * tools.test.ts; the rest of the columns are free to change, because a
+	 * query gaining a column should not be a breaking change for a caller.
+	 */
+	output?: z.ZodType;
 	/** read and additive tools only. */
 	run?: (ctx: ToolContext, input: I) => Promise<unknown>;
 	/** gated tools only: the row version now, stored with the proposal. */
@@ -76,6 +87,15 @@ export interface Tool {
 	risk: RiskClass;
 	description: string;
 	jsonSchema: Record<string, unknown>;
+	/** The JSON Schema of what it answers with, when it is a tool that runs. */
+	outputSchema?: Record<string, unknown>;
+	/**
+	 * Does a payload match what this tool promised? Used by the test that
+	 * holds the contract, and by the MCP server before it sends
+	 * structuredContent, so a caller is never handed a payload that does not
+	 * match the schema it was given.
+	 */
+	checkOutput?(payload: unknown): { ok: true } | { ok: false; message: string };
 	parse(input: unknown): { ok: true; value: unknown } | { ok: false; message: string };
 	run?(ctx: ToolContext, input: unknown): Promise<unknown>;
 	capture?(ctx: ToolContext, input: unknown): Promise<Capture>;
@@ -95,6 +115,16 @@ function tool<I>(def: ToolDef<I>): Tool {
 		risk: def.risk,
 		description: def.description,
 		jsonSchema: z.toJSONSchema(def.schema, { target: 'draft-2020-12', io: 'input' }) as Record<string, unknown>,
+		outputSchema: def.output
+			? (z.toJSONSchema(def.output, { target: 'draft-2020-12', io: 'output' }) as Record<string, unknown>)
+			: undefined,
+		checkOutput: def.output
+			? (payload) => {
+					const parsed = def.output!.safeParse(payload);
+					if (parsed.success) return { ok: true };
+					return { ok: false, message: outputProblem(parsed.error) };
+				}
+			: undefined,
 		parse(input) {
 			const parsed = def.schema.safeParse(input);
 			if (parsed.success) return { ok: true, value: parsed.data };
@@ -123,6 +153,55 @@ const customerNo = z
 	.describe('The account number, for example "1214". Find it with search_accounts first.');
 const itemNo = z.string().trim().min(1).max(40).describe('The part number exactly as the catalog spells it.');
 const commitmentId = z.number().int().positive().describe('The commitment id, without the "C-" prefix.');
+
+// ---------------------------------------------------------------------------
+// What the tools answer with
+// ---------------------------------------------------------------------------
+
+/*
+  A read that could not be answered: the account does not exist, the query
+  was refused. It is a normal answer, not a fault, so it is part of the
+  declared output rather than an exception.
+*/
+const refusal = z.looseObject({
+	error: z.string(),
+	/** The database's own NL4xx SQLSTATE, when the refusal came from one. */
+	code: z.string().optional()
+});
+
+/** Either the tool's own answer or a refusal. */
+const answers = (shape: z.ZodType) => z.union([shape, refusal]);
+
+/**
+ * Why a payload did not match, in words that name the field.
+ *
+ * Every output schema is a union of "the answer" and "a refusal", and zod
+ * reports a failed union at the top as a bare "Invalid input". The useful
+ * reason is in the first branch's own issues, because a result that was
+ * meant to be an answer almost never fails because it was not a refusal.
+ */
+export function outputProblem(error: z.ZodError): string {
+	const first = error.issues[0];
+	if (first.code === 'invalid_union') {
+		const branches = (first as unknown as { errors?: z.core.$ZodIssue[][] }).errors ?? [];
+		const inner = branches[0]?.[0];
+		if (inner) {
+			const path = [...first.path, ...inner.path].join('.');
+			return `${path || 'result'}: ${inner.message}`;
+		}
+	}
+	return `${first.path.join('.') || 'result'}: ${first.message}`;
+}
+
+/**
+ * A row that names a record. Every read tool puts `url` on these, built from
+ * `$lib/routes`, so a caller can follow an answer instead of reassembling
+ * the address from the id.
+ */
+const linked = (fields: z.ZodRawShape) => z.looseObject({ ...fields, url: z.string() });
+
+/** A whole number of rows. */
+const rowCount = z.number().int().nonnegative();
 
 /**
  * The row version of the thing a gated tool would change, as it is right now.
@@ -165,6 +244,12 @@ const searchAccounts = tool({
 		query: z.string().trim().min(1).max(60).describe('Part of the name, the town, or the account number.'),
 		limit: z.number().int().min(1).max(20).default(8)
 	}),
+	output: answers(
+		z.looseObject({
+			rows: z.array(linked({ customer_no: z.string(), name: z.string() })),
+			row_count: rowCount
+		})
+	),
 	run: async (ctx, input) => {
 		const like = `%${input.query}%`;
 		const rows = await ctx.db.asUser(ctx.userId, (tx) =>
@@ -193,6 +278,13 @@ const getAccount = tool({
 	description:
 		'One account in full: revenue, ordering rhythm, its open commitments and its open order lines from the morning ERP export. Business facts only, no contact details.',
 	schema: z.object({ customer_no: customerNo }),
+	output: answers(
+		z.looseObject({
+			account: linked({ customer_no: z.string(), name: z.string() }),
+			open_commitments: z.array(linked({ id: z.number(), title: z.string() })),
+			open_order_lines: z.array(z.looseObject({ document_no: z.string(), item_no: z.string() }))
+		})
+	),
 	run: async (ctx, input) => {
 		return ctx.db.asUser(ctx.userId, async (tx) => {
 			const [account] = await tx.sql<Row>`
@@ -239,6 +331,13 @@ const getCommitment = tool({
 	description:
 		'One commitment: its derived status, what has been delivered against it from the invoice ledger, the parts in scope and the invoice lines that were matched to it.',
 	schema: z.object({ commitment_id: commitmentId }),
+	output: answers(
+		z.looseObject({
+			commitment: linked({ id: z.number(), title: z.string(), status: z.string() }),
+			items: z.array(linked({ item_no: z.string() })),
+			matched_lines: z.array(z.looseObject({ invoice_no: z.string(), item_no: z.string() }))
+		})
+	),
 	run: async (ctx, input) => {
 		return ctx.db.asUser(ctx.userId, async (tx) => {
 			const [head] = await tx.sql<Row>`
@@ -291,6 +390,13 @@ const listWindowsClosedShort = tool({
 		owner: z.enum(['me', 'everyone']).default('me'),
 		limit: z.number().int().min(1).max(20).default(10)
 	}),
+	output: answers(
+		z.looseObject({
+			rows: z.array(linked({ id: z.number(), title: z.string(), shortfall: z.number() })),
+			row_count: rowCount,
+			whose: z.enum(['me', 'everyone'])
+		})
+	),
 	run: async (ctx, input) => {
 		const mine = input.owner === 'me' ? ctx.userId : null;
 		const rows = await ctx.db.asUser(ctx.userId, (tx) =>
@@ -322,6 +428,7 @@ const getPart = tool({
 	description:
 		'One part: stock on hand and on order, what open orders already claim, whether it is under its reorder point, how it has sold over the last twelve months, and its lead time.',
 	schema: z.object({ item_no: itemNo }),
+	output: answers(z.looseObject({ part: linked({ item_no: z.string(), description: z.string() }) })),
 	run: async (ctx, input) => {
 		const rows = await ctx.db.asUser(ctx.userId, (tx) =>
 			tx.sql<Row>`
@@ -369,6 +476,14 @@ const runSql = tool({
 		sql: z.string().trim().min(1).max(4000).describe('One SELECT, or a WITH that ends in a SELECT.'),
 		why: z.string().trim().max(200).default('').describe('One line on what you are measuring.')
 	}),
+	output: answers(
+		z.looseObject({
+			rows: z.array(z.unknown()),
+			row_count: rowCount,
+			/** The 1,000 row cap was reached, so there may be more. */
+			capped: z.boolean()
+		})
+	),
 	run: (ctx, input) => runReadOnlySql(ctx.db, input.sql)
 });
 
@@ -378,6 +493,14 @@ const testAutomationRule = tool({
 	description:
 		'Try an automation rule out without saving it: it is compiled to one parameterized query and run in a read-only transaction, and you get back how many subjects match now and what the action would write for each. Use this before proposing save_automation_rule.',
 	schema: z.object({ rule: ruleSchema }),
+	output: answers(
+		z.looseObject({
+			matches_now: rowCount,
+			already_fired: rowCount,
+			fields: z.array(z.unknown()),
+			sample: z.array(z.unknown())
+		})
+	),
 	run: async (ctx, input) => {
 		try {
 			const result = await testRule(ctx.db, ctx.userId, input.rule, null);
@@ -410,6 +533,14 @@ const addNote = tool({
 		body: z.string().trim().min(1).max(2000),
 		commitment_id: z.number().int().positive().nullable().default(null)
 	}),
+	output: answers(
+		z.looseObject({
+			wrote: z.literal('note'),
+			// From nl.log_activity's own result, which the write function builds.
+			activity_id: z.number(),
+			customer_no: z.string()
+		})
+	),
 	run: async (ctx, input) => {
 		const [row] = await ctx.db.asUser(ctx.userId, (tx) =>
 			tx.sql<WriteRow>`
@@ -432,6 +563,14 @@ const addNextStep = tool({
 		due_in_days: z.number().int().min(0).max(60).default(7),
 		commitment_id: z.number().int().positive().nullable().default(null)
 	}),
+	output: answers(
+		z.looseObject({
+			wrote: z.literal('next_step'),
+			// From nl.add_next_step's own result.
+			next_step_id: z.number(),
+			owner_id: z.number()
+		})
+	),
 	run: async (ctx, input) => {
 		const [row] = await ctx.db.asUser(ctx.userId, (tx) =>
 			tx.sql<WriteRow>`

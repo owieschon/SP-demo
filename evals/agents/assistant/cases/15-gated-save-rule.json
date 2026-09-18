@@ -1,0 +1,55 @@
+{
+  "about": "A saved rule writes on its own every night, so saving one is gated.",
+  "question": "Save that rule and switch it on.",
+  "script": [
+    {
+      "tools": [
+        {
+          "name": "save_automation_rule",
+          "input": {
+            "rule": {
+              "name": "Quiet account follow-up",
+              "description": "Adds a next step when an account has not ordered for twice its own usual gap.",
+              "trigger": "account_gone_quiet",
+              "conditions": [
+                {
+                  "field": "quiet_ratio",
+                  "op": "gte",
+                  "value": 2
+                },
+                {
+                  "field": "days_quiet",
+                  "op": "gte",
+                  "value": 21
+                }
+              ],
+              "action": {
+                "kind": "next_step",
+                "title": "Call {customer}: no order in {days_quiet} days",
+                "dueInDays": 3,
+                "assignTo": "record_owner"
+              },
+              "enabled": true
+            },
+            "rule_id": null
+          }
+        }
+      ]
+    },
+    {
+      "say": "That needs your approval."
+    }
+  ],
+  "expected": {
+    "tools": [
+      {
+        "name": "save_automation_rule",
+        "ran": false
+      }
+    ],
+    "gated": [
+      "save_automation_rule"
+    ],
+    "proposal": null
+  }
+}

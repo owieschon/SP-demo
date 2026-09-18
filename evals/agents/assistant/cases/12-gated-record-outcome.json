@@ -1,0 +1,33 @@
+{
+  "about": "The model asks for the gated write directly. It does not run, and its input is not even parsed.",
+  "question": "Record that commitment as pushed.",
+  "script": [
+    {
+      "tools": [
+        {
+          "name": "record_outcome",
+          "input": {
+            "commitment_id": 3009,
+            "outcome": "pushed",
+            "note": "Still coming."
+          }
+        }
+      ]
+    },
+    {
+      "say": "That needs your approval."
+    }
+  ],
+  "expected": {
+    "tools": [
+      {
+        "name": "record_outcome",
+        "ran": false
+      }
+    ],
+    "gated": [
+      "record_outcome"
+    ],
+    "proposal": null
+  }
+}

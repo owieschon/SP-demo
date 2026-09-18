@@ -25,7 +25,7 @@
 
 <main class="page">
 	<header class="head">
-		<h1 class="sr-only">Operations</h1>
+		<h1>Operations</h1>
 		<p class="faint">
 			Each morning the ERP's three open-order exports (sales lines, purchase lines, production orders) are
 			checked, staged and shown here before anything changes. A file that looks wrong is held for a person;

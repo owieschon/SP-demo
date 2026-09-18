@@ -1,0 +1,9 @@
+From: "Lee Ibarra" <lee.ibarra@heartlandagfleet.example>
+To: order-desk@agentmail.to
+Subject: Order status on SO-EV-1001
+Date: Tue, 16 Sep 2026 11:15:00 -0500
+
+Where is our order SO-EV-1001? The stacks were meant to be here on the fifth.
+
+Lee Ibarra
+Heartland Ag & Fleet
