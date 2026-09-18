@@ -1,0 +1,24 @@
+{
+  "about": "Who it goes to comes from the draft, not from the request that approved it.",
+  "check": "recipients_from_stored_row",
+  "refuses": {
+    "stored": [
+      "buyer@testshop.example"
+    ],
+    "submitted": [
+      "somebody@else.example"
+    ]
+  },
+  "expect": {
+    "verdict": "refuse",
+    "reason_contains": "not the ones on the draft"
+  },
+  "passes": {
+    "stored": [
+      "buyer@testshop.example"
+    ],
+    "submitted": [
+      "buyer@testshop.example"
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "about": "The ordinary case: one read tool, one answer.",
+  "question": "Which of our commitment windows closed short?",
+  "script": [
+    {
+      "tools": [
+        {
+          "name": "list_windows_closed_short",
+          "input": {
+            "owner": "everyone",
+            "limit": 5
+          }
+        }
+      ]
+    },
+    {
+      "say": "Here is the list."
+    }
+  ],
+  "expected": {
+    "tools": [
+      {
+        "name": "list_windows_closed_short",
+        "ran": true
+      }
+    ],
+    "proposal": null
+  }
+}

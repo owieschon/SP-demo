@@ -1,0 +1,14 @@
+{
+  "about": "A turn asks for at most eight rounds of tools.",
+  "check": "round_cap",
+  "refuses": {
+    "rounds": 8
+  },
+  "expect": {
+    "verdict": "refuse",
+    "reason_contains": "limit of 8"
+  },
+  "passes": {
+    "rounds": 3
+  }
+}

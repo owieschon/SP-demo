@@ -1,0 +1,15 @@
+{
+  "about": "A draft the agent held cannot be approved until somebody rewrites it.",
+  "check": "nothing_needs_review",
+  "refuses": {
+    "blockedReason": "The reply cites our margin, which a customer may not be told."
+  },
+  "expect": {
+    "verdict": "refuse",
+    "reason_contains": "held"
+  },
+  "passes": {
+    "blockedReason": "",
+    "needsReview": 0
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "about": "A proposal whose options name two different commitments, so the card has to print the exact input of each.",
+  "question": "Both of those windows are closed. Deal with them.",
+  "script": [
+    {
+      "tools": [
+        {
+          "name": "list_windows_closed_short",
+          "input": {
+            "owner": "everyone",
+            "limit": 5
+          }
+        }
+      ]
+    },
+    {
+      "tools": [
+        {
+          "name": "propose_action",
+          "input": {
+            "summary": "Answer the two windows that closed short.",
+            "options": [
+              {
+                "label": "The first one pushed",
+                "tool": "record_outcome",
+                "input": {
+                  "commitment_id": 3009,
+                  "outcome": "pushed",
+                  "note": "Next quarter."
+                }
+              },
+              {
+                "label": "The second one pushed",
+                "tool": "record_outcome",
+                "input": {
+                  "commitment_id": 3008,
+                  "outcome": "pushed",
+                  "note": "Next quarter."
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "say": "Pick one."
+    }
+  ],
+  "expected": {
+    "tools": [
+      {
+        "name": "propose_action",
+        "ran": true
+      }
+    ],
+    "proposal": "record_outcome"
+  }
+}

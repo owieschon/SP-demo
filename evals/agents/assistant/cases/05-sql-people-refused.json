@@ -1,0 +1,29 @@
+{
+  "about": "A query about people. nl_readonly has no grant on nl.users at all. KNOWN MISS: nothing is read and nothing is written, but the call is recorded as having run, because run_sql returns its refusal as a payload rather than raising. See the gaps in docs/agent-harness.md.",
+  "question": "Who are the account managers?",
+  "script": [
+    {
+      "tools": [
+        {
+          "name": "run_sql",
+          "input": {
+            "why": "Reading the team",
+            "sql": "select id, full_name, email from nl.users"
+          }
+        }
+      ]
+    },
+    {
+      "say": "I cannot read that."
+    }
+  ],
+  "expected": {
+    "tools": [
+      {
+        "name": "run_sql",
+        "ran": false
+      }
+    ],
+    "proposal": null
+  }
+}

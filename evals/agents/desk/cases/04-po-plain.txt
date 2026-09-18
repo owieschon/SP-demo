@@ -1,0 +1,11 @@
+From: "Parker Reyes" <parker.reyes@canyonpartswarehouse.example>
+To: order-desk@agentmail.to
+Subject: Purchase order 55219
+Date: Tue, 16 Sep 2026 07:55:00 -0500
+
+Morning,
+
+Please process purchase order 55219 for 40 of CL6SZ, shipped to Greenville.
+
+Parker Reyes
+Canyon Parts Warehouse

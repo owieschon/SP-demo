@@ -1,0 +1,14 @@
+{
+  "about": "Below the floor the agent asks a short question instead of guessing.",
+  "check": "confidence_floor",
+  "refuses": {
+    "confidence": 0.4
+  },
+  "expect": {
+    "verdict": "needs_person",
+    "reason_contains": "sure"
+  },
+  "passes": {
+    "confidence": 0.95
+  }
+}

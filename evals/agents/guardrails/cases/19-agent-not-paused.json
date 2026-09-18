@@ -1,0 +1,38 @@
+{
+  "about": "A paused agent may draft and may not act, at once and without a deploy.",
+  "check": "agent_not_paused",
+  "refuses": {
+    "autonomy": {
+      "agent": "order_desk",
+      "workKind": "rfq",
+      "level": "auto",
+      "undoWindowMinutes": 0,
+      "sampleRate": 0,
+      "paused": true,
+      "pauseReason": "Checking a price sheet",
+      "pausedByName": null,
+      "mayAct": false,
+      "needsReview": true,
+      "hidden": false
+    }
+  },
+  "expect": {
+    "verdict": "needs_person",
+    "reason_contains": "paused"
+  },
+  "passes": {
+    "autonomy": {
+      "agent": "order_desk",
+      "workKind": "rfq",
+      "level": "auto",
+      "undoWindowMinutes": 0,
+      "sampleRate": 0,
+      "paused": false,
+      "pauseReason": "",
+      "pausedByName": null,
+      "mayAct": true,
+      "needsReview": false,
+      "hidden": false
+    }
+  }
+}
