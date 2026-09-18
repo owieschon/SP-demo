@@ -1,0 +1,52 @@
+{
+  "about": "A proposal to change confidence, which is the other gated write on a commitment.",
+  "question": "I think that one is more likely than we have it.",
+  "script": [
+    {
+      "tools": [
+        {
+          "name": "get_commitment",
+          "input": {
+            "commitment_id": 3009
+          }
+        }
+      ]
+    },
+    {
+      "tools": [
+        {
+          "name": "propose_action",
+          "input": {
+            "summary": "Raise the confidence on this commitment.",
+            "options": [
+              {
+                "label": "Put it at 90%",
+                "tool": "set_confidence",
+                "input": {
+                  "commitment_id": 3009,
+                  "confidence": 90
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "say": "Approve it and I will."
+    }
+  ],
+  "expected": {
+    "tools": [
+      {
+        "name": "get_commitment",
+        "ran": true
+      },
+      {
+        "name": "propose_action",
+        "ran": true
+      }
+    ],
+    "proposal": "set_confidence"
+  }
+}

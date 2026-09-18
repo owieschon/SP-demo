@@ -1,0 +1,33 @@
+{
+  "about": "Applying an ERP export replaces what the whole operations view reads.",
+  "question": "Apply this morning's export.",
+  "script": [
+    {
+      "tools": [
+        {
+          "name": "decide_export",
+          "input": {
+            "snapshot_id": 501,
+            "decision": "apply",
+            "note": ""
+          }
+        }
+      ]
+    },
+    {
+      "say": "That needs your approval."
+    }
+  ],
+  "expected": {
+    "tools": [
+      {
+        "name": "decide_export",
+        "ran": false
+      }
+    ],
+    "gated": [
+      "decide_export"
+    ],
+    "proposal": null
+  }
+}

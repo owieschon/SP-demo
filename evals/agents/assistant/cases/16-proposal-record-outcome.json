@@ -1,0 +1,59 @@
+{
+  "about": "A proposal rather than an action: two options, and nothing runs until a person approves one.",
+  "question": "That window closed short. What happened?",
+  "script": [
+    {
+      "tools": [
+        {
+          "name": "list_windows_closed_short",
+          "input": {
+            "owner": "everyone",
+            "limit": 5
+          }
+        }
+      ]
+    },
+    {
+      "tools": [
+        {
+          "name": "propose_action",
+          "input": {
+            "summary": "Say what happened to the commitment that closed short.",
+            "options": [
+              {
+                "label": "The business moved out of the window",
+                "tool": "record_outcome",
+                "input": {
+                  "commitment_id": 3009,
+                  "outcome": "pushed",
+                  "note": "Still coming, outside this window."
+                }
+              },
+              {
+                "label": "They did not buy it",
+                "tool": "record_outcome",
+                "input": {
+                  "commitment_id": 3009,
+                  "outcome": "broken",
+                  "note": "Not going ahead."
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "say": "The options are above."
+    }
+  ],
+  "expected": {
+    "tools": [
+      {
+        "name": "propose_action",
+        "ran": true
+      }
+    ],
+    "proposal": "record_outcome"
+  }
+}

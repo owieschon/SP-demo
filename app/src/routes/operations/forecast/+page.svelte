@@ -14,7 +14,7 @@
 
 <main class="page">
 	<header class="head">
-		<h1 class="sr-only">Late-order forecast</h1>
+		<h1>Late-order forecast</h1>
 		<p class="faint">
 			Every open order line, netted against what is on the shelf and what is on order from vendors and the
 			shop floor. A line's projected date is the day the parts for it and for every line promised before it
