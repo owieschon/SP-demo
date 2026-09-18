@@ -11,7 +11,8 @@
 import { describe, expect, it } from 'vitest';
 import { ariaSortValue, nextSortValue, rowCountLine, sortSearch } from './table';
 import { isBackdropClick, moveHighlight } from './dialog';
-import { groupEntries, matchEntries, scoreEntry, type PaletteEntry } from './palette';
+import { askEntry, groupEntries, matchEntries, scoreEntry, type PaletteEntry } from './palette';
+import { NAV, NAV_ITEMS, phoneItems, visibleSections, type NavItem } from '$lib/nav';
 
 describe('a sortable header link', () => {
 	it('keeps every other filter and goes back to page one', () => {
@@ -150,5 +151,71 @@ describe('the command palette', () => {
 		const groups = groupEntries(matchEntries('', entries));
 		expect(groups.map((group) => group.kind)).toEqual(['action', 'screen', 'account', 'part']);
 		expect(groups[1].entries.map((entry) => entry.id)).toEqual(['b', 'c']);
+	});
+});
+
+describe('the palette taking a question', () => {
+	it('offers to ask whatever was typed', () => {
+		const entry = askEntry('which accounts have gone quiet in Texas');
+		expect(entry?.href).toBe('/ask?q=which%20accounts%20have%20gone%20quiet%20in%20Texas');
+		expect(entry?.label).toContain('which accounts have gone quiet');
+	});
+
+	it('says nothing until there is a question to ask', () => {
+		expect(askEntry('')).toBeNull();
+		expect(askEntry('  a ')).toBeNull();
+	});
+
+	it('trims what it passes on', () => {
+		expect(askEntry('  what sold last week  ')?.href).toBe('/ask?q=what%20sold%20last%20week');
+	});
+});
+
+describe('the rail', () => {
+	it('has four groups, in the order a day runs', () => {
+		expect(NAV.map((section) => section.heading)).toEqual([
+			'Today',
+			'Desks',
+			'Records',
+			'Controls'
+		]);
+	});
+
+	it('keeps Records small, because a lookup belongs in the palette', () => {
+		const records = NAV.find((section) => section.heading === 'Records');
+		expect(records?.items.length).toBeLessThanOrEqual(3);
+		// Accounts, parts and vendors are reachable by typing a name or number.
+		const hrefs = records?.items.map((item) => item.href) ?? [];
+		expect(hrefs).not.toContain('/accounts');
+		expect(hrefs).not.toContain('/parts');
+		expect(hrefs).not.toContain('/vendors');
+	});
+
+	it('leaves a screen that does not exist yet out of the rail', () => {
+		const shown = visibleSections().flatMap((section) => section.items.map((item) => item.href));
+		expect(shown).not.toContain('/agents');
+		expect(shown).not.toContain('/policies');
+		// And out of what the palette offers, for the same reason.
+		expect(NAV_ITEMS.map((item) => item.href)).not.toContain('/policies');
+	});
+
+	it('drops a group that a person may see nothing in', () => {
+		const notDesks = (item: NavItem) => !item.href.startsWith('/desk');
+		const onlyToday = (item: NavItem) => item.href === '/';
+		expect(visibleSections(notDesks).map((section) => section.heading)).toContain('Desks');
+		// Everything gone except Today: three groups disappear rather than
+		// rendering as empty headings.
+		expect(visibleSections(onlyToday).map((section) => section.heading)).toEqual(['Today']);
+	});
+
+	it('renders a group of one the same as a group of five', () => {
+		const today = visibleSections()[0];
+		expect(today.heading).toBe('Today');
+		expect(today.items).toHaveLength(1);
+	});
+
+	it('gives a phone Today and the desk that person works', () => {
+		expect(phoneItems('account_manager').map((item) => item.href)).toEqual(['/', '/desk']);
+		expect(phoneItems('operations').map((item) => item.href)).toEqual(['/', '/operations']);
 	});
 });

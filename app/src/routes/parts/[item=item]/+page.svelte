@@ -144,8 +144,9 @@
 
 	<section class="panel" aria-labelledby="chart">
 		<header class="panel-head">
-			<h2 id="chart">Units a month</h2>
-			<span class="faint">last 24 months</span>
+			<!-- A chart's title is the question it answers. -->
+			<h2 id="chart">Does this part sell steadily, or in bursts?</h2>
+			<span class="muted">last 24 months</span>
 		</header>
 		<div class="body">
 			{#await data.sales}

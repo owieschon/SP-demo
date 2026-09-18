@@ -44,6 +44,18 @@ export const routes = {
 	ask: () => '/ask',
 	deskMessage: (id: number) => `/desk/${seg(id)}`,
 	desk: () => '/desk',
+	/** The procurement desk: what to buy, from whom, by when. */
+	procurement: () => '/procurement',
+	/*
+	  Pages other branches are building. They are named here so the rail and
+	  the palette can be written once, and each is marked unavailable in
+	  nav.ts until its route exists.
+	*/
+	agents: () => '/agents',
+	policies: () => '/policies',
+	dictionary: () => '/dictionary',
+	context: () => '/context',
+	people: () => '/people',
 	/** The queue an agent's proposal waits in. */
 	workspace: (source?: 'rfq' | 'assistant' | 'mail' | 'purchase') =>
 		source ? `/workspace?source=${source}` : '/workspace',

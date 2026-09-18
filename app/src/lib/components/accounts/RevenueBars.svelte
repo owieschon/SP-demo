@@ -1,9 +1,21 @@
 <script lang="ts">
-	// Two years of monthly revenue as plain SVG bars: no chart library, one
-	// rect per month, the last twelve months in a stronger tone than the
-	// twelve before them. A bar for a month with a net credit (returns worth
-	// more than sales) hangs below the line.
-	import { money } from '$lib/format';
+	/*
+	  Two years of monthly revenue as plain SVG bars: no chart library, one
+	  rect per month, the last twelve months in a stronger tone than the
+	  twelve before them. A bar for a month with a net credit (returns worth
+	  more than sales) hangs below the line.
+
+	  It earns its place under the app's own rule (docs/design-system.md)
+	  because the gaps are the signal: an account that buys every month and
+	  an account that buys twice a year can have the same annual figure and
+	  need completely different handling, and no single number separates
+	  them. The rule also demands a reference line, which is the dashed one:
+	  the average month of the EARLIER twelve, so each recent bar is read
+	  against what this account used to do rather than against its own best
+	  month. And it demands the numbers as a table, which is underneath.
+	*/
+	import { count, money } from '$lib/format';
+	import ChartNumbers from '$lib/components/ui/ChartNumbers.svelte';
 
 	let { months }: { months: { month: string; revenue: number }[] } = $props();
 
@@ -79,6 +91,20 @@
 	const earlierTotal = $derived(
 		months.slice(0, Math.max(0, months.length - 12)).reduce((sum, m) => sum + m.revenue, 0)
 	);
+	/*
+	  The reference line: the average month across the earlier twelve. A
+	  chart of revenue by month with nothing to compare against is
+	  decoration, and "its own tallest bar" is a comparison with itself.
+	*/
+	const earlierMonths = $derived(Math.max(0, months.length - 12));
+	const reference = $derived(earlierMonths > 0 ? earlierTotal / earlierMonths : 0);
+	const referenceY = $derived(
+		scale.highest > 0
+			? scale.top - (Math.max(0, reference) / scale.highest) * (scale.top - 2)
+			: scale.top
+	);
+	const quietMonths = $derived(months.slice(-12).filter((m) => m.revenue === 0).length);
+
 	const best = $derived(
 		months.length === 0
 			? null
@@ -95,6 +121,9 @@
 			`Last 12 months ${money(recentTotal)}.`
 		];
 		if (months.length > 12) parts.push(`The 12 before them ${money(earlierTotal)}.`);
+		if (reference > 0) parts.push(`An average month of the earlier twelve was ${money(reference)}.`);
+		if (quietMonths > 0)
+			parts.push(`${count(quietMonths)} of the last 12 months had no revenue at all.`);
 		if (best && best.revenue > 0) parts.push(`Best month ${monthName(best.month)}, ${money(best.revenue)}.`);
 		return parts.join(' ');
 	});
@@ -115,6 +144,10 @@
 			     colours distinguish are also separated by a line. -->
 			{#if splitAt !== null}
 				<line x1={splitAt} y1="0" x2={splitAt} y2={H} class="split" />
+			{/if}
+			<!-- The reference: what a month used to be, before the last year. -->
+			{#if reference > 0}
+				<line x1="0" y1={referenceY} x2={W} y2={referenceY} class="reference" />
 			{/if}
 			{#each bars as bar (bar.month)}
 				<rect
@@ -144,6 +177,18 @@
 				<span class="muted">{monthName(bars[bars.length - 1].month)}</span>
 			</figcaption>
 		{/if}
+		{#if reference > 0}
+			<p class="t-meta muted reference-note">
+				<span class="key-line" aria-hidden="true"></span>
+				Dashed line: {money(reference)}, an average month before the last year.{#if quietMonths > 0}
+					{count(quietMonths)} of the last 12 months had no revenue at all.{/if}
+			</p>
+		{/if}
+		<ChartNumbers
+			caption="Revenue per month, oldest first"
+			headers={['Month', 'Revenue']}
+			rows={months.map((m) => [monthName(m.month), money(m.revenue)])}
+		/>
 	</figure>
 {/if}
 
@@ -175,6 +220,28 @@
 	.axis {
 		stroke: var(--hairline-strong);
 		stroke-width: 1;
+	}
+
+	/* The reference line the bars are read against. */
+	.reference {
+		stroke: var(--text-muted);
+		stroke-width: 1;
+		stroke-dasharray: 3 3;
+	}
+
+	.reference-note {
+		display: flex;
+		align-items: baseline;
+		gap: 6px;
+		max-width: var(--measure);
+	}
+
+	.key-line {
+		flex: none;
+		width: 14px;
+		height: 0;
+		margin-bottom: 3px;
+		border-top: 1px dashed var(--text-muted);
 	}
 
 	/* The twelve-month boundary, dashed so it reads as a divider. */

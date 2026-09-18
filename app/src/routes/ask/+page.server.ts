@@ -8,6 +8,13 @@ export const load: PageServerLoad = async (event) => {
 	const page = await askPageData(event);
 	return {
 		...page,
+		/*
+		  ?q= pre-fills the box. It is what makes a question a link: the four
+		  starter questions are now anchors, and the command palette hands the
+		  whole app one address for "ask this". Nothing is sent until a person
+		  presses the button.
+		*/
+		question: (event.url.searchParams.get('q') ?? '').slice(0, 500),
 		// Not awaited: the page arrives now and the list streams in behind it.
 		conversations: listConversations(await getDb(), event.locals.user!.id)
 	};

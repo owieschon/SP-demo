@@ -26,11 +26,10 @@
      record and so cannot be typed: the commitment board, open orders, and
      the floor.
 
-  Reserved, and deliberately not linked until the page exists, because a rail
-  entry that 404s is worse than a missing one:
-
-    Desks     /procurement, the procurement desk
-    Controls  /policies, /dictionary, /context, /agents, /people
+  Pages other branches are building are listed here with `available: false`,
+  so the grouping and the wording are settled now and the entry appears the
+  moment its route lands. Nothing unavailable reaches the rail or the
+  palette.
 
   Which entries a given person sees is decided elsewhere (a roles branch
   derives it from authority and hides an entry with nothing behind it), so
@@ -39,6 +38,8 @@
   as it renders a group of five.
 */
 import type { Component } from 'svelte';
+import BadgeCheck from '@lucide/svelte/icons/badge-check';
+import Book from '@lucide/svelte/icons/book';
 import Boxes from '@lucide/svelte/icons/boxes';
 import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
 import ListChecks from '@lucide/svelte/icons/list-checks';
@@ -46,6 +47,9 @@ import Mails from '@lucide/svelte/icons/mails';
 import Settings from '@lucide/svelte/icons/settings';
 import SunMedium from '@lucide/svelte/icons/sun-medium';
 import Route from '@lucide/svelte/icons/route';
+import ScrollText from '@lucide/svelte/icons/scroll-text';
+import ShoppingCart from '@lucide/svelte/icons/shopping-cart';
+import Users from '@lucide/svelte/icons/users';
 import Warehouse from '@lucide/svelte/icons/warehouse';
 import Workflow from '@lucide/svelte/icons/workflow';
 import type { Role } from './types';
@@ -62,6 +66,13 @@ export interface NavItem {
 	  glyph repeating it would be read twice.
 	*/
 	icon: Component<{ size?: number; strokeWidth?: number; 'aria-hidden'?: boolean | 'true' }>;
+	/*
+	  False for a screen another branch is still building. The entry is
+	  written here so the grouping, the order and the wording are decided
+	  once, and it stays out of the rail and the palette until its route
+	  exists: an entry that 404s is worse than a missing one.
+	*/
+	available?: boolean;
 }
 
 export interface NavSection {
@@ -98,12 +109,17 @@ export const NAV: NavSection[] = [
 				icon: ClipboardCheck
 			},
 			{
+				href: routes.procurement(),
+				label: 'Procurement desk',
+				hint: 'What to buy, how much and from whom, with the vendor email drafted',
+				icon: ShoppingCart
+			},
+			{
 				href: routes.operations(),
 				label: 'Morning exports',
-				hint: "The ERP files staged overnight: apply them, or hold one and say why",
+				hint: 'The ERP files staged overnight: apply them, or hold one and say why',
 				icon: Warehouse
 			}
-			// Reserved: /procurement, the procurement desk.
 		]
 	},
 	{
@@ -133,6 +149,41 @@ export const NAV: NavSection[] = [
 		heading: 'Controls',
 		items: [
 			{
+				href: routes.agents(),
+				label: 'Agents',
+				hint: 'What each agent may do on its own, what it did, and what it was refused',
+				icon: BadgeCheck,
+				available: false
+			},
+			{
+				href: routes.policies(),
+				label: 'Policies',
+				hint: 'The rules the agents work to, in the words the business uses',
+				icon: ScrollText,
+				available: false
+			},
+			{
+				href: routes.dictionary(),
+				label: 'Dictionary',
+				hint: 'What each word in this business means, so an agent means it too',
+				icon: Book,
+				available: false
+			},
+			{
+				href: routes.context(),
+				label: 'Context',
+				hint: 'What the agents are told about this company before they start',
+				icon: Book,
+				available: false
+			},
+			{
+				href: routes.people(),
+				label: 'People',
+				hint: 'Who works here, what they may approve, and who covers them',
+				icon: Users,
+				available: false
+			},
+			{
 				href: routes.rules(),
 				label: 'Automations',
 				hint: 'The rules that run every night, each as one plain sentence',
@@ -149,13 +200,38 @@ export const NAV: NavSection[] = [
 	}
 ];
 
-/** The groups that still have something in them. */
-export function visibleSections(sections: NavSection[] = NAV): NavSection[] {
-	return sections.filter((section) => section.items.length > 0);
+/**
+ * The groups a person sees, with the entries they may not see dropped and
+ * the groups that are left empty dropped with them.
+ *
+ * Two filters, on purpose. `available` is about this codebase: whether the
+ * screen exists yet. `canSee` is about authority, and it belongs to whoever
+ * knows what a person may do; the default lets everything through so this
+ * file has no opinion about it.
+ *
+ * Every group has to survive being emptied, because both filters can empty
+ * one: a group of one renders exactly like a group of five, and a group of
+ * none is not rendered at all.
+ */
+export function visibleSections(
+	canSee: (item: NavItem) => boolean = () => true,
+	sections: NavSection[] = NAV
+): NavSection[] {
+	return sections
+		.map((section) => ({
+			heading: section.heading,
+			items: section.items.filter((item) => item.available !== false && canSee(item))
+		}))
+		.filter((section) => section.items.length > 0);
 }
 
-/** Every entry, flat. The palette and the "which section am I in" check use it. */
-export const NAV_ITEMS: NavItem[] = NAV.flatMap((section) => section.items);
+/**
+ * Every entry that exists, flat. The palette and the "which section am I in"
+ * check use it, and neither should offer a screen that is not there yet.
+ */
+export const NAV_ITEMS: NavItem[] = NAV.flatMap((section) =>
+	section.items.filter((item) => item.available !== false)
+);
 
 /**
  * The phone bar: Today, the desk this person actually works, and that is it.

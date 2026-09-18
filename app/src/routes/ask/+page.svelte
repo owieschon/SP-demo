@@ -11,7 +11,18 @@
 
 	let { data, form }: PageProps = $props();
 
+	/*
+	  The box starts from ?q=, so a question can be a link: the four starters
+	  below are anchors now, and the command palette can hand this page what
+	  somebody typed into it.
+	*/
 	let question = $state('');
+
+	// A new ?q= is a new question, including on a client-side navigation from
+	// the command palette or from one of the starters below.
+	$effect(() => {
+		question = data.question ?? '';
+	});
 
 	const message = $derived(form && 'message' in form ? form.message : null);
 	const capped = $derived(Boolean(form && 'capped' in form && form.capped));
@@ -53,10 +64,10 @@
 		<ul class="starters">
 			{#each STARTERS as starter (starter.question)}
 				<li>
-					<button type="button" class="starter pressable" onclick={() => (question = starter.question)}>
+					<a class="starter pressable" href="?q={encodeURIComponent(starter.question)}">
 						<span class="q">{starter.question}</span>
 						<span class="faint small">{starter.why}</span>
-					</button>
+					</a>
 				</li>
 			{/each}
 		</ul>
