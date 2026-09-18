@@ -499,16 +499,15 @@ curl -s https://<host>/api/mcp \
 
 ## 10. The tests
 
-`app/src/lib/server/mcp/mcp.test.ts`, 37 tests against a real database
-(PGlite), with today pinned to 2026-09-17. The ones that hold the promises
-above:
+`app/src/lib/server/mcp/mcp.test.ts`, against a real database (PGlite), with
+today pinned to 2026-09-17. The ones that hold the promises above:
 
 | Claim | Test |
 |---|---|
 | `initialize` answers with the server's name and tools capability | `the protocol > answers initialize ...` |
 | `ping` answers | `the protocol > answers ping` |
 | Every tool has a real description and an object JSON Schema | `the protocol > lists every tool with a description and a JSON Schema` |
-| No tool that writes is listed, under any name | `the protocol > does not list a tool that writes, under any name` |
+| No tool that writes is listed to a suggest-level token, under any name | `the protocol > does not list a tool that writes to a token at suggest, under any name` |
 | An unknown method is `-32601` | `the protocol > answers an unknown method with -32601` |
 | A malformed request is a JSON-RPC error with no stack trace | `the protocol > answers a malformed request with a JSON-RPC error, not a stack trace` |
 | GET says what this is and how to connect | `the protocol > tells a GET what this endpoint is and how to connect` |
@@ -517,9 +516,19 @@ above:
 | A revoked token is 401, worded exactly like a made-up one | `the token > refuses a token that was never minted, and a revoked one, with the same words` |
 | A revoked token's attempt is still recorded | `the token > still records that a revoked token was tried` |
 | The plain text is never stored, in the token table, the audit log or the request log | `the token > never stores the token in plain text` |
-| A read-only token calling a propose tool is 403, and writes nothing | `scopes > refuses a propose tool to a read-only token with 403, and writes nothing` |
-| A read-only token is not even shown the propose tools | `scopes > shows a read-only token only the tools it can call` |
-| A gated tool is never executed directly, whatever the input | `a gated tool > is not callable directly, whatever the input` (four inputs, including a row version, plus five more tool names; the commitment's `updated_at` and every business table count are unchanged) |
+| The SAME token proposes at suggest and writes once raised to act | `the one dial > proposes and writes nothing at suggest, and writes once raised to act` |
+| The write is audited under the person the token acts as, not the admin and not the principal | `the one dial > audits the write it made under the person the token acts as` |
+| `tools/list` shows a tool under its own name at act and as `propose_` at suggest, and never both | `the one dial > tells an agent the truth about what it can do right now` |
+| The additive pair is offered at the acting rungs and not at suggest | same test |
+| A request above the person's ceiling is refused with the ceiling named, and not downgraded | `the one dial > refuses a request above the person's ceiling, and names the ceiling` |
+| A paused agent is refused at every level, and reads still answer | `the one dial > refuses a paused agent at every level` |
+| Raising a token's level is the same write, the same table and the same audit row as a person's limit | `the one dial > raises a token's level through the same write as a person's limit` |
+| The scopes column is gone, so nothing can fall back to it | `the one dial > has no scopes left to decide anything` |
+| The policy engine's cap binds once set, and not before | `the one dial > reads the company's cap from the policy engine, and not before one is set` |
+| A change at act-with-review is made and left reversible, with the window taken from the ladder | `acting with a window > makes the change and leaves it reversible inside the window` |
+| The undo can be claimed while the window is open | `acting with a window > lets a person claim the undo while the window is open` |
+| The undo is refused once the window has closed | `acting with a window > refuses the undo once the window has closed` |
+| A gated tool is never executed directly by a suggest-level token, whatever the input | `a gated tool > is not callable directly, whatever the input` (four inputs, including a row version, plus five more tool names; the commitment's `updated_at` and every business table count are unchanged) |
 | A propose tool creates a proposal and writes nothing else | `proposing a change > creates a proposal and writes nothing else` (ten table counts before and after, and the commitment's row version) |
 | The proposal is a draft with the row version it would write against | `proposing a change > stores it as a draft on an MCP conversation ...` |
 | The trail records a proposal, never a gated tool that ran | `proposing a change > records the tool call as a proposal, never as a gated tool that ran` |
@@ -531,5 +540,15 @@ above:
 | Every call is logged with its tool, its time and how it ended | `the log > has a row for every call ...` |
 | Minting and revoking are in the audit log | `the log > records minting and revoking in the audit log` |
 
-The assistant's own 91 tests still pass unchanged, which is the other half of
-the claim that this reuses its safety model rather than copying it.
+| A gated tool is not in the registry a suggest-level token sees, is in the acting ones, and is never in both shapes at once | `a gated tool > is not in the registry a suggest-level token sees` |
+
+The assistant's own tests still pass unchanged, which is the other half of the
+claim that this reuses its safety model rather than copying it.
+
+**What is NOT covered by a test yet**, written down rather than left to be
+found: the `/agents` form that raises a token's level is exercised through
+`setTokenLevel` rather than through the page, so the form markup itself is
+unverified; and the reversal of an `add_next_step` or a `set_confidence` made
+over MCP (`harness/wake.ts`) is written but has no test driving it end to end.
+The window's open-and-closed behaviour IS tested, which is the part that
+decides whether a reversal is allowed at all.
