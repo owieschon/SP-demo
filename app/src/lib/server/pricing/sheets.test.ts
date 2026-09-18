@@ -1,5 +1,5 @@
 // Published price sheets, published ladders, what a customer is used to
-// paying, and the exceptions behind a number (migration 0027), against the
+// paying, and the exceptions behind a number (migration 0031), against the
 // small world with today pinned to 2026-09-17.
 //
 // The rule here is the same one pricing.test.ts follows: every number is
@@ -1192,8 +1192,9 @@ describe('nl.answer_for', () => {
 		expect(answer!.reply.join(' ')).toMatch(/ship/);
 		for (const sentence of answer!.reply) {
 			expect(sentence.endsWith('.'), sentence).toBe(true);
-			// The house style: plain English, no em dashes anywhere.
-			expect(sentence).not.toContain('—');
+			// The house style: plain English, no em dashes anywhere. Written as
+			// an escape so this file does not contain one either.
+			expect(sentence).not.toContain('\u2014');
 		}
 	});
 

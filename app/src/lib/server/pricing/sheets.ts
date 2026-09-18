@@ -2,7 +2,7 @@
 // to paying, the exceptions behind a number, and the two functions that put
 // all of it into one answer.
 //
-// The rules live in migration 0027 and nowhere else:
+// The rules live in migration 0031 and nowhere else:
 //
 //   nl.price_quote_for(customer, item, quantity, date)  the quote level price
 //   nl.explain_price(...)                               the price and the why
