@@ -81,7 +81,7 @@
 			</p>
 			<ConnectButtons
 				providers={data.providers}
-				requestId={data.connectId}
+				requestIds={data.connectIds}
 				canConnect={data.isAdmin}
 				reason="Only an admin can mint a token, so these are off for you. Ask an admin for one with your name on it, or ask them to make you an admin of this deployment."
 			/>

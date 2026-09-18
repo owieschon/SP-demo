@@ -13,7 +13,7 @@
   answers "you" and names the provider for you.
 */
 import { AppError } from '../errors.ts';
-import { mintToken } from './tokens.ts';
+import { hashToken, mintToken } from './tokens.ts';
 import {
 	assembleConfig,
 	CONNECT_SCOPES,
@@ -76,6 +76,26 @@ export async function connectProvider(
 		scopes: [...CONNECT_SCOPES] as McpScope[],
 		requestId: input.requestId
 	});
+
+	/*
+	  A reused request id does not write twice: nl.claim_request hands back the
+	  answer to the first write. That is what stops a double click minting two
+	  live secrets, and it means a stale form comes back with the first token's
+	  id beside a second secret that was never stored. Handing that over would
+	  be a block that cannot authenticate, looking like the app's fault, so the
+	  hash is checked and a person is asked to reload instead.
+	*/
+	const [stored] = await db.asUser(person.id, (tx) =>
+		tx.sql<{ token_sha256: string }>`
+			select token_sha256 from nl.mcp_tokens where id = ${minted.tokenId}`
+	);
+	if (!stored || stored.token_sha256 !== hashToken(minted.secret)) {
+		throw new AppError(
+			409,
+			'NL409',
+			'That button was already used once. Reload the page and press it again for a fresh token.'
+		);
+	}
 
 	const details = { endpoint: input.endpoint, secret: minted.secret };
 	return {

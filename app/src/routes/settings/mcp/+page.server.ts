@@ -78,9 +78,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		// sends the same id, so the database writes once. Revoke needs one per
 		// token, because two revokes on one page load are two different writes.
 		mintId: randomUUID(),
-		// One id for the connect row. A successful connect re-renders the page
-		// and brings a new one, so two connects in a row are two writes.
-		connectId: randomUUID(),
+		// One id per provider button. Two different buttons are two different
+		// writes even from a page that has been sitting open, and pressing the
+		// same one twice on one render is one write rather than two secrets.
+		connectIds: Object.fromEntries(MCP_PROVIDERS.map((provider) => [provider.id, randomUUID()])),
 		revokeIds: Object.fromEntries(tokens.map((token) => [token.id, randomUUID()]))
 	};
 };
