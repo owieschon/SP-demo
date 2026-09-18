@@ -37,7 +37,7 @@
 		"pdf-lib": "1.17.1",
 		"postgres": "3.4.9",
 		"unpdf": "1.8.1",
-		"xlsx": "0.18.5",
+		"xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
 		"zod": "4.6.5"
 	}
 }
