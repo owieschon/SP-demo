@@ -1,8 +1,11 @@
 <script lang="ts">
-	// One emailed request: what was read, what the checks decided, the fixes
-	// a person can make, and the proposal to approve or reject.
+	// One quote request: what arrived, what was read out of it, what the
+	// checks decided, the fixes a person can make, and the proposal to
+	// approve or reject. Approving is what creates the quote and the
+	// commitment; until then nothing exists but this.
 	import { invalidateAll } from '$app/navigation';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+	import RunTrail from '$lib/components/agentruns/RunTrail.svelte';
 	import Attachments from '$lib/components/rfq/Attachments.svelte';
 	import ChangeForm from '$lib/components/rfq/ChangeForm.svelte';
 	import CheckBadge from '$lib/components/rfq/CheckBadge.svelte';
@@ -10,6 +13,7 @@
 	import ProposalCard from '$lib/components/rfq/ProposalCard.svelte';
 	import QuoteActions from '$lib/components/rfq/QuoteActions.svelte';
 	import { day, moment, moneyExact, percent, place } from '$lib/format';
+	import { routes } from '$lib/routes';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -34,13 +38,27 @@
 <main class="page">
 	<header class="head">
 		<div class="title-row">
-			<h1>Emailed request <span class="mono">R-{d.id}</span></h1>
-			<span class="chip state {d.status}">{d.status === 'draft' ? 'Draft' : d.status === 'approved' ? 'Approved' : 'Rejected'}</span>
+			<h1>Quote request <span class="mono">R-{d.id}</span></h1>
+			<span class="chip state {d.status}"
+				>{d.status === 'draft' ? 'Draft' : d.status === 'approved' ? 'Approved' : 'Rejected'}</span
+			>
 		</div>
 		<dl class="facts">
 			<div>
-				<dt>Source</dt>
-				<dd>{d.sourceName || 'pasted email'}</dd>
+				<dt>Came in as</dt>
+				<dd>
+					{#if data.item}
+						<a class="link" href={routes.deskMessage(data.item.messageId)}>
+							{data.item.source === 'person' ? 'a request typed at the desk' : 'mail at the order desk'}
+						</a>
+					{:else}
+						{d.sourceName || 'a request with no desk item'}
+					{/if}
+				</dd>
+			</div>
+			<div>
+				<dt>File</dt>
+				<dd>{d.sourceName || 'no file'}</dd>
 			</div>
 			<div>
 				<dt>Read by</dt>
@@ -52,11 +70,9 @@
 			</div>
 			{#if d.usage}
 				<div>
-					<dt>Read by</dt>
-					<dd
-						title="{d.usage.input_tokens} tokens in, {d.usage.output_tokens} out, {d.usage.cache_read_input_tokens} from cache"
-					>
-						AI reading
+					<dt>Tokens</dt>
+					<dd title="{d.usage.input_tokens} in, {d.usage.output_tokens} out, {d.usage.cache_read_input_tokens} from cache">
+						{d.usage.input_tokens + d.usage.output_tokens}
 					</dd>
 				</div>
 			{/if}
@@ -90,6 +106,11 @@
 			Rejected by {d.decidedByName}{d.decidedAt ? ` on ${moment(d.decidedAt)}` : ''}.
 			{#if d.rejectReason}Reason: {d.rejectReason}{/if} Nothing was created.
 		</p>
+	{/if}
+
+	{#if data.run}
+		<!-- What the agent did to turn what arrived into this. -->
+		<RunTrail run={data.run} heading="What the agent did to read this" />
 	{/if}
 
 	{#if d.attachments.length > 0}
@@ -130,7 +151,11 @@
 							<select name="customerNo" aria-label="Candidate accounts" required>
 								{#each v.customer.candidates as c (c.customer_no)}
 									<option value={c.customer_no} disabled={c.blocked || c.closed}>
-										{c.name} ({c.customer_no}), {place(c.city, c.state, 'US')}{c.blocked ? ', blocked' : c.closed ? ', closed' : ''}
+										{c.name} ({c.customer_no}), {place(c.city, c.state, 'US')}{c.blocked
+											? ', blocked'
+											: c.closed
+												? ', closed'
+												: ''}
 									</option>
 								{/each}
 							</select>
@@ -141,7 +166,14 @@
 				{#if editable && v.customer.check.status === 'needs_review'}
 					<ChangeForm {...change} change="customer" label="Enter an account number">
 						{#snippet children({ saving })}
-							<input name="customerNo" class="mono account" placeholder="Account number" aria-label="Account number" required maxlength="20" />
+							<input
+								name="customerNo"
+								class="mono account"
+								placeholder="Account number"
+								aria-label="Account number"
+								required
+								maxlength="20"
+							/>
 							<button class="button" disabled={saving}>Use</button>
 						{/snippet}
 					</ChangeForm>
@@ -153,7 +185,8 @@
 					<dt>Sender</dt>
 					<dd>
 						{d.draft.sender_email.value ?? 'unknown'}
-						{#if d.draft.sender_email.value}<span class="faint">{confidence(d.draft.sender_email.confidence)}</span>{/if}
+						{#if d.draft.sender_email.value}<span class="faint">{confidence(d.draft.sender_email.confidence)}</span
+							>{/if}
 					</dd>
 				</div>
 				<div>
@@ -202,7 +235,14 @@
 				{#if editable}
 					<ChangeForm {...change} change="needed_by" label="Set the needed-by date">
 						{#snippet children({ saving })}
-							<input type="date" name="neededBy" min={v.today} value={v.needed_by.date ?? ''} aria-label="Needed-by date" required />
+							<input
+								type="date"
+								name="neededBy"
+								min={v.today}
+								value={v.needed_by.date ?? ''}
+								aria-label="Needed-by date"
+								required
+							/>
 							<button class="button" disabled={saving}>Set date</button>
 						{/snippet}
 					</ChangeForm>
@@ -224,7 +264,9 @@
 			<div class="body stack">
 				<p class="figure num left">
 					{v.totals.subtotal === null ? 'Not priced yet' : moneyExact(v.totals.subtotal)}
-					<span class="faint small">our price, {activeLines.length} {activeLines.length === 1 ? 'line' : 'lines'}</span>
+					<span class="faint small"
+						>our price, {activeLines.length} {activeLines.length === 1 ? 'line' : 'lines'}</span
+					>
 				</p>
 				{#if v.totals.stated_subtotal !== null}
 					<p class="small">They wrote {moneyExact(v.totals.stated_subtotal)}.</p>
@@ -243,7 +285,7 @@
 
 	{#if d.draft.notes}
 		<section class="panel" aria-labelledby="notes">
-			<header class="panel-head"><h2 id="notes">Notes from the email</h2></header>
+			<header class="panel-head"><h2 id="notes">Notes from the request</h2></header>
 			<p class="body">{d.draft.notes}</p>
 		</section>
 	{/if}
@@ -256,15 +298,15 @@
 			</header>
 			<div class="body">
 				<QuoteActions
-					pdfUrl="/rfq/{d.id}/quote"
+					pdfUrl={routes.quoteRequestPdf(d.id)}
 					mail={data.draftMail}
 					lineCount={data.draftQuote.lineCount}
 					subtotal={data.draftQuote.subtotal}
 					fileName={data.draftQuote.fileName}
 				/>
 				<p class="faint small">
-					The PDF is marked DRAFT QUOTE and says nothing has been approved. Approving below writes the real quote,
-					with its own number.
+					The PDF is marked DRAFT QUOTE and says nothing has been approved. Approving below writes the real
+					quote, with its own number.
 				</p>
 			</div>
 		</section>
@@ -285,11 +327,15 @@
 	{/if}
 
 	<details class="panel source">
-		<summary>The email as received</summary>
+		<summary>The request as it was received</summary>
 		<pre class="mono">{d.sourceText}</pre>
 	</details>
 
-	<p><a class="link" href="/rfq">Back to quote requests</a></p>
+	<p>
+		<a class="link" href={data.item ? routes.deskMessage(data.item.messageId) : '/desk'}>
+			{data.item ? 'Back to the desk item' : 'Back to the desk'}
+		</a>
+	</p>
 </main>
 
 <style>

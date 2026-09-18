@@ -8,7 +8,6 @@
 	import Boxes from '@lucide/svelte/icons/boxes';
 	import Building2 from '@lucide/svelte/icons/building-2';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
-	import Inbox from '@lucide/svelte/icons/inbox';
 	import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
 	import ListChecks from '@lucide/svelte/icons/list-checks';
 	import Mails from '@lucide/svelte/icons/mails';
@@ -42,7 +41,6 @@
 		{ href: '/settings', label: 'Settings', icon: Settings },
 		{ href: '/commitments', label: 'Commitments', icon: ListChecks },
 		{ href: '/accounts', label: 'Accounts', icon: Building2 },
-		{ href: '/rfq', label: 'Quote requests', icon: Inbox },
 		{ href: '/parts', label: 'Parts', icon: Package },
 		{ href: '/vendors', label: 'Vendors', icon: Truck },
 		{ href: '/operations', label: 'Operations', icon: Warehouse },
@@ -81,19 +79,20 @@
 				{ label: `C-${page.params.id}`, href: null }
 			];
 		}
-		if (route === '/rfq') return [{ label: 'Quote requests', href: null }];
-		if (route === '/rfq/[id=id]') {
-			return [
-				{ label: 'Quote requests', href: '/rfq' },
-				{ label: `R-${page.params.id}`, href: null }
-			];
-		}
 		if (route === '/workspace') return [{ label: 'Workspace', href: null }];
 		if (route === '/desk') return [{ label: 'Desk', href: null }];
 		if (route === '/desk/[id=id]') {
 			return [
 				{ label: 'Desk', href: '/desk' },
-				{ label: 'Message', href: null }
+				{ label: 'Item', href: null }
+			];
+		}
+		// Quote requests used to be a section of their own. They arrive at the
+		// desk, so they are under it.
+		if (route === '/desk/requests/[id=id]') {
+			return [
+				{ label: 'Desk', href: '/desk' },
+				{ label: `Quote request R-${page.params.id}`, href: null }
 			];
 		}
 		if (route === '/settings') return [{ label: 'Settings', href: null }];

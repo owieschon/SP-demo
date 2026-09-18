@@ -6,6 +6,8 @@
 // (0022). The last one is built elsewhere and may not be in the database at
 // all; the queue then simply has no rows from it.
 
+import { routes } from '$lib/routes';
+
 export type QueueSource = 'rfq' | 'assistant' | 'mail' | 'purchase';
 
 /** In the order the workspace lists them. */
@@ -24,7 +26,7 @@ export const SOURCE_LABEL: Record<QueueSource, string> = {
  * links to the message it replies to) carries its own `href`.
  */
 export const SOURCE_HREF: Record<QueueSource, (id: number) => string> = {
-	rfq: (id) => `/rfq/${id}`,
+	rfq: (id) => routes.quoteRequest(id),
 	assistant: (id) => `/ask?proposal=${id}`,
 	// The desk page lists drafts under the message they answer, so a draft id
 	// is not an address there.

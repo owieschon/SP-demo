@@ -26,8 +26,18 @@ export const routes = {
 	parts: () => '/parts',
 	vendor: (vendorNo: string) => `/vendors/${seg(vendorNo)}`,
 	vendors: () => '/vendors',
-	/** A quote request read out of a customer's email. */
-	quoteRequest: (id: number) => `/rfq/${seg(id)}`,
+	/**
+	 * A quote request read out of what a customer sent, under the desk it
+	 * arrived at. `/rfq/<id>` redirects here.
+	 */
+	quoteRequest: (id: number) => `/desk/requests/${seg(id)}`,
+	/*
+	  The two file endpoints did not move with the screen, so a link somebody
+	  already has to a stored attachment or a draft PDF still serves the same
+	  bytes from the same address. New links come from here.
+	*/
+	quoteRequestPdf: (id: number) => `/rfq/${seg(id)}/quote`,
+	quoteRequestFile: (id: number, attachment: number) => `/rfq/${seg(id)}/attachments/${seg(attachment)}`,
 	quote: (id: number) => `/quotes/${seg(id)}`,
 	rule: (id: number) => `/automations/${seg(id)}`,
 	conversation: (id: number) => `/ask/${seg(id)}`,
