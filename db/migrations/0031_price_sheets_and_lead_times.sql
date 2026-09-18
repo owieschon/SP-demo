@@ -1,4 +1,4 @@
--- 0027 Published price sheets, published ladders, what a customer is used to
+-- 0031 Published price sheets, published ladders, what a customer is used to
 -- paying, and the exceptions that explain a number.
 --
 -- Migration 0018 gave the business one pricing rule with four sources, and
@@ -718,7 +718,15 @@ create table nl.purchase_receipts (
   promised_on date not null,
   received_on date not null,
   quantity    int not null check (quantity > 0),
+  -- What the vendor billed for the goods themselves.
   unit_cost   numeric(12, 2) not null check (unit_cost >= 0),
+  -- What it cost to get them here. The item card carries one cost figure and
+  -- it is the goods figure, so a margin worked out from it is flattering by
+  -- whatever these two add up to. Kept per receipt because they move: a part
+  -- flown in to cover a shortage lands at a different cost from the same part
+  -- on a full truck.
+  freight_in  numeric(12, 2) not null default 0 check (freight_in >= 0),
+  duty        numeric(12, 2) not null default 0 check (duty >= 0),
   primary key (document_no, line_no),
   constraint purchase_receipts_order check (promised_on >= ordered_on and received_on >= ordered_on)
 );
@@ -734,6 +742,47 @@ create index purchase_receipts_lead_idx
 
 create index purchase_receipts_item_idx
   on nl.purchase_receipts (item_no, received_on desc);
+
+-- What a part has actually cost us delivered, per vendor and part.
+--
+-- nl.items.unit_cost and the cost timeline in 0018 both carry the goods
+-- figure, which is what the vendor invoiced. Freight in and duty are real
+-- money and they are not in it, so every margin in the app is flattering by
+-- the uplift below. This view is where that gap becomes a number rather than
+-- a suspicion.
+--
+-- Grouped on read, never stored: a receipt is the fact, and a landed cost is
+-- arithmetic over the receipts, so it cannot go stale or be hand edited.
+create view nl.landed_cost with (security_invoker = true) as
+select
+  r.vendor_no,
+  r.item_no,
+  count(*)::int            as receipts,
+  max(r.received_on)       as last_received,
+  sum(r.quantity)::int     as units,
+  sum(r.quantity * r.unit_cost) as goods,
+  sum(r.freight_in)        as freight_in,
+  sum(r.duty)              as duty,
+  round(sum(r.quantity * r.unit_cost) / sum(r.quantity), 4) as invoiced_unit_cost,
+  round((sum(r.quantity * r.unit_cost) + sum(r.freight_in) + sum(r.duty)) / sum(r.quantity), 4)
+    as landed_unit_cost,
+  -- How much the goods figure understates what the part really costs.
+  round((sum(r.freight_in) + sum(r.duty)) / nullif(sum(r.quantity * r.unit_cost), 0), 4)
+    as uplift_pct,
+  -- The same thing over the last year only, because freight moved.
+  round(sum(r.quantity * r.unit_cost) filter (where r.received_on > nl.today() - 365)
+        / nullif(sum(r.quantity) filter (where r.received_on > nl.today() - 365), 0), 4)
+    as invoiced_unit_cost_12m,
+  round((sum(r.quantity * r.unit_cost) filter (where r.received_on > nl.today() - 365)
+         + sum(r.freight_in) filter (where r.received_on > nl.today() - 365)
+         + sum(r.duty) filter (where r.received_on > nl.today() - 365))
+        / nullif(sum(r.quantity) filter (where r.received_on > nl.today() - 365), 0), 4)
+    as landed_unit_cost_12m
+from nl.purchase_receipts r
+group by r.vendor_no, r.item_no;
+
+comment on view nl.landed_cost is
+  'What a part has cost delivered: goods plus freight in plus duty, per vendor and part, from receipts.';
 
 -- What a vendor actually does on one part. Deliberately no mean: an average
 -- hides the tail, and the tail is what a buyer has to plan around.
@@ -972,6 +1021,19 @@ $$;
 -- has a number the forecast can plan with. Anything customer facing should
 -- call nl.promise_lead_days() and read can_promise.
 create or replace function nl.item_lead_days(p_item_no text) returns int
+language sql stable
+set search_path = ''
+as $$
+  select lead_days from nl.promise_lead_days(p_item_no)
+$$;
+
+-- Migration 0029 has its own copy of the old three step chain, because the
+-- procurement desk has to work on a database without 0016. It is replaced here
+-- for the same reason nl.item_lead_days() is: the replenishment maths, the
+-- order-by dates and the purchase requests should plan on what the vendor
+-- actually does, and none of their callers has to change to get it. Same
+-- signature, same return type.
+create or replace function nl.item_lead_time_days(p_item_no text) returns int
 language sql stable
 set search_path = ''
 as $$
@@ -1483,6 +1545,14 @@ as $$
   lead_time as (
     select * from nl.lead_time_for(p_item_no, p_on_date)
   ),
+  -- What the part has cost us delivered, from the source we buy it from.
+  landed as (
+    select lc.landed_unit_cost, lc.uplift_pct
+    from nl.landed_cost lc
+    where lc.item_no = p_item_no
+    order by lc.receipts desc, lc.vendor_no
+    limit 1
+  ),
   ex as (
     select nl.exceptions_for(p_customer_no, p_item_no, p_on_date) as rows
   ),
@@ -1684,7 +1754,17 @@ as $$
       'floor_price', q.floor_price,
       'min_margin', nl.min_margin(),
       'margin_pct', q.margin_pct,
-      'below_floor', q.below_floor),
+      'below_floor', q.below_floor,
+      -- What the part has actually cost delivered, and the margin at that
+      -- figure rather than at the goods cost. Null for a part we have never
+      -- received, which is most made parts. The flagged margin stays the one
+      -- the rest of the app uses; this sits beside it so nobody has to guess
+      -- how flattering it is.
+      'landed_unit_cost', (select lc.landed_unit_cost from landed lc),
+      'landed_uplift_pct', (select lc.uplift_pct from landed lc),
+      'landed_margin_pct', (select case when q.unit_price > 0
+                                        then round((q.unit_price - lc.landed_unit_cost) / q.unit_price, 4) end
+                            from landed lc)),
     'lead_time', (
       select jsonb_build_object(
         'days', ld.days, 'card_days', ld.card_days, 'slipped', ld.slipped,
@@ -2144,6 +2224,165 @@ begin
     'reply', to_jsonb(v_reply));
 end $$;
 
+
+-- ---------------------------------------------------------------------------
+-- The last unnamed number
+-- ---------------------------------------------------------------------------
+
+-- nl.sample_open_purchase_lines() (migration 0022) invented the open purchase
+-- book for the seeded world, and it dated every line off
+-- coalesce(item formula, vendor formula, 21). That 21 was the only lead time
+-- figure left in the schema with no name, no provenance and no way to change
+-- it, and it decided a date that the forecast then treated as a fact.
+--
+-- The whole function is repeated here because Postgres has no way to change
+-- one line of it, and it is not edited otherwise: only the one coalesce
+-- changes, to a call on the promise rule. If 0022 is ever revised, this copy
+-- has to be revised with it.
+create or replace function nl.sample_open_purchase_lines(p_day date)
+returns table (
+  row_no        int,
+  document_no   text,
+  line_no       int,
+  vendor_no     text,
+  item_no       text,
+  description   text,
+  due_date      date,
+  promised_date date,
+  quantity      int,
+  location_code text
+)
+language sql stable
+set search_path = ''
+as $$
+with plan_all as (
+  select * from nl.sample_supply_plan()
+),
+bought as (
+  select * from plan_all p
+  where p.covered and not p.made and p.vendor_no is not null
+),
+-- One line per requirement, due around the day it is needed.
+against_demand as (
+  select b.item_no, b.description, b.vendor_no, b.today, b.lead_days,
+         'po|' || b.item_no || '|' || b.seq as key,
+         false as received,
+         b.quantity,
+         case
+           -- A part needed in the next few days whose vendor is already late.
+           when b.need_by <= b.today + 3
+                and nl.sample_draw('po.over.soon|' || b.item_no || '|' || b.seq) < 0.75::double precision
+             then b.today - (1 + floor(nl.sample_draw('po.over|' || b.item_no || '|' || b.seq) * 20)::int)
+           -- There in time.
+           when nl.sample_draw('po.when|' || b.item_no || '|' || b.seq) < 0.55::double precision
+             then greatest(b.need_by - floor(nl.sample_draw('po.early|' || b.item_no || '|' || b.seq) * 11)::int,
+                           b.today)
+           -- Lands after it is needed: this is what makes a customer line late.
+           when nl.sample_draw('po.when|' || b.item_no || '|' || b.seq) < 0.95::double precision
+             then b.need_by + (1 + floor(nl.sample_draw('po.late|' || b.item_no || '|' || b.seq) * 21)::int)
+           -- Already past due, for a need further out.
+           else b.today - (1 + floor(nl.sample_draw('po.over|' || b.item_no || '|' || b.seq) * 20)::int)
+         end as due_now
+  from bought b
+),
+-- Stocked parts nobody is waiting for, bought back up to their reorder point
+-- now and then. Parts with a requirement are left out: their cover is decided
+-- above, and a part deliberately left uncovered must stay uncovered.
+replenishment as (
+  select i.item_no, i.description, i.vendor_no, c.today,
+         -- Was: coalesce(item formula, vendor formula, 21). The 21 was a bare
+         -- number with no name and no provenance, and it decided a date. This
+         -- now asks the promise rule, which answers from what the vendor has
+         -- actually done and falls back through the same formulas to a named
+         -- default for the replenishment method.
+         nl.item_lead_days(i.item_no) as lead_days,
+         'po.rep|' || i.item_no as key,
+         false as received,
+         greatest(5, i.reorder_point - s.on_hand)::int as quantity,
+         c.today + (7 + floor(nl.sample_draw('po.rep.due|' || i.item_no) * 45)::int) as due_now
+  from nl.items i
+  join nl.stock s on s.item_no = i.item_no
+  join nl.vendors v on v.vendor_no = i.vendor_no
+  cross join (select nl.today() as today) c
+  where i.replenishment = 'Purchase'
+    and not i.blocked
+    and i.reorder_point is not null
+    and s.on_hand < i.reorder_point
+    and nl.sample_draw('po.rep|' || i.item_no) < 0.25::double precision
+    and not exists (select 1 from plan_all p where p.item_no = i.item_no)
+),
+-- For one covered part in eight, a line that landed today: it is in
+-- yesterday's file and gone from today's, which is what day over day shows.
+landed as (
+  select b.item_no, b.description, b.vendor_no, b.today, b.lead_days,
+         'po.recv|' || b.item_no as key,
+         true as received,
+         greatest(1, b.quantity / 2)::int as quantity,
+         b.today - floor(nl.sample_draw('po.got|' || b.item_no) * 6)::int as due_now
+  from bought b
+  where b.seq = 1 and nl.sample_draw('po.recv|' || b.item_no) < 0.12::double precision
+),
+lines as (
+  select * from against_demand
+  union all select * from replenishment
+  union all select * from landed
+),
+dated as (
+  select l.*,
+         -- A vendor who moves a date out only does it once, a day or two ago.
+         case
+           when not l.received and nl.sample_draw(l.key || '|slip') < 0.12::double precision
+           then 3 + floor(nl.sample_draw(l.key || '|slip.days') * 12)::int
+           else 0
+         end as slipped,
+         l.today - floor(nl.sample_draw(l.key || '|slip.on') * 3)::int as slipped_on
+  from lines l
+),
+ordered as (
+  select d.*,
+         -- What the vendor promised first, and when we placed the order: a
+         -- lead time before the promised date, or, for an order promised far
+         -- out, somewhere in the last six weeks. One order in twenty was
+         -- placed today, which is what makes it "new" in today's file.
+         d.due_now - d.slipped as promised,
+         case
+           when not d.received and nl.sample_draw(d.key || '|new') < 0.05::double precision then d.today
+           else least(d.due_now - d.slipped - d.lead_days,
+                      d.today - 1 - floor(nl.sample_draw(d.key || '|lag') * 45)::int)
+         end as ordered_on,
+         case when d.received then d.today else null::date end as received_on
+  from dated d
+),
+-- One purchase order per vendor per week of first promise; the numbering
+-- covers every line in the world, so a document keeps its number whichever
+-- day is asked about.
+numbered as (
+  select o.*,
+         dense_rank() over (order by o.vendor_no, to_char(o.promised, 'IYYY-IW')) as po_seq,
+         row_number() over (partition by o.vendor_no, to_char(o.promised, 'IYYY-IW')
+                            order by o.item_no, o.key) as po_line
+  from ordered o
+),
+open_lines as (
+  select 'PO-' || lpad((104000 + n.po_seq)::text, 6, '0') as document_no,
+         (n.po_line * 10000)::int as line_no,
+         n.vendor_no, n.item_no, n.description,
+         -- Before the day the vendor moved it, the file showed the old date.
+         case when n.slipped > 0 and p_day < n.slipped_on then n.promised else n.due_now end as due_date,
+         n.promised as promised_date,
+         n.quantity
+  from numbered n
+  where n.ordered_on <= p_day
+    and (n.received_on is null or n.received_on > p_day)
+)
+select
+  (row_number() over (order by l.document_no collate "C", l.line_no))::int as row_no,
+  l.document_no, l.line_no, l.vendor_no, l.item_no, l.description,
+  l.due_date, l.promised_date, l.quantity, 'MAIN'::text as location_code
+from open_lines l
+order by l.document_no collate "C", l.line_no
+$$;
+
 -- ---------------------------------------------------------------------------
 -- Access
 -- ---------------------------------------------------------------------------
@@ -2188,7 +2427,8 @@ grant select on nl.price_sheets, nl.price_sheet_lines, nl.price_sheet_sends,
 
 grant select on nl.account_price_sheet, nl.customer_item_prices,
   nl.customer_item_price_context, nl.trade_exceptions_live,
-  nl.vendor_item_lead_times, nl.vendor_item_commitments, nl.vendor_part_lead_times
+  nl.vendor_item_lead_times, nl.vendor_item_commitments, nl.vendor_part_lead_times,
+  nl.landed_cost
 to nl_app, nl_readonly;
 
 grant execute on function

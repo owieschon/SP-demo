@@ -120,12 +120,12 @@ export interface Agreement {
 }
 
 // ---------------------------------------------------------------------------
-// Published price sheets, ladders, history and exceptions (migration 0027)
+// Published price sheets, ladders, history and exceptions (migration 0031)
 // ---------------------------------------------------------------------------
 
 /**
  * Which rule produced a quote level price. The order is the precedence order.
- * Two of these are new in 0027: 'sheet' is the page price on the sheet in
+ * Two of these are new in 0031: 'sheet' is the page price on the sheet in
  * force for the account's tier, and 'held sheet' is an older sheet the
  * account keeps by a written exception.
  */
@@ -542,7 +542,7 @@ export interface PriceAnswer {
 }
 
 // ---------------------------------------------------------------------------
-// Lead time per vendor and part (migration 0027)
+// Lead time per vendor and part (migration 0031)
 // ---------------------------------------------------------------------------
 
 /**

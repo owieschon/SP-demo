@@ -1,5 +1,5 @@
 -- Published price sheets, published ladders and the exceptions behind a
--- number (migration 0027).
+-- number (migration 0031).
 --
 -- Runs last, after the catalog, the ledger, the supply snapshots and the
 -- agreements in 50_cost_and_pricing.sql, because every generation of every
@@ -570,7 +570,10 @@ begin
     end as tail,
     -- How optimistic their quote is against what they do. Most quote a little
     -- short of reality, which is why the observed figure is worth having.
-    0.88 + 0.22 * nl_seed.u('vh.quote|' || v.vendor_no) as quote_ratio
+    0.88 + 0.22 * nl_seed.u('vh.quote|' || v.vendor_no) as quote_ratio,
+    -- About one vendor in six brings the part in from abroad, so its
+    -- receipts carry duty and broker fees on top of the freight.
+    nl_seed.chance(0.16, 'vh.imports|' || v.vendor_no) as imports
   from nl.vendors v;
 
   -- The vendor and part rows. The primary source is the vendor the item card
@@ -701,7 +704,8 @@ begin
   -- and some deliberately do not: a part with two receipts has to fall back
   -- to the quote, and that branch needs data to prove it.
   insert into nl.purchase_receipts (document_no, line_no, vendor_no, item_no,
-                                    ordered_on, promised_on, received_on, quantity, unit_cost)
+                                    ordered_on, promised_on, received_on, quantity, unit_cost,
+                                    freight_in, duty)
   select
     'PO1' || lpad(((row_number() over (order by d.vendor_no, d.item_no, d.n)) + 40000)::text, 6, '0'),
     1,
@@ -717,7 +721,22 @@ begin
              else 0 end,
     d.ordered_on + d.actual_days,
     d.quantity,
-    d.unit_cost
+    d.unit_cost,
+    -- Freight in runs 3 to 9 percent of the goods on a normal receipt, and
+    -- far more on the one in twelve that had to be expedited to cover a
+    -- shortage. That spread is the point: a landed cost averaged over a year
+    -- hides which receipts hurt.
+    round((d.quantity * d.unit_cost)
+          * (case when nl_seed.chance(0.08, 'pr.exp|' || d.vendor_no || '|' || d.item_no || '|' || d.n)
+                  then 0.14 + 0.10 * nl_seed.u('pr.expf|' || d.vendor_no || '|' || d.item_no || '|' || d.n)
+                  else 0.03 + 0.06 * nl_seed.u('pr.frt|' || d.vendor_no || '|' || d.item_no || '|' || d.n)
+             end)::numeric, 2),
+    -- Duty and broker fees: nothing on a domestic vendor, which is most of
+    -- them, and 3 to 7 percent on the ones that import.
+    case when d.imports
+         then round((d.quantity * d.unit_cost)
+                    * (0.03 + 0.04 * nl_seed.u('pr.duty|' || d.vendor_no || '|' || d.item_no))::numeric, 2)
+         else 0::numeric end
   from (
     select
       vi.vendor_no,
@@ -739,7 +758,8 @@ begin
       greatest(vi.min_order_qty,
                vi.order_multiple * nl_seed.ri(1, 8, 'pr.qty|' || vi.vendor_no || '|' || vi.item_no || '|' || g.n))
         as quantity,
-      coalesce(vi.unit_cost, 1.00) as unit_cost
+      coalesce(vi.unit_cost, 1.00) as unit_cost,
+      h.imports
     from nl.vendor_items vi
     join vendor_habit h on h.vendor_no = vi.vendor_no
     cross join lateral (

@@ -277,3 +277,404 @@ differ.
 | `nl.freight_rates` | 9 | 21 |
 | `nl.fuel_surcharge` | 21 months | 81 months |
 | `nl.customer_prices` | 17, over 6 accounts | about 340, over 120 accounts |
+
+---
+
+# Published sheets, ladders, exceptions and lead times
+
+Everything above is true and none of it is what a buyer is holding. A buyer
+holds a **price sheet**: a document with a name, a date, a tier and a price
+per part. They remember what they paid last time. When a number moves they
+want to know which letter said so, from when, and who signed it. And before
+they order anything they want a date they can plan around.
+
+Migration `0031_price_sheets_and_lead_times.sql` is the paperwork behind the
+price and the evidence behind the date. `db/seed.d/90_pricing_depth.sql`
+builds it. `app/src/lib/server/pricing/sheets.ts` calls it and renames the
+columns, exactly as `pricing.ts` does for 0018.
+
+## Price sheets
+
+| Table | What it is |
+|---|---|
+| `nl.price_sheets` | one generation: code, name, tier, window, the day it was published |
+| `nl.price_sheet_lines` | the page price per part on that sheet, and the list it was worked out from |
+| `nl.price_sheet_sends` | which sheet went to which account, and when |
+| `nl.account_price_sheet` | the sheet an account is holding, how old it is, how many generations behind |
+
+Three generations per tier, in March and November. The generation with
+`effective_to` null is the one in force, and a partial unique index allows
+only one per tier, for the same reason `nl.customer_prices` allows one open
+agreement per account and part.
+
+**The current sheet cannot disagree with `nl.price_for()`.** A line on the
+generation in force is seeded as exactly `round(list_price * (1 - discount), 2)`,
+which is what 0018 calls the group discount. Putting a sheet in front of the
+rule changes the wording of an answer, never the number: "the March 2026
+Dealer sheet, page price" instead of "list less 45%". A test holds every line
+of every current sheet to that figure.
+
+Older generations sit a few percent under the one that replaced them, because
+list has moved since. That is what makes "you are quoting from the March
+sheet, they hold the November one, which was 4% lower on this part" a sentence
+worth saying, and about a third of the book is holding a replaced generation
+on purpose.
+
+## Volume ladders
+
+`nl.price_breaks` supersedes `nl.quantity_breaks` (0021). Two things changed.
+
+- **A rung belongs to a published document**, either a sheet (`sheet_id`) or a
+  tier (`price_group`), never both and never neither. A
+  `check (num_nonnulls(sheet_id, price_group) = 1)` says so.
+- **A rung carries a price, not a discount**, at quantities 1, 6, 12, 25, 50
+  and 100. That is what the sheet prints and what the buyer reads back. Rung
+  one is the page price, so a ladder explains itself without looking anywhere
+  else.
+
+`nl.quantity_breaks` and `nl.desk_price_for()` are left alone so the desk agent
+keeps working. Moving it over is one of the call site changes in the report.
+
+### What happens when an agreement and a rung both apply
+
+`nl.customer_prices.break_policy`:
+
+- `better of` (the default): the lower of the two wins, because a buyer
+  holding both documents will read the lower one back to us and be right to.
+- `agreement only`: the agreed price is firm at every quantity. About one
+  agreement in six is written this way.
+
+Under every other rule the rung applies only when it is lower than the base
+price. A last paid price under the published ladder stays: the better price
+for the customer is the one they already have.
+
+## The quote level rule
+
+`nl.price_quote_for(customer, item, quantity, date)`. `nl.price_for()` is
+untouched: this is a second function because a quote knows two things a part
+does not, a quantity and which sheet the buyer holds.
+
+| Order | Rule | What it uses |
+|---|---|---|
+| 1 | `agreement` | an agreed price whose window covers the day |
+| 2 | `held sheet` | a live customer exception pinning an older sheet |
+| 3 | `last paid` | the last price they paid in the last 12 months, if it clears the floor |
+| 4 | `sheet` | the page price on the sheet in force for their tier |
+| 5 | `group discount` | list less the tier discount, for a part no sheet covers |
+| 6 | `list` | list price, for an account we do not know |
+
+Then the ladder: the sheet's rungs if it prints any for the part, otherwise the
+tier's standing ladder, never the two mixed. `next_price` is what they would
+actually pay at the next rung up, not the printed rung, so a reply can say
+"buy twelve and it is this" and be right even under a firm agreement.
+
+## What they are used to paying
+
+`nl.customer_item_prices` is one row per account and part off their own
+invoices: times bought, units, first and last purchase, the last price and
+its invoice, the twelve month average weighted by quantity, the highest and
+the lowest. Credit memo lines are left out: a return is not a price the buyer
+remembers paying.
+
+`nl.customer_item_price_context` puts that next to today's number and sets
+`above_last_paid` when the quote is more than `nl.price_jump_pct()` (7%) above
+what they last paid. **This is the thing that stops an agent quoting a number
+that looks absurd to the buyer.** The flag is strictly greater than the
+threshold, so a quote exactly 7% up is not a jump.
+
+Both are grouped on read, not stored. `customer_no` and `item_no` are the
+grouping keys, so a filter on either is pushed below the aggregate and one
+lookup reads that account's lines for that part and nothing else.
+`invoice_lines_customer_item_idx` is `(customer_no, item_no, posted_on desc)
+include (quantity, unit_price, amount, invoice_no, line_no)`, which makes it an
+index only scan at full scale. It costs about 40 MB there.
+
+## Exceptions
+
+`nl.trade_exceptions`: one table, seven kinds, so an agent looks in one place
+instead of seven. Every row carries a reason, the day it was announced, its
+window and an owner, because an explanation that cannot say who decided
+something is an apology rather than an answer.
+
+| Kind | What it carries |
+|---|---|
+| `price increase` | a percent and a future date, with the wording of the letter |
+| `surcharge` | a percent, material or freight, with a window |
+| `customer exception` | an account that keeps an older sheet on a family until a date |
+| `lead time` | a longer figure than the card, with the reason: a vendor, a work center, a material |
+| `allocation` | a limit per order while stock is short |
+| `discontinued` | with the part that replaces it |
+| `order minimum` | an order value, or a pack size |
+
+Scope is `item`, `family`, `product_group` or `catalog`; `customer_no` null
+means everyone, `price_group` null means every tier. A check constraint holds
+the scope column and the scope columns to each other, and another holds each
+kind to the fields it uses.
+
+`nl.exceptions_for(customer, item, date)` resolves all of that and returns
+live ones, then announced, then anything that ended in the last quarter.
+**Announced rows are included on purpose**: a price increase that starts in six
+weeks is the single most useful thing to say when a buyer asks how long a
+number is good for.
+
+Three decisions:
+
+- **A surcharge and an announced increase do not move today's price.** They
+  are reported next to it with the dollars they would add and the day they
+  start, because that is how they arrive: a separate line on the invoice, or a
+  letter about next quarter.
+- **A customer exception does move the price**, because that is what it was
+  written to do. It is the one kind that sits in the precedence order, and it
+  works by pinning a real older sheet rather than by inventing a discount.
+- **An allocation stops a promise.** See below.
+
+## Lead time per vendor and part
+
+A single lead time for a whole vendor is not a lead time. `nl.items.lead_time`
+and `nl.vendors.lead_time` are both one text field holding an ERP date
+formula, and the old rule coalesced item, then vendor, then a constant, so a
+date given to a customer could rest on a guess with no provenance at all.
+
+Buying happens per vendor and per part, so that is where this lives, and a
+lead time there is three things that are regularly three different numbers.
+
+| | Where it lives | What it is |
+|---|---|---|
+| **Quoted** | `nl.vendor_items.quoted_lead_days`, with `quoted_on` and `quote_reference` | what the vendor says. A claim, not a fact |
+| **Committed** | `nl.vendor_item_commitments` over the open purchase lines | what they promised on one order, which is often not the quote |
+| **Observed** | `nl.vendor_item_lead_times` over `nl.purchase_receipts` | what actually happened |
+
+The observed figures are a count, a median, a ninetieth percentile, the worst
+one and the share that arrived late. **There is no average, on purpose.** A
+vendor whose median is 18 days and whose ninetieth is 45 is not the same
+supplier as one that is 24 days every time, and an average calls them the
+same. The tail is the decision.
+
+`nl.vendor_items` also carries what a buyer cannot act without: whether this
+vendor is the primary source or an alternate, their part number, the minimum
+order quantity, the order multiple, their price at one piece, and whether the
+part is on allocation or discontinued at that vendor. `nl.vendor_item_breaks`
+is their own ladder, the same shape as the customer one.
+
+### What the system promises with
+
+`nl.promise_lead_days(item)` returns one row: the days, the basis, a sentence
+saying why, and whether a date may be given at all.
+
+| Basis | When |
+|---|---|
+| `observed` | at least `nl.promise_min_receipts()` receipts from the primary source. Uses `nl.promise_percentile()`, the ninetieth, rounded up |
+| `quoted` | too little history, so the vendor's own word, with the date they said it |
+| `item card` | the part's own ERP date formula |
+| `vendor default` | the vendor card figure, **labelled as a default**, because it covers every part they supply |
+| `default` | `nl.default_lead_days()` for the replenishment method |
+| `exception` | a published slip has moved the date out past all of those |
+
+The ninetieth, not the median, because half of a median is late by definition
+and a promise a buyer can plan around has to cover the tail. Both numbers are
+policy functions, so they can move without a deploy:
+`set_config('nl.promise_percentile', '0.5', true)` and the promise follows.
+
+`can_promise` is false where the source has the part on allocation or has
+discontinued it. **An allocated part gets no date at all**, because promising
+one we will miss is worse than saying we will come back with one.
+`lead_days` is still a number in that case, because the forecast has to plan
+with something.
+
+### Everywhere a date appears, so does its basis
+
+`nl.lead_time_for()` gains `basis`, `basis_detail`, `can_promise`, the vendor
+and the observed figures. `nl.explain_price()` carries them in `lead_time`.
+`nl.answer_for()` extends the `earliest_basis` vocabulary
+`available_to_promise` already uses rather than replacing it: `stock` and
+`supply` are unchanged, `rolled` is the manufacturing model's own answer, and
+where the date rests on a lead time it now says **which** lead time.
+
+### Nothing had to change to get it
+
+`nl.item_lead_days()` (0016) and `nl.item_lead_time_days()` (0029) keep their
+signatures and are replaced to read the promise rule. The forecast, the
+projection, available to promise, the replenishment maths and the purchase
+requests all get the better number without a line of their own changing. A
+part with no vendor-part row and no receipts falls all the way through to the
+old chain, so a fixture with nothing but an item card answers what it always
+did.
+
+The last unnamed number went with it. `nl.sample_open_purchase_lines()` (0022)
+dated every line off `coalesce(item formula, vendor formula, 21)`. That 21 had
+no name and no provenance and it decided a date. The function is repeated in
+0031 with that one coalesce replaced by `nl.item_lead_days()`. It is the only
+line that changed, and if 0022 is ever revised this copy has to be revised
+with it.
+
+## Landed inbound cost
+
+`nl.items.unit_cost` and the cost timeline both carry what the vendor invoiced
+for the goods. Freight in and duty are real money and are not in it, so every
+margin in the app is flattering by whatever they add up to.
+
+`nl.purchase_receipts.freight_in` and `.duty` are per receipt, because they
+move: a part expedited in to cover a shortage lands at a different cost from
+the same part on a full truck. `nl.landed_cost` groups them per vendor and
+part into an invoiced unit cost, a landed unit cost and the uplift between
+them, over all history and over the last twelve months.
+
+`nl.explain_price()` carries `landed_unit_cost`, `landed_uplift_pct` and
+`landed_margin_pct` in its `cost` block, beside the margin the rest of the app
+uses, so nobody has to guess how flattering that one is.
+
+## One function that explains a price
+
+`nl.explain_price(customer_no, item_no, quantity, on_date)` returns the price
+**and** the reasoning, as one JSON value. A page, the desk agent and the
+assistant read the same answer, so they cannot tell a customer two different
+things, and an explanation that needed a second query would sooner or later be
+assembled two ways.
+
+```
+unit_price, extended
+quote           rule, detail, base price, the rung that set it, the whole ladder
+sheet           the sheet in force for their tier
+customer_sheet  the sheet they are holding, their price on it, the difference
+agreement       the agreed price and its break policy
+history         last paid and when, twelve month average, high, low,
+                above_last_paid with the size of the jump
+cost            cost, floor, margin, below_floor, and the landed figures
+lead_time       days, basis, why, whether it may be promised, the vendor evidence
+next_increase   the announced increase that moves this number next, and to what
+surcharges      what rides on top, and the dollars on this quantity
+exceptions      everything published that reaches this account and this part
+talking_points  plain sentences, in the order to say them
+```
+
+`nl.answer_for(customer_no, item_no, quantity, needed_by)` adds the other half
+of every real question, when can I have it: free stock now, the earliest date
+the whole quantity can ship and why, the replacement part if this one is
+discontinued, and `reply`, one or two sentences a person can paste into an
+email. It feature detects `nl.item_truth()` from the manufacturing model and
+uses it when present.
+
+An exception's owner comes back as `owner_id` and never as a name: the
+read-only role has no grant on `nl.users`, so a page resolves the name itself
+and both functions stay safe to grant to `nl_readonly`.
+
+### A worked explanation
+
+Novak & Sons Truck Parts, `S8-144MC`, 25 pieces, wanted in ten days (small
+world, 2026-09-17):
+
+```
+unit_price 248.26   extended 6,206.50
+rule       last paid, on 2026-09-07
+tier price 263.58 on the Performance sheet, March 2026
+ladder     1: 263.58  6: 259.28  12: 255.73  25: 249.43  50: 243.27  100: 238.61
+```
+
+The ladder rung at 25 is 249.43 and what they last paid is 248.26, so the rung
+does not apply: the better price for the customer is the one they already have.
+The talking points come back as:
+
+- This holds the price they paid last time.
+- At 50 or more it drops to 243.27 each.
+- They last paid 248.26, so this is in line.
+- They are holding Performance net prices, November 2025, which shows 250.58
+  for this part. Quote the current sheet and say the older one has been
+  replaced.
+- The announced increase of 4.5% starts 2026-11-02, so this number holds until
+  then.
+- A surcharge of 2.0% is live and is billed as its own line, not inside this
+  price.
+- Lead time has moved out to 57 days: the bender is the bottleneck and the
+  queue in front of this part is four weeks deep.
+
+and `nl.answer_for()` turns the first of those and the date into a reply:
+
+> S8-144MC at 248.26 each, the price they last paid, on 2026-09-07. We can
+> ship 0 now and all 25 by 2026-11-13. Lead time on this part is out to 57
+> days: the bender is the bottleneck and the queue in front of this part is
+> four weeks deep.
+
+## Everything under one customer's roof
+
+`nl.customer_parts(customer_no)`: every part the account has ever bought, with
+spend and units over twelve months and lifetime, first and last purchase, what
+they last paid, whether they are still buying it (`active`, `slowing`,
+`quiet`), and what state the part is in today (`discontinued` with its
+replacement, `available`, `on order`, `short`) with the lead time and its
+basis. This is what answers a question about a part they bought three years
+ago that we may no longer stock.
+
+It is one aggregate over one range of `invoice_lines_customer_item_idx`: the
+account's ledger read once, not once per part. It deliberately does not go
+through `nl.customer_item_prices`, which would group the same rows again for
+every part on the list.
+
+## Query plans
+
+Small, demo and full worlds under PGlite, after `analyze`, best of three.
+`node app/scripts/pricing-plans.ts [small|demo|full]` reproduces it.
+
+**Read the buffers, not the milliseconds.** PGlite is Postgres compiled to
+WebAssembly and its timings move with whatever else the machine is doing;
+pages touched does not. What these have to prove is that a lookup for one
+account and one part does not grow with the ledger.
+
+| Query | Small (3.5k lines) | Demo (30k) | Full (450k) |
+|---|---|---|---|
+| `customer_item_prices`, one account and part | 43 buf | 146 | 356 |
+| `customer_item_price_context`, same | 55 | 159 | 368 |
+| `price_quote_for` | 46 | 53 | 56 |
+| `explain_price` | 168 | 129 | 242 |
+| `answer_for` | 201 | 155 | 275 |
+| `exceptions_for` | 6 | 7 | 10 |
+| `account_price_sheet`, one account | 4 | 5 | 5 |
+| `customer_parts`, whole account | 193 | 1,415 | 7,780 |
+
+The agent's hot path, `explain_price` and `answer_for`, is flat from 3,500
+invoice lines to 450,000. `customer_parts` grows with the number of parts the
+account has bought, not with the ledger: the figures above are 110, 368 and
+about 700 parts. The full world column was measured before the vendor and part
+section was added; see the report for the figures with it.
+
+Three findings worth keeping.
+
+**A CTE value cannot be pushed into a view's group by.**
+`nl.promise_lead_days()` first read `nl.vendor_item_lead_times` and filtered it
+by a value from a CTE, which grouped the whole receipts table on every call:
+37 buffers a part instead of 4, which showed up at once in
+`nl.customer_parts`. It now aggregates the receipts directly, and a test holds
+the two copies of that arithmetic to the same answer, the way 0018 holds
+`nl.freight_by_month` to `nl.freight_for()`.
+
+**A lateral referenced twice is evaluated twice.** `nl.customer_parts` worked
+the open supply out in a lateral and read it in two output columns; the
+planner inlined it and ran the two correlated subqueries 1,018 times over 368
+parts, 5,600 buffers of the 7,400 it used. Grouping the two small open
+document tables once in a CTE took the whole function to 1,400.
+
+**Mark the tiny CTEs `materialized`.** Postgres inlines a CTE used once, so
+`nl.today()` and the account's current sheet were being worked out again for
+every part on the list.
+
+## What the seed builds
+
+| Table | Small (506 parts) | Demo (2,715) | Full (11,422), estimated |
+|---|---|---|---|
+| `nl.price_sheets` | 15 | 15 | 15 |
+| `nl.price_sheet_lines` | 4,035 | 22,485 | about 94,000 |
+| `nl.price_sheet_sends` | 180 | 1,212 | about 7,700 |
+| `nl.price_breaks` | 960 | 1,155 | about 7,600 |
+| `nl.trade_exceptions` | 23 | 22 | about 77 |
+| `nl.vendor_items` | 190 | about 1,000 | about 4,500 |
+| `nl.vendor_item_breaks` | 249 | about 1,300 | about 6,000 |
+| `nl.purchase_receipts` | 1,124 | about 6,000 | about 27,000 |
+
+## What the desk agent and the assistant should call now
+
+| Instead of | Call |
+|---|---|
+| `nl.price_for()` for a quote line | `nl.price_quote_for()`, which knows the quantity and the sheet |
+| `nl.desk_price_for()` | `nl.price_quote_for()`; `nl.quantity_breaks` is superseded by `nl.price_breaks` |
+| assembling an explanation from several lookups | `nl.explain_price()` |
+| a price lookup and an availability lookup | `nl.answer_for()`, which is both and returns a reply |
+| `nl.item_lead_days()` for a customer facing date | `nl.promise_lead_days()`, and read `can_promise` and `basis` |
