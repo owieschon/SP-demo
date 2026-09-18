@@ -1,10 +1,10 @@
 // The one write the run trail makes.
 //
-// It calls nl.record_agent_trail (migration 0031), which claims the request
+// It calls nl.record_agent_trail (migration 0039), which claims the request
 // id, checks who is asking, checks every step, drops the detail of a withheld
 // one itself and writes the audit row. Nothing here decides anything; it
 // exists so nothing above it writes SQL by hand or forgets a request id.
-import type { Disclosure } from '$lib/desk/types';
+import type { Disclosure, FactKind } from '$lib/desk/types';
 import type { StepKind, WokeBy } from '$lib/agentruns/types';
 import type { Tx } from '../db/types.ts';
 
@@ -25,6 +25,14 @@ export interface StepInput {
 	/** Required on a refusal: which rule, and what it says. */
 	rule?: string | null;
 	rule_note?: string;
+	/**
+	 * Which kinds of fact this step's detail rests on. The write-time check
+	 * uses the facts themselves; this is what the READ-time check uses, when
+	 * somebody whose disclosure grant differs from the mailbox's opens the
+	 * trail. Empty means the detail rests on no business fact, so there is
+	 * nothing any level could withhold.
+	 */
+	fact_kinds?: FactKind[];
 	withheld?: boolean;
 	withheld_reason?: string;
 }

@@ -1,4 +1,4 @@
--- 0031 The run trail: the steps behind a run, and a desk item a person typed.
+-- 0039 The run trail: the steps behind a run, and a desk item a person typed.
 --
 -- Migration 0028 gave every agent a run record: nl.agent_runs is one row per
 -- run, assembled from the tables the features already write, and
@@ -29,12 +29,30 @@
 -- Two rules shape the steps, because the point is trust and not telemetry:
 --
 --   1. A step never holds anything the disclosure policy would forbid its
---      reader from seeing. The trail goes through the same check as a draft
---      reply (app/src/lib/server/desk/policy.ts). A step that fails it is
---      stored WITHHELD: the label and the reason survive, the detail does
---      not. The constraint below makes that a fact about the schema, and a
---      withheld step must carry its reason, so the withholding is visible
---      rather than silent.
+--      reader from seeing. This is checked twice, against two different
+--      readers, because there are two of them:
+--
+--      WHEN IT IS WRITTEN, against the level the run's own output was drafted
+--      at (the mailbox's, in `reader`). The trail goes through the same check
+--      as a draft reply (app/src/lib/server/desk/policy.ts). A step that
+--      fails it is stored WITHHELD: the label and the reason survive, the
+--      detail does not. The constraint below makes that a fact about the
+--      schema, and a withheld step must carry its reason, so the withholding
+--      is visible rather than silent.
+--
+--      WHEN IT IS READ, against the person reading the trail, whose own
+--      disclosure grant (0031) is a different question from the mailbox's. A
+--      trail is written once and read by many people, so the write-time check
+--      cannot answer this one. That is what `fact_kinds` below is for: each
+--      step records which kinds of fact its detail rests on, and the reader
+--      assembles the payload through nl.may_see(reader, kind), withholding
+--      the detail of any step that names a kind they may not be shown. The
+--      withholding is visible there too: the step, its label and the kind
+--      held back all stay in the payload.
+--
+--      Both use the one vocabulary in nl.disclosure_allows (0031), so a
+--      screen, an outgoing draft and a trail cannot disagree about whether
+--      unit cost may be shown.
 --
 --   2. A refusal is a first-class step with a rule on it, never a silence.
 --      The constraint refuses a refusal step with no rule reference.
@@ -46,8 +64,10 @@
 -- checked by the same validation. It differs in one recorded fact, which is
 -- the column added here: its source is a person.
 --
--- Depends on 0001 to 0028. Nothing here is granted to nl_readonly: a step can
--- name a person, an account and what they pay.
+-- Depends on 0001 to 0031: 0021 for the desk's runs, 0028 for the harness's
+-- run record and its run key, and 0031 for nl.disclosure_allows and
+-- nl.may_see. Nothing here is granted to nl_readonly: a step can name a
+-- person, an account and what they pay.
 
 -- ---------------------------------------------------------------------------
 -- Where a desk item came from
@@ -61,7 +81,7 @@ alter table nl.mail_messages
   add column entered_by int references nl.users (id);
 
 comment on column nl.mail_messages.source is
-  'How this desk item arrived: mail from a provider, or a person who typed it (migration 0031).';
+  'How this desk item arrived: mail from a provider, or a person who typed it (migration 0039).';
 
 -- A hand-entered quote request. It writes exactly the row a delivered message
 -- writes, plus the two columns above, so everything downstream (the run, the
@@ -181,7 +201,7 @@ create table nl.agent_run_trails (
 );
 
 comment on table nl.agent_run_trails is
-  'How a run reached its decision, keyed to the run_key of nl.agent_runs (migration 0031).';
+  'How a run reached its decision, keyed to the run_key of nl.agent_runs (migration 0039).';
 
 create index agent_run_trails_agent_idx on nl.agent_run_trails (agent, recorded_at desc);
 create index agent_run_trails_entity_idx on nl.agent_run_trails (entity, entity_id);
@@ -206,6 +226,19 @@ create table nl.agent_run_steps (
   -- On a refusal: which rule, and what it says in plain English.
   rule      text,
   rule_note text not null default '',
+  -- Which kinds of fact this step's detail rests on, in the one vocabulary
+  -- nl.disclosure_allows (0031) defines. Empty means the detail rests on no
+  -- business fact at all (a row count, a timing, the rule it refused under),
+  -- and there is nothing for a reader's level to withhold.
+  --
+  -- This is what makes the read-time check possible: the reader does not have
+  -- to parse the step's text to guess what is in it, because the step already
+  -- says. The constraint keeps a typo out, which matters because an unknown
+  -- kind is in no level's list, so a typo would quietly withhold the step
+  -- from everybody and hide evidence rather than leak it.
+  fact_kinds text[] not null default '{}'
+    constraint agent_run_steps_fact_kinds_known
+      check (fact_kinds <@ nl.disclosure_allows('internal')),
   withheld  boolean not null default false,
   withheld_reason text not null default '',
   unique (run_key, seq),
@@ -218,7 +251,7 @@ create table nl.agent_run_steps (
 );
 
 comment on table nl.agent_run_steps is
-  'The steps of one run, in order, with each tool call''s arguments. A step the disclosure policy would not let its reader see is stored withheld, with the reason (migration 0031).';
+  'The steps of one run, in order, with each tool call''s arguments. A step the disclosure policy would not let its reader see is stored withheld, with the reason (migration 0039).';
 
 create index agent_run_steps_run_idx on nl.agent_run_steps (run_key, seq);
 
@@ -231,7 +264,8 @@ create index agent_run_steps_run_idx on nl.agent_run_steps (run_key, seq);
 -- key: the same run transcribed twice is one trail.
 --
 -- A step arrives as {"kind", "label", "tool", "args", "result", "rows", "ms",
--- "rule", "rule_note", "withheld", "withheld_reason"}. When withheld is true
+-- "rule", "rule_note", "fact_kinds", "withheld", "withheld_reason"}. When
+-- withheld is true
 -- this function throws the detail away itself rather than trusting the caller
 -- to have done it, which is the only way rule 1 holds for a caller nobody has
 -- read.
@@ -260,6 +294,7 @@ declare
   v_step   jsonb;
   v_seq    int := 0;
   v_kind   text;
+  v_kinds  text[];
   v_withheld boolean;
   v_refusals int := 0;
   v_result jsonb;
@@ -331,10 +366,25 @@ begin
       raise exception 'A withheld step says why it was withheld.' using errcode = 'NL422';
     end if;
 
+    -- The kinds of fact the step rests on, deduplicated. An unknown kind is
+    -- refused by the constraint rather than stored, because a kind nothing
+    -- recognises would withhold the step from every reader.
+    if v_step ? 'fact_kinds' and jsonb_typeof(v_step -> 'fact_kinds') = 'array' then
+      select coalesce(array_agg(distinct k), '{}')
+        into v_kinds
+        from jsonb_array_elements_text(v_step -> 'fact_kinds') as k;
+    else
+      v_kinds := '{}';
+    end if;
+    if not (v_kinds <@ nl.disclosure_allows('internal')) then
+      raise exception 'A step rests on fact kinds this app does not know: %.',
+        array_to_string(v_kinds, ', ') using errcode = 'NL422';
+    end if;
+
     v_seq := v_seq + 1;
     insert into nl.agent_run_steps (
       run_key, seq, kind, label, tool, args, result, row_count, ms, rule, rule_note,
-      withheld, withheld_reason)
+      fact_kinds, withheld, withheld_reason)
     values (
       p_run_key, v_seq, v_kind, left(btrim(v_step ->> 'label'), 300),
       left(v_step ->> 'tool', 100),
@@ -346,6 +396,7 @@ begin
       (v_step ->> 'ms')::int,
       left(v_step ->> 'rule', 100),
       left(coalesce(v_step ->> 'rule_note', ''), 500),
+      v_kinds,
       v_withheld,
       case when v_withheld then left(coalesce(v_step ->> 'withheld_reason', ''), 500) else '' end);
   end loop;
@@ -389,7 +440,7 @@ from nl.agent_run_log l
 left join nl.agent_run_trails t on t.run_key = l.run_key;
 
 comment on view nl.agent_run_trail_log is
-  'nl.agent_run_log with the trail that says how the run reached its decision (migration 0031).';
+  'nl.agent_run_log with the trail that says how the run reached its decision (migration 0039).';
 
 -- ---------------------------------------------------------------------------
 -- Access
