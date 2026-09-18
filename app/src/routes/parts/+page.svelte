@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Blank from '$lib/components/ui/Blank.svelte';
 	import PartFlags from '$lib/components/catalog/PartFlags.svelte';
 	import TableSkeleton from '$lib/components/catalog/TableSkeleton.svelte';
 	import { PART_SORT_LABEL, PART_SORTS, partHref } from '$lib/components/catalog/types';
@@ -119,7 +120,7 @@
 									<td class="num">{count(part.onHand)}</td>
 									<td class="num">{count(part.units12m)}</td>
 									<td class="num">{money(part.revenue12m)}</td>
-									<td class="num">{part.margin12m === null ? '·' : percent(part.margin12m)}</td>
+									<td class="num">{#if part.margin12m === null}<Blank word="not known" />{:else}{percent(part.margin12m)}{/if}</td>
 									<td class="num">{part.lastSoldOn ? day(part.lastSoldOn, data.year) : 'never'}</td>
 								</tr>
 							{/each}

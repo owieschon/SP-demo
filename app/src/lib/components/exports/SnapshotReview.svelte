@@ -8,6 +8,7 @@
 	//   older than the live data -> Discard only
 	//
 	// The database checks all of this again (role, status, order, version).
+	import Blank from '$lib/components/ui/Blank.svelte';
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
@@ -148,8 +149,8 @@
 					{#each r.errors as e (e.rowNo)}
 						<tr>
 							<td class="num">{e.rowNo}</td>
-							<td class="mono">{e.documentNo || '·'}</td>
-							<td class="num mono">{e.lineNo || '·'}</td>
+							<td class="mono">{#if e.documentNo}{e.documentNo}{:else}<Blank word="no document number" />{/if}</td>
+							<td class="num mono">{#if e.lineNo}{e.lineNo}{:else}<Blank word="no line number" />{/if}</td>
 							<td class="problem">{e.reasons.join(' ')}</td>
 						</tr>
 					{/each}

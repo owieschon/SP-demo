@@ -2,6 +2,7 @@
 	// The last few rows of the stock ledger: what moved, which way, off which
 	// shelf, against what paperwork, and who did it. The ERP's own loads have
 	// no person against them, which is the honest answer, not a gap.
+	import Blank from '$lib/components/ui/Blank.svelte';
 	import { count, moment } from '$lib/format';
 	import { MOVE_LABEL, type MoveRow } from './types';
 
@@ -48,7 +49,7 @@
 							<td class="num" class:down={m.quantity < 0}>
 								{m.quantity > 0 ? '+' : ''}{count(m.quantity)}
 							</td>
-							<td class="mono nowrap faint">{m.reference || '·'}</td>
+							<td class="mono nowrap faint">{#if m.reference}{m.reference}{:else}<Blank word="no reference" />{/if}</td>
 							<td class="nowrap">{m.actorName ?? 'ERP'}</td>
 						</tr>
 					{/each}

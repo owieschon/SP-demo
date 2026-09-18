@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Blank from '$lib/components/ui/Blank.svelte';
 	import { page } from '$app/state';
 	import RowCount from '$lib/components/ui/RowCount.svelte';
 	import PartFlags from '$lib/components/catalog/PartFlags.svelte';
@@ -128,7 +129,7 @@
 									<td class="num">{moneyExact(part.unitCost)}</td>
 									<td class="num">{count(part.onHand)}</td>
 									<td class="num">{count(part.onPurchaseOrder)}</td>
-									<td class="num">{part.reorderPoint === null ? '·' : count(part.reorderPoint)}</td>
+									<td class="num">{#if part.reorderPoint === null}<Blank word="no reorder point" />{:else}{count(part.reorderPoint)}{/if}</td>
 									<td class="num">{money(part.revenue12m)}</td>
 								</tr>
 							{/each}

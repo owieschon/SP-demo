@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Blank from '$lib/components/ui/Blank.svelte';
 	import { enhance } from '$app/forms';
 	import RowCount from '$lib/components/ui/RowCount.svelte';
 	import { invalidateAll } from '$app/navigation';
@@ -193,7 +194,7 @@
 						<tr>
 							<td class="mono">{item.itemNo}</td>
 							<td>{item.description}</td>
-							<td class="num">{item.quantity ?? '·'}</td>
+							<td class="num">{#if item.quantity === null}<Blank word="no quantity promised" />{:else}{item.quantity}{/if}</td>
 							<td class="num">{count(item.deliveredQty)}</td>
 							<td class="num">{money(item.delivered)}</td>
 						</tr>

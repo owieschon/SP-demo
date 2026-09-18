@@ -3,6 +3,7 @@
 	// person found, and what posting it would do. Posting turns every variance
 	// into one stock move and moves the on-hand figure by exactly that much,
 	// which is why the total is stated before the button is pressed.
+	import Blank from '$lib/components/ui/Blank.svelte';
 	import { enhance } from '$app/forms';
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
@@ -119,7 +120,7 @@
 			<tbody>
 				{#each ordered as l (l.lineNo)}
 					<tr class:pending={l.countedQty === null}>
-						<td class="mono nowrap">{l.bin || '·'}</td>
+						<td class="mono nowrap">{#if l.bin}{l.bin}{:else}<Blank word="no bin" />{/if}</td>
 						<td>
 							<a class="link mono" href="/warehouse?part={encodeURIComponent(l.itemNo)}">{l.itemNo}</a>
 							<span class="faint desc">{l.description}</span>

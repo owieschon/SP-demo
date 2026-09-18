@@ -1,6 +1,7 @@
 <script lang="ts">
 	// The live open lines: four buckets, the lines that need attention, what
 	// changed since the last export, and the recent snapshots.
+	import Blank from '$lib/components/ui/Blank.svelte';
 	import { count, day, moment, money } from '$lib/format';
 	import {
 		BUCKET_LABEL,
@@ -141,7 +142,7 @@
 								<td class="mono nowrap">{l.documentNo}<span class="faint">/{l.lineNo}</span></td>
 								<td class="nowrap" class:late={l.bucket === 'past_due'}>{day(l.shipDate, year)}</td>
 								<td class="num">{count(l.quantity)}</td>
-								<td class="num" class:short={l.short > 0}>{l.short > 0 ? count(l.short) : '·'}</td>
+								<td class="num" class:short={l.short > 0}>{#if l.short > 0}{count(l.short)}{:else}<Blank word="nothing short" />{/if}</td>
 							</tr>
 						{/each}
 					</tbody>
@@ -205,7 +206,7 @@
 										<span class="short">{count(l.shortNow ?? 0)}</span>
 										<span class="faint">was 0</span>
 									{:else if l.change === 'new'}
-										{l.shortNow ? count(l.shortNow) : '·'}
+										{#if l.shortNow}{count(l.shortNow)}{:else}<Blank word="nothing short" />{/if}
 									{:else}
 										·
 									{/if}

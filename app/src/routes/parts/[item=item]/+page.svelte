@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Blank from '$lib/components/ui/Blank.svelte';
 	import PartFlags from '$lib/components/catalog/PartFlags.svelte';
 	import SalesChart from '$lib/components/catalog/SalesChart.svelte';
 	import TableSkeleton from '$lib/components/catalog/TableSkeleton.svelte';
@@ -74,7 +75,7 @@
 			</div>
 			<div>
 				<dt>Margin at list</dt>
-				<dd class="num">{p.listMargin === null ? '·' : percent(p.listMargin)}</dd>
+				<dd class="num">{#if p.listMargin === null}<Blank word="not known" />{:else}{percent(p.listMargin)}{/if}</dd>
 				<p class="faint small">
 					{#if p.margin12m !== null}sold at {percent(p.margin12m)} over 12 months{:else}nothing sold in 12 months{/if}
 				</p>
@@ -193,8 +194,8 @@
 										</td>
 										<td class="num">{count(buyer.units)}</td>
 										<td class="num">{money(buyer.revenue)}</td>
-										<td class="num">{buyer.lastPrice === null ? '·' : moneyExact(buyer.lastPrice)}</td>
-										<td class="num">{buyer.lastOn ? day(buyer.lastOn, data.year) : '·'}</td>
+										<td class="num">{#if buyer.lastPrice === null}<Blank word="not known" />{:else}{moneyExact(buyer.lastPrice)}{/if}</td>
+										<td class="num">{#if buyer.lastOn}{day(buyer.lastOn, data.year)}{:else}<Blank word="no date" />{/if}</td>
 									</tr>
 								{/each}
 							</tbody>
@@ -287,7 +288,7 @@
 									<td><a class="link" href={accountHref(line.customerNo)}>{line.customerName}</a></td>
 									<td class="num">{count(line.quantity)}</td>
 									<td class="num">{count(line.allocated)}</td>
-									<td class="num">{line.short > 0 ? count(line.short) : '·'}</td>
+									<td class="num">{#if line.short > 0}{count(line.short)}{:else}<Blank word="nothing short" />{/if}</td>
 									<td>
 										<span class="chip" class:warn={line.bucket === 'past_due' || line.bucket === 'at_risk'}>
 											{BUCKET_LABEL[line.bucket]}

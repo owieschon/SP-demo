@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Blank from '$lib/components/ui/Blank.svelte';
 	import TableSkeleton from '$lib/components/catalog/TableSkeleton.svelte';
 	import { vendorHref } from '$lib/components/catalog/types';
 	import { count, money, place } from '$lib/format';
@@ -75,8 +76,8 @@
 										<span class="mono faint">{vendor.vendorNo}</span>
 									</td>
 									<td class="muted">{place(vendor.city, vendor.state, 'US')}</td>
-									<td class="muted">{vendor.terms || '·'}</td>
-									<td class="muted">{vendor.leadTime || '·'}</td>
+									<td class="muted">{#if vendor.terms}{vendor.terms}{:else}<Blank word="no terms on file" />{/if}</td>
+									<td class="muted">{#if vendor.leadTime}{vendor.leadTime}{:else}<Blank word="no lead time on file" />{/if}</td>
 									<td class="num">{count(vendor.activeItems)}</td>
 									<td class="num">{money(vendor.revenue12m)}</td>
 									<td>

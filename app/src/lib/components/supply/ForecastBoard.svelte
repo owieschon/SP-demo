@@ -5,6 +5,7 @@
 	// Nothing here computes a date or a status: they come from
 	// nl.open_line_projection and the four aggregates beside it (migration
 	// 0016), so the page and the database can never disagree.
+	import Blank from '$lib/components/ui/Blank.svelte';
 	import { count, day, money } from '$lib/format';
 	import { reasonFor } from './reason';
 	import { LINE_STATUS_LABEL, type Forecast, type LineStatus } from './types';
@@ -125,7 +126,7 @@
 							</td>
 							<td class="nowrap">{day(l.shipDate, year)}</td>
 							<td class="nowrap" class:late={l.daysLate > 0}>{day(l.projectedDate, year)}</td>
-							<td class="num" class:late={l.daysLate > 0}>{l.daysLate > 0 ? l.daysLate : '·'}</td>
+							<td class="num" class:late={l.daysLate > 0}>{#if l.daysLate > 0}{l.daysLate}{:else}<Blank word="on time" />{/if}</td>
 							<td class="why">
 								<span class="chip" class:warn={l.daysLate > 0}>{LINE_STATUS_LABEL[l.status]}</span>
 								<span class="reason">{reasonFor(l, year)}</span>
@@ -224,7 +225,7 @@
 								<td class="num">
 									<a class="link" href={withFilter('wc', w.workCenter)}>{count(w.lateLines)}</a>
 								</td>
-								<td class="nowrap">{w.firstDue ? day(w.firstDue, year) : '·'}</td>
+								<td class="nowrap">{#if w.firstDue}{day(w.firstDue, year)}{:else}<Blank word="no date" />{/if}</td>
 								<td class="num">{money(w.valueWaiting)}</td>
 							</tr>
 						{/each}
@@ -347,10 +348,10 @@
 									<span class="faint desc">{m.partyName ?? m.party}</span>
 								</td>
 								<td><a class="link mono" href="/parts/{encodeURIComponent(m.itemNo)}">{m.itemNo}</a></td>
-								<td class="nowrap">{m.dueBefore ? day(m.dueBefore, year) : '·'}</td>
-								<td class="nowrap">{m.dueNow ? day(m.dueNow, year) : '·'}</td>
+								<td class="nowrap">{#if m.dueBefore}{day(m.dueBefore, year)}{:else}<Blank word="no date" />{/if}</td>
+								<td class="nowrap">{#if m.dueNow}{day(m.dueNow, year)}{:else}<Blank word="no date" />{/if}</td>
 								<td class="num" class:late={(m.daysMoved ?? 0) > 0}>
-									{m.daysMoved === null ? '·' : m.daysMoved > 0 ? `+${m.daysMoved}` : m.daysMoved}
+									{#if m.daysMoved === null}<Blank word="did not move" />{:else}{m.daysMoved > 0 ? `+${m.daysMoved}` : m.daysMoved}{/if}
 								</td>
 							</tr>
 						{/each}

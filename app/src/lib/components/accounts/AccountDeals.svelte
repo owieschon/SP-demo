@@ -1,6 +1,7 @@
 <script lang="ts">
 	// What is being sold to this account: commitments across its billing
 	// family, the quotes behind them, and this reader's own quote requests.
+	import Blank from '$lib/components/ui/Blank.svelte';
 	import ProgressBar from '$lib/components/ProgressBar.svelte';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import { day, money, percent } from '$lib/format';
@@ -82,7 +83,7 @@
 						<tr>
 							<td class="mono"><a class="link" href="/quotes/{q.id}">SQ-{q.id}</a></td>
 							<td class="nowrap">{day(q.quotedOn, year)}</td>
-							<td class="nowrap">{q.validUntil ? day(q.validUntil, year) : '·'}</td>
+							<td class="nowrap">{#if q.validUntil}{day(q.validUntil, year)}{:else}<Blank word="no expiry" />{/if}</td>
 							<td>
 								{#if q.commitmentId}
 									<a class="link" href="/commitments/{q.commitmentId}">C-{q.commitmentId}</a>
