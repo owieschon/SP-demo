@@ -119,6 +119,16 @@ begin
   if v_vendors is null or cardinality(v_vendors) < 6 then
     return;   -- a world with no vendors is a world with no plant to model
   end if;
+
+  -- Hold the roll-up triggers off for the length of this file. Everything
+  -- below is a bulk load, and step 16 measures the whole catalogue itself,
+  -- three times, because calibrating the metal price means measure, move one
+  -- number, measure again. Without this, the statement that moves the number
+  -- re-measures the catalogue as a side effect of the measure that follows
+  -- it, and the file spends nine full passes where three will do. Turned off
+  -- again at the end of the file, and transaction local either way, so it
+  -- cannot escape the build.
+  perform set_config('nl.suspend_rollup', 'on', true);
   v_steel := array[v_vendors[1], v_vendors[2], v_vendors[3]];
   v_plater := v_vendors[4];
   v_hardware := array[v_vendors[5], v_vendors[6]];
@@ -1353,6 +1363,94 @@ begin
   on conflict (item_no) do nothing;
 
   -- -------------------------------------------------------------------------
+  -- 15b. The vendor relationship, and what the mills actually did
+  --
+  -- The material master this file invents is the bottom of every bill of
+  -- materials in the plant, so it is what decides a made part's promise
+  -- date. Migration 0036 gets those days from nl.lead_time_for() (0032),
+  -- which prefers the ninetieth percentile of real receipts over anything
+  -- written on a card. Without receipts for these parts that rule would
+  -- always fall through to the item card and the roll-up would be quoting a
+  -- date formula with extra steps. So the mills get a history.
+  --
+  -- The quote and the observed median are deliberately different numbers,
+  -- for the same reason db/seed.d/91_pricing_depth separates them: the gap
+  -- between what a vendor says and what a vendor does is the finding, and a
+  -- world where they agree hides it. Mill tube runs late, the hardware
+  -- shops run close to their quote.
+  -- -------------------------------------------------------------------------
+  insert into nl.vendor_items
+    (vendor_no, item_no, is_primary, vendor_item_no, quoted_lead_days, quoted_on,
+     quote_reference, min_order_qty, order_multiple, unit_cost, status, status_note)
+  select
+    i.vendor_no,
+    i.item_no,
+    true,
+    'V' || substr(md5(i.item_no), 1, 8),
+    -- What they quote: the item card's formula, which is what a buyer was
+    -- told when the part was set up.
+    greatest(2, coalesce(nl.lead_time_days(i.lead_time), 21)),
+    v_today - nl_seed.ri(60, 500, 'mfg.quote.on|' || i.item_no),
+    'Mill quote ' || to_char(v_today - nl_seed.ri(60, 500, 'mfg.quote.on|' || i.item_no), 'YYYY-MM'),
+    case when i.kind = 'raw material' then 40 else 25 end,
+    case when i.kind = 'raw material' then 10 else 5 end,
+    i.unit_cost,
+    -- One bought component sits on allocation, so a made part above it
+    -- comes out with a date the roll-up refuses to call promisable. That is
+    -- the case nl.item_lead_rolled.can_promise exists for.
+    case when nl_seed.chance(0.04, 'mfg.alloc|' || i.item_no) then 'allocation' else 'active' end,
+    case when nl_seed.chance(0.04, 'mfg.alloc|' || i.item_no)
+         then 'On allocation: the mill is rationing this gauge, so no date is promised'
+         else '' end
+  from nl.items i
+  join nl_seed.mfg_material m on m.item_no = i.item_no
+  where i.vendor_no is not null
+  on conflict (vendor_no, item_no) do nothing;
+
+  -- Between four and fourteen receipts each, which straddles
+  -- nl.promise_min_receipts(): most of these parts earn an observed figure
+  -- and a few are still too thin for one and fall back to the quote, which
+  -- is what the basis column is for.
+  insert into nl.purchase_receipts (document_no, line_no, vendor_no, item_no,
+                                    ordered_on, promised_on, received_on, quantity, unit_cost)
+  select
+    'PO2' || lpad(((row_number() over (order by d.item_no, d.n)) + 70000)::text, 6, '0'),
+    1,
+    d.vendor_no,
+    d.item_no,
+    d.ordered_on,
+    d.ordered_on + d.quoted_days,
+    d.ordered_on + d.actual_days,
+    d.quantity,
+    d.unit_cost
+  from (
+    select
+      vi.vendor_no,
+      vi.item_no,
+      g.n,
+      vi.quoted_lead_days as quoted_days,
+      v_today - nl_seed.ri(20, 900, 'mfg.pr.when|' || vi.item_no || '|' || g.n) as ordered_on,
+      -- A one-sided tail: steel runs a fifth to a half past its quote, the
+      -- hardware shops land on it. u cubed keeps most receipts near the
+      -- middle and sends a few a long way out, which is the shape a late
+      -- delivery actually has.
+      greatest(1, round(
+        vi.quoted_lead_days
+        * (1 + (case when i.kind = 'raw material' then 0.45 else 0.12 end)
+               * power(nl_seed.u('mfg.pr.tail|' || vi.item_no || '|' || g.n), 3))
+        + nl_seed.gauss(0, 1.5, 'mfg.pr.jitter|' || vi.item_no || '|' || g.n)
+      )::int) as actual_days,
+      vi.order_multiple * nl_seed.ri(1, 6, 'mfg.pr.qty|' || vi.item_no || '|' || g.n) as quantity,
+      coalesce(vi.unit_cost, 1.00) as unit_cost
+    from nl.vendor_items vi
+    join nl.items i on i.item_no = vi.item_no
+    join nl_seed.mfg_material m on m.item_no = vi.item_no
+    cross join lateral generate_series(
+      1, greatest(1, round(nl_seed.ri(4, 14, 'mfg.pr.count|' || vi.item_no) * v_scale)::int)) as g(n)
+  ) d
+  on conflict (document_no, line_no) do nothing;
+
+  -- -------------------------------------------------------------------------
   -- 16. Measure everything, calibrate the metal price, measure again
   --
   -- The first pass is the roll-up doing its job on the provisional metal
@@ -1426,4 +1524,10 @@ begin
   from nl.items i
   where not exists (select 1 from nl.item_costs c where c.item_no = i.item_no)
   on conflict (item_no, effective_from) do nothing;
+
+  -- The triggers take over from here. Nothing above changed a cost or a
+  -- lead time after the last measure: step 17 writes each new part's
+  -- opening cost row at the figure already on its card, which the roll-up
+  -- reads through the same view either way.
+  perform set_config('nl.suspend_rollup', 'off', true);
 end $$;
