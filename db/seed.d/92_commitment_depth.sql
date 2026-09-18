@@ -56,7 +56,7 @@ end $$;
 -- The extras
 -- ---------------------------------------------------------------------------
 
-create or replace function nl_seed.extra_90_commitment_depth() returns void
+create or replace function nl_seed.extra_92_commitment_depth() returns void
 language plpgsql
 set search_path = ''
 as $$
@@ -893,7 +893,13 @@ begin
         + make_interval(mins => nl_seed.ri(0, 480, 'depth.act.min|' || rev.id || '|' || g.n)))
         at time zone 'America/Chicago' as at
   ) a
-  where rev.revised_on <= v_today;
+  -- The revision has to have happened, and so does the call about it: the
+  -- activity is scattered up to nine days after the revision, so gating only
+  -- the revision let a burst near today's edge leave an email dated tomorrow.
+  -- An account page showing a call that has not happened yet is the kind of
+  -- detail that costs a demo its credibility.
+  where rev.revised_on <= v_today
+    and (a.at at time zone 'America/Chicago')::date <= v_today;
 
   -- One note against each answer, in the answerer's own words. This is the
   -- thing a person reads first when they open a settled commitment.

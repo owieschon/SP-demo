@@ -1046,13 +1046,22 @@ describe('the world the seed extra builds', () => {
 		expect(buyers.buyer_titles).toBe(buyers.named);
 	});
 
-	it('leaves a year of calls, emails, meetings and notes behind', async () => {
+	it('leaves calls, emails, meetings and notes behind, most of them recent', async () => {
 		const kinds = await db.asSystem(
-			(tx) => tx.sql<{ kind: string; n: number; with_outcome: number; oldest: string; newest: string }>`
+			(tx) => tx.sql<{
+				kind: string;
+				n: number;
+				with_outcome: number;
+				recent: number;
+				before_world: number;
+				after_today: number;
+			}>`
 				select kind, count(*)::int as n,
 				       count(call_outcome)::int as with_outcome,
-				       min(occurred_at)::date::text as oldest,
-				       max(occurred_at)::date::text as newest
+				       count(*) filter (
+				         where occurred_at::date > nl.today() - interval '1 year')::int as recent,
+				       count(*) filter (where occurred_at::date < date '2020-01-01')::int as before_world,
+				       count(*) filter (where occurred_at::date > nl.today())::int as after_today
 				from nl.activities where via = 'seed' group by kind order by kind`
 		);
 		expect(kinds.map((k) => k.kind)).toEqual(['call', 'email', 'meeting', 'note']);
@@ -1060,8 +1069,18 @@ describe('the world the seed extra builds', () => {
 			expect(kind.n, kind.kind).toBeGreaterThan(10);
 			// Only a call says how it went.
 			expect(kind.with_outcome, kind.kind).toBe(kind.kind === 'call' ? kind.n : 0);
-			expect(kind.newest <= '2026-09-17', kind.kind).toBe(true);
-			expect(kind.oldest >= '2025-09-01', kind.kind).toBe(true);
+			// Nothing outside the world: not before it starts, not after today.
+			expect(kind.before_world, kind.kind).toBe(0);
+			expect(kind.after_today, kind.kind).toBe(0);
+			/*
+			  The accounts seed lays down a year of contact. The commitment
+			  seed then puts bursts of it around quotes that go back as far as
+			  the commitments do, which is several years, so the oldest row is
+			  no longer a year old. What still has to hold is that the recent
+			  year is where most of the contact is, because an account nobody
+			  has called since 2021 should read as quiet rather than typical.
+			*/
+			expect(kind.recent / kind.n, kind.kind).toBeGreaterThan(0.5);
 		}
 		const [total] = await db.asSystem(
 			(tx) => tx.sql<{ n: number; named: number }>`
