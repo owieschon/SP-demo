@@ -74,9 +74,10 @@ function lookupOf(
 	round: number,
 	ms: number,
 	note = '',
-	rows: number | null = null
+	rows: number | null = null,
+	conforms: boolean | null = null
 ): LookupView {
-	return { round, name: call.name, risk, input: call.input, outcome, rows, ms, note };
+	return { round, name: call.name, risk, input: call.input, outcome, rows, ms, note, conforms };
 }
 
 /** How many rows a payload carries, when it carries rows. */
@@ -220,8 +221,17 @@ export async function runTool(ctx: ToolContext, call: ModelToolCall, options: Ga
 	}
 	try {
 		const payload = await tool.run!(ctx, parsed.value);
+		/*
+		  Hold the tool to what it says it answers with. The model still gets
+		  the payload either way, because a real answer that has drifted is
+		  more use than no answer; the drift is recorded on the lookup so it
+		  shows up in the conversation rather than passing unseen.
+		*/
+		const checked = tool.checkOutput?.(payload);
+		const conforms = checked ? checked.ok : null;
+		const note = checked && !checked.ok ? `Result did not match the declared shape: ${checked.message}` : '';
 		return {
-			lookup: lookupOf(call, tool.risk, 'ran', ctx.round, since(), '', rowsIn(payload)),
+			lookup: lookupOf(call, tool.risk, 'ran', ctx.round, since(), note, rowsIn(payload), conforms),
 			payload,
 			proposal: null
 		};

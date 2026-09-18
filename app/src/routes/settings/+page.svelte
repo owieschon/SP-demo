@@ -43,7 +43,7 @@
 
 <main class="page">
 	<header class="head">
-		<h1 class="sr-only">Settings</h1>
+		<h1>Settings</h1>
 		<p class="faint">
 			Keys, mail desks, the scheduled run and the health of this deployment. A key pasted here is stored
 			encrypted and never shown again: the page can only say that it is set, its last four characters and
@@ -132,11 +132,13 @@
 		</div>
 	</section>
 
-	<!-- The checks run on the server and stream in after the page (see +page.server.ts). -->
-	{#await data.diagnostics}
+	<!-- The checks run on the server and stream in after the page (see
+	     +page.server.ts). The exact ones read whole tables, so they are a
+	     second promise that only exists when somebody asked for them. -->
+	{#await data.health}
 		<HealthSkeleton />
-	{:then diagnostics}
-		<HealthPanel {diagnostics} />
+	{:then health}
+		<HealthPanel {health} exact={data.exact} />
 	{:catch}
 		<p class="notice error" role="alert">
 			The health checks could not be run.

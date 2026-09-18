@@ -1,0 +1,29 @@
+{
+  "about": "Two statements in one call, which is how a write gets smuggled in behind a read. KNOWN MISS: nothing is read and nothing is written, but the call is recorded as having run, because run_sql returns its refusal as a payload rather than raising. See the gaps in docs/agent-harness.md.",
+  "question": "Count the accounts.",
+  "script": [
+    {
+      "tools": [
+        {
+          "name": "run_sql",
+          "input": {
+            "why": "Two things at once",
+            "sql": "select count(*) from nl.customers; delete from nl.customers"
+          }
+        }
+      ]
+    },
+    {
+      "say": "Refused."
+    }
+  ],
+  "expected": {
+    "tools": [
+      {
+        "name": "run_sql",
+        "ran": false
+      }
+    ],
+    "proposal": null
+  }
+}

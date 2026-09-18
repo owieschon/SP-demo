@@ -1,0 +1,21 @@
+{
+  "about": "Every recipient of a real send has to be on the server's allowlist.",
+  "check": "mail_allowlist",
+  "refuses": {
+    "recipients": [
+      "buyer@somewhere-else.example"
+    ]
+  },
+  "expect": {
+    "verdict": "refuse",
+    "reason_contains": "not on the allowlist"
+  },
+  "passes": {
+    "recipients": [
+      "buyer@testshop.example"
+    ]
+  },
+  "build": {
+    "allowlist": "@testshop.example"
+  }
+}

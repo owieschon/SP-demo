@@ -1,0 +1,29 @@
+{
+  "about": "A read-only SELECT through the SQL tool, which is what it is for.",
+  "question": "How many accounts are on the book?",
+  "script": [
+    {
+      "tools": [
+        {
+          "name": "run_sql",
+          "input": {
+            "why": "How many accounts",
+            "sql": "select count(*) as accounts from nl.customers"
+          }
+        }
+      ]
+    },
+    {
+      "say": "Counted."
+    }
+  ],
+  "expected": {
+    "tools": [
+      {
+        "name": "run_sql",
+        "ran": true
+      }
+    ],
+    "proposal": null
+  }
+}

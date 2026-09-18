@@ -1,56 +1,15 @@
-// Every write the run trail makes, and there are only four of them.
+// The one write the run trail makes.
 //
-// Each one calls the SQL function of the same name in migration 0027, which
-// claims the request id, checks who is asking, checks the rules and writes
-// the audit row. Nothing in this file decides anything; it exists so nothing
-// above it writes SQL by hand or forgets a request id.
-import type { Tx } from '../db/types.ts';
+// It calls nl.record_agent_trail (migration 0031), which claims the request
+// id, checks who is asking, checks every step, drops the detail of a withheld
+// one itself and writes the audit row. Nothing here decides anything; it
+// exists so nothing above it writes SQL by hand or forgets a request id.
 import type { Disclosure } from '$lib/desk/types';
-import type { ReplayDiffKind, RunOutcome, StepKind } from '$lib/agentruns/types';
+import type { StepKind, WokeBy } from '$lib/agentruns/types';
+import type { Tx } from '../db/types.ts';
 
 interface WriteRow<T> {
 	result: T;
-}
-
-export interface StartRun {
-	agent: string;
-	wokeBy: 'mail' | 'signal' | 'schedule' | 'person' | 'replay';
-	wokeNote: string;
-	entity: string | null;
-	entityId: number | null;
-	reader: Disclosure;
-	subjectNo: string | null;
-	mode: 'mock' | 'live';
-	model: string | null;
-	/** Only when the context engine is in this database. */
-	bundleVersion: string | null;
-	/** What a replay would need to make the same decisions again. */
-	inputs: unknown;
-	replayOf: number | null;
-	/**
-	 * The agent's own record this trail is taken from, for example
-	 * `mail_run` and a row id. Set, it makes the write idempotent: asking
-	 * twice gives the same run back with `existing` true.
-	 */
-	sourceKind: string | null;
-	sourceId: number | null;
-	/** When the work really began, for a trail written after the fact. */
-	startedAt?: string | null;
-}
-
-export async function startRun(
-	tx: Tx,
-	input: StartRun,
-	request: string
-): Promise<{ runId: number; existing: boolean }> {
-	const [row] = await tx.sql<WriteRow<{ run_id: number; existing: boolean }>>`
-		select nl.start_agent_run(
-			${input.agent}, ${input.wokeBy}, ${input.wokeNote}, ${input.entity}, ${input.entityId},
-			${input.reader}, ${input.subjectNo}, ${input.mode}, ${input.model},
-			${input.bundleVersion}, ${JSON.stringify(input.inputs ?? {})}::jsonb,
-			${input.replayOf}, ${input.sourceKind}, ${input.sourceId},
-			${input.startedAt ?? null}::timestamptz, ${request}) as result`;
-	return { runId: Number(row.result.run_id), existing: row.result.existing === true };
 }
 
 /** One step, as it goes into the database. */
@@ -70,41 +29,42 @@ export interface StepInput {
 	withheld_reason?: string;
 }
 
-export async function appendSteps(
-	tx: Tx,
-	runId: number,
-	steps: StepInput[],
-	request: string
-): Promise<{ added: number; steps: number }> {
-	const [row] = await tx.sql<WriteRow<{ added: number; steps: number }>>`
-		select nl.append_agent_steps(${runId}, ${JSON.stringify(steps)}::jsonb, ${request}) as result`;
-	return { added: Number(row.result.added), steps: Number(row.result.steps) };
-}
-
-export interface FinishRun {
-	runId: number;
-	outcome: Exclude<RunOutcome, 'running'>;
+export interface TrailInput {
+	/** The harness's key for this run: '<agent>:<source_id>' (migration 0028). */
+	runKey: string;
+	agent: string;
+	wokeBy: WokeBy;
+	wokeNote: string;
+	entity: string | null;
+	entityId: number | null;
+	reader: Disclosure;
+	subjectNo: string | null;
+	/** Only when the context engine is in this database. */
+	bundleVersion: string | null;
 	decision: string;
-	durationMs: number;
-	inputTokens: number;
-	outputTokens: number;
-	producedKind: string | null;
-	producedId: number | null;
-	produced: Record<string, unknown>;
-	/** Only on a replay. */
-	diff: ReplayDiffKind | null;
-	error: string | null;
-	/** When the work really ended, for a trail written after the fact. */
-	finishedAt?: string | null;
+	/** What a replay would need to make the same decisions again. */
+	inputs: unknown;
+	steps: StepInput[];
 }
 
-export async function finishRun(tx: Tx, input: FinishRun, request: string): Promise<void> {
-	await tx.sql`
-		select nl.finish_agent_run(
-			${input.runId}, ${input.outcome}, ${input.decision}, ${input.durationMs},
-			${input.inputTokens}, ${input.outputTokens},
-			${input.producedKind}, ${input.producedId}, ${JSON.stringify(input.produced)}::jsonb,
-			${input.diff}, ${input.error}, ${input.finishedAt ?? null}::timestamptz, ${request})`;
+export async function recordTrail(
+	tx: Tx,
+	input: TrailInput,
+	request: string
+): Promise<{ runKey: string; recorded: boolean; steps: number; refusals: number }> {
+	const [row] = await tx.sql<WriteRow<{ run_key: string; recorded: boolean; steps?: number; refusals?: number }>>`
+		select nl.record_agent_trail(
+			${input.runKey}, ${input.agent}, ${input.wokeBy}, ${input.wokeNote},
+			${input.entity}, ${input.entityId}, ${input.reader}, ${input.subjectNo},
+			${input.bundleVersion}, ${input.decision},
+			${JSON.stringify(input.inputs ?? {})}::jsonb,
+			${JSON.stringify(input.steps)}::jsonb, ${request}) as result`;
+	return {
+		runKey: String(row.result.run_key),
+		recorded: row.result.recorded === true,
+		steps: Number(row.result.steps ?? 0),
+		refusals: Number(row.result.refusals ?? 0)
+	};
 }
 
 /** One hand-typed quote request, as a desk item with a person as its source. */

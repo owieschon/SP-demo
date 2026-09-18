@@ -21,7 +21,7 @@
 
 	const message = $derived(data.detail.message);
 	const run = $derived(data.detail.runs[0] ?? null);
-	const trails = $derived(data.runs);
+	const trails = $derived(data.trails);
 	const request = $derived(data.request);
 	// Where each extracted line came from, lined up with the validated lines
 	// by position, the same way the quote request page does it.
@@ -122,7 +122,7 @@
 			{#if trails.length === 0}
 				<p class="muted small">No run trail was recorded for this item.</p>
 			{:else}
-				{#each trails as trail, i (trail.id)}
+				{#each trails as trail, i (trail.runKey)}
 					<RunTrail
 						run={trail}
 						open={i === 0 && trail.refusals > 0}

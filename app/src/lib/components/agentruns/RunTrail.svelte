@@ -11,15 +11,15 @@
 	// that quietly dropped a step would be worth nothing.
 	import Ban from '@lucide/svelte/icons/ban';
 	import EyeOff from '@lucide/svelte/icons/eye-off';
-	import type { RunView } from '$lib/agentruns/types';
-	import { OUTCOME_LABEL, STEP_LABEL, WOKE_LABEL } from '$lib/agentruns/types';
+	import type { RunTrail } from '$lib/agentruns/types';
+	import { OUTCOME_LABEL, REVIEW_LABEL, STEP_LABEL, WOKE_LABEL } from '$lib/agentruns/types';
 	import { count, moment } from '$lib/format';
 
 	let {
 		run,
 		open = false,
 		heading = 'What the agent did'
-	}: { run: RunView; open?: boolean; heading?: string } = $props();
+	}: { run: RunTrail; open?: boolean; heading?: string } = $props();
 
 	/** "1.4s", "820ms". */
 	function took(ms: number | null): string {
@@ -39,7 +39,7 @@
 			{#if run.refusals > 0}
 				· <strong class="refused">{run.refusals} {run.refusals === 1 ? 'refusal' : 'refusals'}</strong>
 			{/if}
-			· {took(run.durationMs)}
+			· {took(run.ms)}
 			· {tokens === 0 ? 'no model tokens' : `${count(tokens)} tokens`}
 		</span>
 	</summary>
@@ -51,7 +51,9 @@
 		</div>
 		<div>
 			<dt>Ended</dt>
-			<dd>{OUTCOME_LABEL[run.outcome]}{run.finishedAt ? ` · ${moment(run.finishedAt)}` : ''}</dd>
+			<dd>
+				{OUTCOME_LABEL[run.outcome] ?? run.outcome}{run.finishedAt ? ` · ${moment(run.finishedAt)}` : ''}
+			</dd>
 		</div>
 		<div>
 			<dt>Model</dt>
@@ -63,10 +65,14 @@
 				<dd class="mono">{run.bundleVersion}</dd>
 			</div>
 		{/if}
-		{#if run.humanChange}
+		<div>
+			<dt>Since then</dt>
+			<dd>{REVIEW_LABEL[run.reviewState] ?? run.reviewState}</dd>
+		</div>
+		{#if run.guardrail}
 			<div>
-				<dt>Since then</dt>
-				<dd>{run.humanChange}</dd>
+				<dt>Guardrail</dt>
+				<dd class="refused">{run.guardrail}{run.guardrailReason ? `: ${run.guardrailReason}` : ''}</dd>
 			</div>
 		{/if}
 	</dl>
