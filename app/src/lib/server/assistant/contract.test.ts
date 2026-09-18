@@ -202,6 +202,15 @@ describe('the MCP surface publishes the same contract', () => {
 
 	it('reuses the assistant tool schema for a read rather than keeping a second copy', () => {
 		for (const mcp of MCP_TOOLS) {
+			/*
+			  Reads only. A tool offered under its own name from the acting rungs
+			  answers with the action rather than with the write: whether it
+			  acted, at which level, the action's id and when the undo window
+			  closes. That is a different shape on purpose, and holding it to the
+			  assistant's schema would be holding it to the wrong contract.
+			  `gate` says which is which.
+			*/
+			if (mcp.gate !== 'read') continue;
 			const shared = findTool(mcp.name);
 			if (!shared?.outputSchema) continue;
 			expect(mcp.outputSchema, mcp.name).toEqual(shared.outputSchema);

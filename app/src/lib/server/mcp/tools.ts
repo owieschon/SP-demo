@@ -436,6 +436,17 @@ const READ_TOOLS: McpTool[] = [
 const GATED = TOOLS.filter((tool) => tool.risk === 'gated');
 const ADDITIVE = TOOLS.filter((tool) => tool.risk === 'additive');
 
+/*
+  The propose_ and act shapes, each built once.
+
+  Built here rather than inside the three lists below so that the SAME object
+  is in every list it belongs to. Two lists holding two separately built
+  wrappers of one tool would pass every test and still let their output
+  schemas drift apart.
+*/
+const PROPOSE_TOOLS: McpTool[] = GATED.map(proposeTool);
+const ACT_TOOLS: McpTool[] = [...GATED.map(actTool), ...ADDITIVE.map(actTool)];
+
 /**
  * Built once per rung rather than per request. The three lists are pure
  * functions of the registry, so building them on every tools/list would be
@@ -444,9 +455,11 @@ const ADDITIVE = TOOLS.filter((tool) => tool.risk === 'additive');
 const BY_LEVEL: Record<TokenLevel, McpTool[]> = {
 	// Exactly what this endpoint offered before there was a dial: reads, and
 	// gated tools as proposals. Nothing an existing token could call has moved.
-	suggest: [...READ_TOOLS, ...GATED.map(proposeTool)],
-	auto_review: [...READ_TOOLS, ...GATED.map(actTool), ...ADDITIVE.map(actTool)],
-	auto: [...READ_TOOLS, ...GATED.map(actTool), ...ADDITIVE.map(actTool)]
+	suggest: [...READ_TOOLS, ...PROPOSE_TOOLS],
+	auto_review: [...READ_TOOLS, ...ACT_TOOLS],
+	// The same list as auto_review: what differs between the two rungs is the
+	// undo window and the sampling on the action, not which tools exist.
+	auto: [...READ_TOOLS, ...ACT_TOOLS]
 };
 
 const INDEX: Record<TokenLevel, Map<string, McpTool>> = {
@@ -473,10 +486,25 @@ export function findMcpTool(level: TokenLevel, name: string): McpTool | undefine
 }
 
 /**
- * Every tool this endpoint can ever offer, with the lowest rung it appears at
- * under its own name. For the connect page, which has to describe the whole
- * roster rather than one token's slice of it.
+ * Every tool this endpoint can ever build, one per name, with the lowest rung
+ * it is offered at.
+ *
+ * This is the whole surface, which is not what any single token sees: a token
+ * sees `toolsForLevel(its rung)`. It is here for the two callers that have to
+ * reason about the surface rather than about one token, namely the connect
+ * page and the contract test that holds every published output schema against
+ * a real answer.
  */
+export const ALL_MCP_TOOLS: { tool: McpTool; fromLevel: TokenLevel }[] = [
+	...READ_TOOLS.map((tool) => ({ tool, fromLevel: 'suggest' as TokenLevel })),
+	...PROPOSE_TOOLS.map((tool) => ({ tool, fromLevel: 'suggest' as TokenLevel })),
+	...ACT_TOOLS.map((tool) => ({ tool, fromLevel: 'auto_review' as TokenLevel }))
+];
+
+/** The same list flattened, for a caller that only wants the tools. */
+export const MCP_TOOLS: McpTool[] = ALL_MCP_TOOLS.map((entry) => entry.tool);
+
+/** What the connect page draws: names and shapes, without the schemas. */
 export interface RosterEntry {
 	name: string;
 	title: string;
@@ -486,36 +514,13 @@ export interface RosterEntry {
 	fromLevel: TokenLevel;
 }
 
-export const MCP_TOOL_ROSTER: RosterEntry[] = [
-	...READ_TOOLS.map((tool) => ({
-		name: tool.name,
-		title: tool.title,
-		gate: tool.gate,
-		readOnly: tool.readOnly,
-		fromLevel: 'suggest' as TokenLevel
-	})),
-	...GATED.map(proposeTool).map((tool) => ({
-		name: tool.name,
-		title: tool.title,
-		gate: tool.gate,
-		readOnly: tool.readOnly,
-		fromLevel: 'suggest' as TokenLevel
-	})),
-	...GATED.map(actTool).map((tool) => ({
-		name: tool.name,
-		title: tool.title,
-		gate: tool.gate,
-		readOnly: tool.readOnly,
-		fromLevel: 'auto_review' as TokenLevel
-	})),
-	...ADDITIVE.map(actTool).map((tool) => ({
-		name: tool.name,
-		title: tool.title,
-		gate: tool.gate,
-		readOnly: tool.readOnly,
-		fromLevel: 'auto_review' as TokenLevel
-	}))
-];
+export const MCP_TOOL_ROSTER: RosterEntry[] = ALL_MCP_TOOLS.map(({ tool, fromLevel }) => ({
+	name: tool.name,
+	title: tool.title,
+	gate: tool.gate,
+	readOnly: tool.readOnly,
+	fromLevel
+}));
 
 /** Every name this endpoint can answer to, at any rung. */
 export function mcpToolNames(): string[] {
