@@ -1,12 +1,17 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import RowCount from '$lib/components/ui/RowCount.svelte';
+	import SkeletonRows from '$lib/components/ui/SkeletonRows.svelte';
 	import { invalidateAll } from '$app/navigation';
 	import BuyerPicker from '$lib/components/accounts/BuyerPicker.svelte';
+	import OpenSteps from '$lib/components/commitments/OpenSteps.svelte';
 	import OutcomeForm from '$lib/components/OutcomeForm.svelte';
+	import OutcomeTrail from '$lib/components/commitments/OutcomeTrail.svelte';
 	import ProgressBar from '$lib/components/ProgressBar.svelte';
+	import QuoteRevisions from '$lib/components/commitments/QuoteRevisions.svelte';
+	import RequirementChecklist from '$lib/components/commitments/RequirementChecklist.svelte';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
-	import { count, day, moment, money, moneyExact, percent, place, windowRange } from '$lib/format';
+	import { count, day, money, moneyExact, percent, place, windowRange } from '$lib/format';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -255,64 +260,24 @@
 		{/if}
 	</section>
 
-	<div class="three">
-		<section class="panel" aria-labelledby="answers">
-			<header class="panel-head"><h2 id="answers">Outcome history</h2></header>
-			{#if c.outcomes.length === 0}
-				<p class="body muted">No answers recorded.</p>
-			{:else}
-				<ul class="list">
-					{#each c.outcomes as o (o.answeredAt + o.outcome)}
-						<li>
-							<span class="outcome-name">{o.outcome}</span>
-							<span class="muted small">
-								by {o.source === 'nightly' ? 'the nightly job' : o.answeredBy} · {moment(o.answeredAt)}
-							</span>
-							{#if o.note}<p class="note">{o.note}</p>{/if}
-						</li>
-					{/each}
-				</ul>
-			{/if}
+	<!-- The history behind it: the quote versions, the conditions they carry,
+	     the trail of answers and what is still owed. It streams in behind the
+	     figures above, which is what the page is really about. -->
+	{#await data.depth}
+		<section class="panel" aria-labelledby="history-loading">
+			<header class="panel-head"><h2 id="history-loading">Quotes</h2></header>
+			<SkeletonRows rows={4} cols={5} label="the quotes behind this commitment" header />
 		</section>
-
-		<section class="panel" aria-labelledby="quotes">
-			<header class="panel-head"><h2 id="quotes">Quotes</h2></header>
-			{#if c.quotes.length === 0}
-				<p class="body muted">No quote on file.</p>
-			{:else}
-				<ul class="list">
-					{#each c.quotes as q (q.id)}
-						<li>
-							<span class="line">
-								<a class="link mono" href="/quotes/{q.id}">SQ-{q.id}</a>
-								<span class="muted">{day(q.quotedOn, data.year)}</span>
-								<span class="num push">{money(q.total)}</span>
-							</span>
-							<span class="muted small">
-								{q.linked ? `${q.lines} lines` : `${q.lines} matching lines, written later for the same customer`}
-							</span>
-						</li>
-					{/each}
-				</ul>
-			{/if}
-		</section>
-
-		<section class="panel" aria-labelledby="steps">
-			<header class="panel-head"><h2 id="steps">Next steps</h2></header>
-			{#if c.nextSteps.length === 0}
-				<p class="body muted">None.</p>
-			{:else}
-				<ul class="list">
-					{#each c.nextSteps as s (s.id)}
-						<li class:done={s.done}>
-							<span class="step-title">{s.title}</span>
-							<span class="muted small">{s.ownerName}{#if s.dueOn} · due {day(s.dueOn, data.year)}{/if}</span>
-						</li>
-					{/each}
-				</ul>
-			{/if}
-		</section>
-	</div>
+	{:then depth}
+		<QuoteRevisions quotes={depth.quotes} year={data.year} />
+		<RequirementChecklist requirements={depth.requirements} year={data.year} />
+		<div class="two">
+			<OutcomeTrail outcomes={depth.outcomes} year={data.year} />
+			<OpenSteps steps={depth.steps} year={data.year} />
+		</div>
+	{:catch}
+		<p class="notice error" role="alert">The history behind this commitment could not be loaded.</p>
+	{/await}
 
 	{#if c.notes}
 		<section class="panel" aria-labelledby="notes">
@@ -424,8 +389,7 @@
 		padding-top: var(--space-4);
 	}
 
-	.explain,
-	.small {
+	.explain {
 		font-size: 0.92rem;
 	}
 
@@ -473,50 +437,19 @@
 		margin-left: 4px;
 	}
 
-	.three {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-		gap: var(--space-3);
-		align-items: start;
-	}
-
-	.list {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-	}
-
-	.list li {
-		display: grid;
-		gap: 1px;
-		padding: 8px var(--space-3);
-	}
-
-	.list li + li {
-		border-top: 1px solid var(--hairline);
-	}
-
-	.line {
+	/* The trail and the open work sit side by side on a wide screen and stack
+	   on a phone. Flexbox, because iOS Safari and Chrome do not always agree
+	   about grid. */
+	.two {
 		display: flex;
-		gap: var(--space-2);
+		flex-wrap: wrap;
+		gap: var(--space-3);
+		align-items: flex-start;
 	}
 
-	.push {
-		margin-left: auto;
-	}
-
-	.outcome-name {
-		font-weight: 500;
-		text-transform: capitalize;
-	}
-
-	.note {
-		margin-top: 2px;
-	}
-
-	.list li.done .step-title {
-		color: var(--text-faint);
-		text-decoration: line-through;
+	.two > :global(*) {
+		flex: 1 1 320px;
+		min-width: 0;
 	}
 
 	.notes {
