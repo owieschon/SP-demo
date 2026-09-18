@@ -131,13 +131,24 @@ six-function allowlist and a 1000-row wrapper.
 
 ### MCP, branch `mcp-server`
 
-Twelve tools, built from the assistant registry rather than rewritten:
+Tools built from the assistant registry rather than rewritten:
 `...TOOLS.filter(t => t.risk === 'read').map(readTool)`, plus
-`list_pending_approvals`, plus a `propose_*` wrapper for each of the four
-gated tools. Streamable HTTP, JSON-RPC 2.0, stateless, `POST /api/mcp`.
-Bearer token `nlmcp_...`, SHA-256 stored only, scopes `read` and `propose`,
-200 calls per token per day, every call logged to `nl.mcp_calls`. A token
-acts as one named person, so RLS still decides what it sees.
+`list_pending_approvals`, plus the gated and additive tools in whichever shape
+the token's level allows. Streamable HTTP, JSON-RPC 2.0, stateless,
+`POST /api/mcp`. Bearer token `nlmcp_...`, SHA-256 stored only, 200 calls per
+token per day, every call logged to `nl.mcp_calls`. A token acts as one named
+person, so RLS still decides what it sees.
+
+**There are no scopes.** Migration 0044 dropped the column. What a token may
+do is what its person may do; how far it goes without asking is one dial, its
+rung on the harness autonomy ladder, held as an `agent_autonomy` grant on the
+token's own principal in `nl.users`. At `suggest` a change is offered as
+`propose_<name>` and a person approves it; from `auto_review` the four gated
+tools and the two additive ones are offered under their own names and happen
+for real, bounded by the person's `approve_agent_proposal` ceiling, the
+`agents.approval_threshold` policy, the undo window and the pause switch.
+`tools/list` answers with that rung's list only, so it tells an agent the
+truth about what it can do right now. See [`mcp.md`](mcp.md).
 
 It carries `annotations: { title, readOnlyHint, destructiveHint,
 idempotentHint }`. `openWorldHint` is missing. There is no `outputSchema`
