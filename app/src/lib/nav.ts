@@ -30,7 +30,7 @@
   entry that 404s is worse than a missing one:
 
     Desks     /procurement, the procurement desk
-    Controls  /policies, /dictionary, /context, /agents, /people
+    Controls  /policies, /dictionary, /context, /people
 
   Which entries a given person sees is decided elsewhere (a roles branch
   derives it from authority and hides an entry with nothing behind it), so
@@ -44,6 +44,7 @@ import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
 import ListChecks from '@lucide/svelte/icons/list-checks';
 import Mails from '@lucide/svelte/icons/mails';
 import Settings from '@lucide/svelte/icons/settings';
+import ShieldCheck from '@lucide/svelte/icons/shield-check';
 import SunMedium from '@lucide/svelte/icons/sun-medium';
 import Route from '@lucide/svelte/icons/route';
 import Warehouse from '@lucide/svelte/icons/warehouse';
@@ -139,12 +140,18 @@ export const NAV: NavSection[] = [
 				icon: Workflow
 			},
 			{
+				href: routes.agents(),
+				label: 'Agents',
+				hint: 'What each agent handled, what it refused to do, and how far it may go alone',
+				icon: ShieldCheck
+			},
+			{
 				href: routes.settings(),
 				label: 'Settings',
 				hint: 'What the agents may do, who they may write to, what they cost',
 				icon: Settings
 			}
-			// Reserved: /policies, /dictionary, /context, /agents, /people.
+			// Reserved: /policies, /dictionary, /context, /people.
 		]
 	}
 ];
