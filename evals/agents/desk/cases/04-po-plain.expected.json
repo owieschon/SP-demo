@@ -1,0 +1,29 @@
+{
+  "about": "A plain order for one part that is on the shelf, so nothing has to be flagged.",
+  "intent": "purchase_order",
+  "customer_no": "10146",
+  "required_fact_kinds": [
+    "account_identity",
+    "part_description",
+    "own_price",
+    "availability"
+  ],
+  "forbidden_fact_kinds": [
+    "unit_cost",
+    "margin",
+    "floor_price",
+    "stock_quantity",
+    "other_customer",
+    "internal_note",
+    "colleague_name"
+  ],
+  "prices": [
+    {
+      "item_no": "CL6SZ",
+      "quantity": 40
+    }
+  ],
+  "needs_person": false,
+  "guardrail": null,
+  "asks_a_question": false
+}
