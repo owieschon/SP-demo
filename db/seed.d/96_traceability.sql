@@ -3,7 +3,7 @@
 -- gauges, approved sources, and a shipment that cannot go out because its
 -- package is short one document.
 --
--- Migration 0033 added the tables. This file fills them on top of the plant
+-- Migration 0037 added the tables. This file fills them on top of the plant
 -- that db/seed.d/95_manufacturing.sql built, and it has one job beyond
 -- looking plausible: make every question a defence or aerospace distributor
 -- asks answerable on the seeded world.

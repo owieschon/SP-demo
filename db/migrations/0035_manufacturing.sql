@@ -1,4 +1,4 @@
--- 0031 What a part is made of, what it costs to make and how long it takes.
+-- 0035 What a part is made of, what it costs to make and how long it takes.
 --
 -- Until now the item master said three words about how a part is replenished
 -- ('Prod. Order', 'Purchase', 'Assembly'), carried one cost number and one
@@ -1165,7 +1165,7 @@ from nl.routing_operations_effective o
 where o.expedite_premium > 0;
 
 comment on view nl.item_own_cost_lines is
-  'Every line of one part''s own cost per piece, before anything below it in the tree. The scrap allowance is not here: it depends on everything spent up to the operation that loses the piece, so migration 0032 adds it during the roll-up.';
+  'Every line of one part''s own cost per piece, before anything below it in the tree. The scrap allowance is not here: it depends on everything spent up to the operation that loses the piece, so migration 0036 adds it during the roll-up.';
 
 -- ---------------------------------------------------------------------------
 -- Access

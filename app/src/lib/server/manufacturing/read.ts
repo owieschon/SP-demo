@@ -9,7 +9,7 @@
 //     the customers who got it
 //
 // Nothing here computes a figure. The roll-ups are kept current by the
-// triggers in migration 0032 and read as single rows, and every other figure
+// triggers in migration 0036 and read as single rows, and every other figure
 // comes from a view or a function, so the assistant and the order desk get
 // the same answers without going through this file.
 import type { Db, Tx } from '../db/types.ts';

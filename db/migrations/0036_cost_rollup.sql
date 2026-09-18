@@ -1,6 +1,6 @@
--- 0032 True cost and true lead time, known at an instant.
+-- 0036 True cost and true lead time, known at an instant.
 --
--- 0031 modelled what a part is made of and what each ingredient of its cost
+-- 0035 modelled what a part is made of and what each ingredient of its cost
 -- is worth. This file answers the two questions that model exists for:
 --
 --   what does this part actually cost us, all in, at any depth?
@@ -716,7 +716,7 @@ create trigger item_costs_remeasure_delete after delete on nl.item_costs
  *
  * One function for all six, told which kind of change it is answering, so
  * the six triggers do not repeat the same twenty lines. The lookups all go
- * through the indexes 0031 put on nl.routing_operations for exactly this.
+ * through the indexes 0035 put on nl.routing_operations for exactly this.
  */
 create function nl.items_touched_by_rate(p_kind text, p_keys text[])
 returns text[]
