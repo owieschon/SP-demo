@@ -1335,8 +1335,8 @@ begin
 
   -- The rule of this whole migration.
   if p_basis is null or length(btrim(p_basis)) = 0 then
-    raise exception 'A promise records the basis it was made on. Without one it cannot be'
-      || ' scored later, which is the only reason to record it at all.'
+    -- RAISE takes a literal, not an expression, so this message is one string.
+    raise exception 'A promise records the basis it was made on. Without one it cannot be scored later, which is the only reason to record it at all.'
       using errcode = 'NL422';
   end if;
   if btrim(p_basis) <> all (nl.promise_bases()) then
@@ -1344,8 +1344,7 @@ begin
       btrim(p_basis), array_to_string(nl.promise_bases(), ', ') using errcode = 'NL422';
   end if;
   if p_confidence is null then
-    raise exception 'A promise records how sure it was. Use nl.default_confidence(%) if'
-      || ' nothing has been measured yet.', quote_literal(btrim(p_basis))
+    raise exception 'A promise records how sure it was. Use nl.default_confidence(%) if nothing has been measured yet.', quote_literal(btrim(p_basis))
       using errcode = 'NL422';
   end if;
   if p_confidence <= 0 or p_confidence > 1 then
@@ -1477,8 +1476,12 @@ begin
     raise exception 'Settling a date promise needs the date it actually happened.'
       using errcode = 'NL422';
   end if;
-  if p_outcome <> 'void' and v_promise.kind <> 'date' and p_actual_value is null then
-    raise exception 'Settling a % promise needs the figure it actually came to.', v_promise.kind
+  -- A price or coverage promise that was kept has a figure; one that was
+  -- missed often does not. When a customer buys elsewhere we do not learn
+  -- what they paid, and inventing a number there would be worse than leaving
+  -- it null: the outcome is what is known, and the outcome is 'missed'.
+  if p_outcome = 'kept' and v_promise.kind <> 'date' and p_actual_value is null then
+    raise exception 'A kept % promise records the figure it actually came to.', v_promise.kind
       using errcode = 'NL422';
   end if;
 
