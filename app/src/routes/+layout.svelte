@@ -1,29 +1,35 @@
 <script lang="ts">
-	// The app shell: a left rail (icons, expands over the content on hover or
-	// keyboard focus), a slim top bar, and the page. Signed-out pages (sign in)
-	// get no shell, only the demo note.
+	/*
+	  The app shell: a sidebar, a slim top bar, and the page. Signed-out pages
+	  (sign in, the gate) get no shell, only the demo note.
+
+	  Two things changed here and both were deliberate.
+
+	  The sidebar no longer hides. It used to be a 52px rail of icons that
+	  expanded over the page on hover, which meant the group headings could not
+	  be shown at all, and the effect that kept the current item in view
+	  scrolled the icons off screen on every desktop navigation. Group headings
+	  are labels a person reads, not dividers, so the sidebar is open, 216px,
+	  and the four groups say what they are.
+
+	  On a phone it is a bottom bar with exactly two entries plus the palette:
+	  Today, and the desk this person works. A bar of twelve icons that scrolls
+	  sideways is not navigation, it is a list most of which is off screen.
+	*/
 	import '@fontsource-variable/geist';
 	import '@fontsource-variable/geist-mono';
 	import '../app.css';
-	import Boxes from '@lucide/svelte/icons/boxes';
-	import Building2 from '@lucide/svelte/icons/building-2';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
-	import Inbox from '@lucide/svelte/icons/inbox';
-	import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
-	import ListChecks from '@lucide/svelte/icons/list-checks';
-	import Mails from '@lucide/svelte/icons/mails';
-	import Package from '@lucide/svelte/icons/package';
 	import LogOut from '@lucide/svelte/icons/log-out';
-	import Truck from '@lucide/svelte/icons/truck';
 	import UserRoundArrowLeft from '@lucide/svelte/icons/user-round-arrow-left';
-	import Warehouse from '@lucide/svelte/icons/warehouse';
-	import Workflow from '@lucide/svelte/icons/workflow';
 	import { navigating, page } from '$app/state';
+	import CommandPalette from '$lib/components/ui/CommandPalette.svelte';
+	import PaletteButton from '$lib/components/ui/PaletteButton.svelte';
 	import Mark from '$lib/components/Mark.svelte';
-	import Settings from '@lucide/svelte/icons/settings';
-	import Sparkles from '@lucide/svelte/icons/sparkles';
-	import SearchBox from '$lib/components/SearchBox.svelte';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
+	import Toast from '$lib/components/ui/Toast.svelte';
+	import { NAV_ITEMS, phoneItems, visibleSections } from '$lib/nav';
+	import { routes } from '$lib/routes';
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
@@ -35,20 +41,8 @@
 			'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#0d4a47"/><path d="M10 23V9h2.2l7.6 10V9H22v14h-2.2l-7.6-10v10z" fill="#e6f2f0"/></svg>'
 		);
 
-	const NAV = [
-		{ href: '/ask', label: 'Ask', icon: Sparkles },
-		{ href: '/workspace', label: 'Workspace', icon: ClipboardCheck },
-		{ href: '/desk', label: 'Desk', icon: Mails },
-		{ href: '/settings', label: 'Settings', icon: Settings },
-		{ href: '/commitments', label: 'Commitments', icon: ListChecks },
-		{ href: '/accounts', label: 'Accounts', icon: Building2 },
-		{ href: '/rfq', label: 'RFQ intake', icon: Inbox },
-		{ href: '/parts', label: 'Parts', icon: Package },
-		{ href: '/vendors', label: 'Vendors', icon: Truck },
-		{ href: '/operations', label: 'Operations', icon: Warehouse },
-		{ href: '/warehouse', label: 'Warehouse', icon: Boxes },
-		{ href: '/automations', label: 'Automations', icon: Workflow }
-	];
+	const sections = $derived(visibleSections());
+	const phone = $derived(data.user ? phoneItems(data.user.role) : []);
 
 	// "Pat Doe" -> "PD"
 	const initials = $derived(
@@ -65,9 +59,10 @@
 	// Pages that load `who` (the board and the answer page) get the Mine /
 	// Everyone switch.
 	const who = $derived(page.data.who === 'mine' || page.data.who === 'all' ? page.data.who : null);
-	const boardHref = $derived(who ? `/commitments?who=${who}` : '/commitments');
+	const boardHref = $derived(who ? routes.commitments(who) : routes.commitments());
 	const crumbs = $derived.by(() => {
 		const route = page.route.id ?? '';
+		if (route === '/') return [{ label: 'Today', href: null }];
 		if (route === '/commitments') return [{ label: 'Commitments', href: null }];
 		if (route === '/commitments/answer') {
 			return [
@@ -77,57 +72,58 @@
 		}
 		if (route === '/commitments/[id=id]') {
 			return [
-				{ label: 'Commitments', href: '/commitments' },
+				{ label: 'Commitments', href: routes.commitments() },
 				{ label: `C-${page.params.id}`, href: null }
 			];
 		}
-		if (route === '/rfq') return [{ label: 'RFQ intake', href: null }];
+		if (route === '/rfq') return [{ label: 'Quote requests', href: null }];
 		if (route === '/rfq/[id=id]') {
 			return [
-				{ label: 'RFQ intake', href: '/rfq' },
+				{ label: 'Quote requests', href: routes.quoteRequests() },
 				{ label: `R-${page.params.id}`, href: null }
 			];
 		}
-		if (route === '/workspace') return [{ label: 'Workspace', href: null }];
-		if (route === '/desk') return [{ label: 'Desk', href: null }];
+		if (route === '/quotes/[id=id]') return [{ label: `Quote SQ-${page.params.id}`, href: null }];
+		if (route === '/workspace') return [{ label: 'Approval queue', href: null }];
+		if (route === '/desk') return [{ label: 'Order desk', href: null }];
 		if (route === '/desk/[id=id]') {
 			return [
-				{ label: 'Desk', href: '/desk' },
+				{ label: 'Order desk', href: routes.desk() },
 				{ label: 'Message', href: null }
 			];
 		}
 		if (route === '/settings') return [{ label: 'Settings', href: null }];
 		if (route === '/settings/mcp') {
 			return [
-				{ label: 'Settings', href: null },
+				{ label: 'Settings', href: routes.settings() },
 				{ label: 'Coding agents', href: null }
 			];
 		}
 		if (route === '/ask') return [{ label: 'Ask', href: null }];
 		if (route === '/ask/[id=id]') {
 			return [
-				{ label: 'Ask', href: '/ask' },
+				{ label: 'Ask', href: routes.ask() },
 				{ label: `Conversation ${page.params.id}`, href: null }
 			];
 		}
 		if (route === '/accounts') return [{ label: 'Accounts', href: null }];
 		if (route === '/accounts/[customer=customer]') {
 			return [
-				{ label: 'Accounts', href: '/accounts' },
+				{ label: 'Accounts', href: routes.accounts() },
 				{ label: page.data.account?.name ?? page.params.customer, href: null }
 			];
 		}
 		if (route === '/parts') return [{ label: 'Parts', href: null }];
 		if (route === '/parts/[item=item]') {
 			return [
-				{ label: 'Parts', href: '/parts' },
+				{ label: 'Parts', href: routes.parts() },
 				{ label: page.params.item ?? '', href: null }
 			];
 		}
 		if (route === '/vendors') return [{ label: 'Vendors', href: null }];
 		if (route === '/vendors/[vendor=vendor]') {
 			return [
-				{ label: 'Vendors', href: '/vendors' },
+				{ label: 'Vendors', href: routes.vendors() },
 				{ label: page.params.vendor ?? '', href: null }
 			];
 		}
@@ -135,48 +131,21 @@
 		if (route === '/automations') return [{ label: 'Automations', href: null }];
 		if (route === '/automations/new') {
 			return [
-				{ label: 'Automations', href: '/automations' },
+				{ label: 'Automations', href: routes.rules() },
 				{ label: 'New rule', href: null }
 			];
 		}
 		if (route === '/automations/[id=id]') {
 			return [
-				{ label: 'Automations', href: '/automations' },
+				{ label: 'Automations', href: routes.rules() },
 				{ label: `Rule ${page.params.id}`, href: null }
 			];
 		}
-		if (route.startsWith('/operations')) return [{ label: 'Operations', href: null }];
-		if (route.startsWith('/warehouse')) return [{ label: 'Warehouse', href: null }];
+		if (route === '/operations/forecast') return [{ label: 'Open orders', href: null }];
+		if (route.startsWith('/operations')) return [{ label: 'Morning exports', href: null }];
+		if (route.startsWith('/warehouse')) return [{ label: 'Inventory', href: null }];
 		if (page.error) return [{ label: page.status === 404 ? 'Not found' : 'Error', href: null }];
 		return [];
-	});
-
-	/*
-	  On a phone the rail is a bar that scrolls sideways, so the section you
-	  are in may start out off screen. Bring it into view on every navigation.
-
-	  Two things were wrong here and both were visible. The old guard was
-	  `scrollWidth > clientWidth`, which is true on a desktop too: the rail is
-	  52px wide with its labels clipped, so the check passed and the desktop
-	  rail was scrolled sideways on every navigation, taking its icons out of
-	  view. And `scrollIntoView` moves the browser's sequential focus
-	  navigation starting point, so the first Tab after a page load landed in
-	  the middle of the rail instead of at the top of the document, which
-	  would make the skip link unreachable.
-
-	  So: only when the rail really is the horizontal phone bar, and by
-	  setting scrollLeft rather than asking an element to scroll itself.
-	*/
-	let rail: HTMLElement | null = $state(null);
-	$effect(() => {
-		// Reading the path is what makes this run again after a navigation.
-		void page.url.pathname;
-		if (!rail) return;
-		if (!window.matchMedia('(max-width: 720px)').matches) return;
-		const current = rail.querySelector<HTMLElement>('[aria-current="page"]');
-		if (!current) return;
-		const middle = current.offsetLeft + current.offsetWidth / 2 - rail.clientWidth / 2;
-		rail.scrollTo({ left: Math.max(0, middle), behavior: 'smooth' });
 	});
 
 	function whoHref(value: 'mine' | 'all') {
@@ -186,11 +155,22 @@
 	}
 
 	/*
-	  Which section is the current one. It matches on whole path segments, so
-	  /parts/L3515 lights up Parts but a future /parts-catalog would not.
+	  Which entry is the current one. It matches on whole path segments, so
+	  /parts/L3515 lights up Parts and a future /parts-catalog would not. The
+	  home route is exact, or it would claim every page in the app.
 	*/
 	function isCurrent(href: string): boolean {
 		const path = page.url.pathname;
+		if (href === '/') return path === '/';
+		// A longer entry wins: /operations/forecast must not also light up
+		// /operations, which is in a different group.
+		const better = NAV_ITEMS.some(
+			(item) =>
+				item.href !== href &&
+				item.href.startsWith(href + '/') &&
+				(path === item.href || path.startsWith(item.href + '/'))
+		);
+		if (better) return false;
 		return path === href || path.startsWith(href + '/');
 	}
 </script>
@@ -215,39 +195,45 @@
 	<a class="skip-link" href="#content">Skip to the page</a>
 
 	<div class="shell">
-		<nav class="rail" bind:this={rail} aria-label="Sections">
-			<a class="brand item pressable" href="/commitments">
-				<Mark size={24} />
-				<span class="label brand-name">Northline</span>
+		<nav class="rail" aria-label="Sections">
+			<a class="brand item" href={routes.today()}>
+				<Mark size={22} />
+				<span class="brand-name">Northline</span>
 			</a>
 
-			<ul class="items">
-				{#each NAV as item (item.href)}
-					<li>
-						<a
-							class="item pressable"
-							href={item.href}
-							aria-current={isCurrent(item.href) ? 'page' : undefined}
-						>
-							<item.icon size={16} strokeWidth={1.75} aria-hidden="true" />
-							<span class="label">{item.label}</span>
-						</a>
-					</li>
-				{/each}
-			</ul>
+			{#each sections as section (section.heading)}
+				<!--
+					A real heading per group, with that heading's own list under
+					it, so a screen reader reads "Desks, list, three items"
+					rather than eleven links in a row.
+				-->
+				<h2 class="group">{section.heading}</h2>
+				<ul class="items">
+					{#each section.items as item (item.href)}
+						<li>
+							<a
+								class="item pressable"
+								href={item.href}
+								aria-current={isCurrent(item.href) ? 'page' : undefined}
+							>
+								<item.icon size={16} strokeWidth={1.75} aria-hidden="true" />
+								<span class="label">{item.label}</span>
+							</a>
+						</li>
+					{/each}
+				</ul>
+			{/each}
 
 			<div class="foot">
 				<div class="me">
 					<span class="avatar" aria-hidden="true">{initials}</span>
-					<span class="label who">
+					<span class="who">
 						<span class="name">{data.user.fullName}</span>
 						<span class="title">{data.user.title}</span>
 					</span>
-					<!-- The rail is 52px wide most of the time, so the name is only
-					     visible on hover. It is always here for a screen reader. -->
 					<span class="sr-only">Signed in as {data.user.fullName}, {data.user.title}</span>
 				</div>
-				<a class="item pressable" href="/signin">
+				<a class="item pressable" href={routes.signin()}>
 					<UserRoundArrowLeft size={16} strokeWidth={1.75} aria-hidden="true" />
 					<span class="label">Switch user</span>
 				</a>
@@ -258,6 +244,24 @@
 					</button>
 				</form>
 			</div>
+		</nav>
+
+		<!--
+			The phone bar: two entries and the palette, from nav.ts, rather than
+			a sideways scroller holding twelve.
+		-->
+		<nav class="phone-bar" aria-label="Sections">
+			{#each phone as item (item.href)}
+				<a
+					class="phone-item"
+					href={item.href}
+					aria-current={isCurrent(item.href) ? 'page' : undefined}
+				>
+					<item.icon size={18} strokeWidth={1.75} aria-hidden="true" />
+					<span>{item.label}</span>
+				</a>
+			{/each}
+			<span class="phone-item palette-slot"><PaletteButton variant="compact" /></span>
 		</nav>
 
 		<div class="main">
@@ -274,7 +278,7 @@
 				</nav>
 
 				<div class="tools">
-					<SearchBox />
+					<span class="palette-desktop"><PaletteButton /></span>
 					{#if who}
 						<div class="segmented" role="group" aria-label="Whose records">
 							<a href={whoHref('mine')} aria-current={who === 'mine' ? 'true' : undefined}>Mine</a>
@@ -286,59 +290,63 @@
 				</div>
 			</header>
 
-			<main id="content" tabindex="-1">
+			<!--
+				The skip link's target. It is a div, not a <main>: every page
+				renders its own <main>, through Page.svelte or its own shell
+				until it is migrated, and two nested mains is not a document.
+			-->
+			<div id="content" tabindex="-1">
 				{@render children()}
-			</main>
+			</div>
 		</div>
 	</div>
+
+	<!-- One palette for the whole app; the buttons above open it. -->
+	<CommandPalette />
+	<Toast />
 {:else}
 	<div class="demo-note standalone" role="note">Demo app · synthetic data</div>
 	{@render children()}
 {/if}
 
 <style>
-	/* ------------------------------------------------------------ rail */
+	/* --------------------------------------------------------- sidebar */
 
 	.shell {
 		min-height: 100dvh;
-		padding-left: var(--rail-w);
+		padding-left: var(--rail-open-w);
 	}
 
 	.rail {
 		position: fixed;
 		inset: 0 auto 0 0;
 		z-index: 30;
-		width: var(--rail-w);
+		width: var(--rail-open-w);
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
 		padding: 10px 8px;
-		overflow: hidden;
+		overflow-y: auto;
+		overscroll-behavior: contain;
 		background: var(--bg);
 		border-right: 1px solid var(--hairline);
-		transition:
-			width var(--speed-slow) var(--ease),
-			box-shadow var(--speed-slow) var(--ease),
-			background-color var(--speed-slow) var(--ease);
 	}
 
-	/*
-	  Hover or keyboard focus opens the rail OVER the page. The page's own
-	  padding stays at the collapsed width, so nothing underneath moves.
-	*/
-	.rail:hover,
-	.rail:focus-within {
-		width: var(--rail-open-w);
-		background: var(--surface);
-		box-shadow: var(--overlay-shadow);
+	.group {
+		margin: var(--space-3) 0 2px;
+		padding: 0 10px;
+		font-size: var(--fs-meta);
+		font-weight: 500;
+		letter-spacing: 0.02em;
+		color: var(--text-faint);
 	}
 
 	.items {
 		list-style: none;
-		margin: 10px 0 0;
+		margin: 0;
 		padding: 0;
 		display: grid;
-		gap: 2px;
+		gap: 1px;
 	}
 
 	.item {
@@ -346,7 +354,7 @@
 		align-items: center;
 		gap: 10px;
 		width: 100%;
-		height: 32px;
+		height: 30px;
 		padding: 0 10px;
 		border: 0;
 		border-radius: var(--radius);
@@ -372,14 +380,24 @@
 		color: var(--text);
 	}
 
+	.item:active {
+		transform: scale(0.99);
+	}
+
+	/* Selected is a fill plus a marker down the left edge: the same three
+	   states every other selected thing in this app uses. */
 	.item[aria-current='page'] {
-		background: var(--surface-press);
+		background: var(--surface-selected);
 		color: var(--text);
+		box-shadow: inset 2px 0 0 var(--text);
 	}
 
 	.brand {
-		padding: 0 6px;
+		height: 34px;
+		padding: 0 8px;
+		margin-bottom: var(--space-2);
 		color: var(--text);
+		font-size: var(--fs-section);
 	}
 
 	.brand-name {
@@ -387,23 +405,11 @@
 		letter-spacing: -0.01em;
 	}
 
-	/* Labels fade in once the rail has room for them. */
-	.label {
-		opacity: 0;
-		transition: opacity var(--speed) var(--ease);
-	}
-
-	.rail:hover .label,
-	.rail:focus-within .label {
-		opacity: 1;
-		transition-delay: 60ms;
-	}
-
 	.foot {
 		margin-top: auto;
 		display: grid;
-		gap: 2px;
-		padding-top: 8px;
+		gap: 1px;
+		padding-top: var(--space-2);
 		border-top: 1px solid var(--hairline);
 	}
 
@@ -414,6 +420,7 @@
 		height: 36px;
 		padding: 0 5px;
 		white-space: nowrap;
+		min-width: 0;
 	}
 
 	.avatar {
@@ -439,6 +446,8 @@
 
 	.who .name {
 		font-weight: 500;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.who .title {
@@ -450,6 +459,11 @@
 
 	.foot form {
 		margin: 0;
+	}
+
+	/* The phone bar does not exist on a desktop. */
+	.phone-bar {
+		display: none;
 	}
 
 	/* --------------------------------------------------------- top bar */
@@ -534,8 +548,7 @@
 
 	/* ------------------------------------------------------ loading bar */
 
-
-	main:focus-visible {
+	#content:focus-visible {
 		outline: none;
 	}
 
@@ -563,79 +576,57 @@
 
 	/* ----------------------------------------------------------- phone */
 
-	/*
-	  On a phone the rail becomes a bottom bar: icons only, no hover
-	  expansion. The demo note drops under the top bar's tools.
-	*/
 	@media (max-width: 720px) {
 		.shell {
 			padding-left: 0;
 			padding-bottom: calc(var(--rail-w) + env(safe-area-inset-bottom));
 		}
 
-		.rail,
-		.rail:hover,
-		.rail:focus-within {
+		/* The sidebar goes entirely. Everything in it is in the palette. */
+		.rail {
+			display: none;
+		}
+
+		.phone-bar {
+			position: fixed;
 			inset: auto 0 0 0;
-			width: auto;
-			height: calc(var(--rail-w) + env(safe-area-inset-bottom));
-			flex-direction: row;
+			z-index: 30;
+			display: flex;
 			align-items: center;
 			justify-content: space-around;
+			height: calc(var(--rail-w) + env(safe-area-inset-bottom));
 			padding: 0 var(--space-2) env(safe-area-inset-bottom);
-			border-right: 0;
 			border-top: 1px solid var(--hairline);
 			background: color-mix(in srgb, var(--bg) 92%, transparent);
 			-webkit-backdrop-filter: blur(10px);
 			backdrop-filter: blur(10px);
-			box-shadow: none;
 		}
 
-		.brand,
-		.me {
-			display: none;
-		}
-
-		.items,
-		.foot {
-			display: contents;
-		}
-
-		/* The bar scrolls sideways, so more sections can be added without
-		   squeezing the icons. Labels stay: an icon alone says too little. */
-		.rail {
-			justify-content: flex-start;
-			scroll-behavior: smooth;
-			overflow-x: auto;
-			overflow-y: hidden;
-			gap: 2px;
-			scrollbar-width: none;
-		}
-
-		.rail::-webkit-scrollbar {
-			display: none;
-		}
-
-		.item {
-			flex: none;
-			width: auto;
-			min-width: 66px;
-			height: calc(var(--rail-w) - 6px);
+		.phone-item {
+			flex: 1 1 0;
+			display: flex;
 			flex-direction: column;
+			align-items: center;
 			justify-content: center;
 			gap: 3px;
-			padding: 0 8px;
-		}
-
-		.item .label {
+			height: calc(var(--rail-w) - 6px);
+			border-radius: var(--radius);
+			color: var(--text-muted);
 			font-size: var(--fs-meta);
 			line-height: 1;
-			letter-spacing: 0.01em;
-			opacity: 1;
-			transform: none;
+			-webkit-tap-highlight-color: transparent;
 		}
 
-		/* The page's own heading already names the section. */
+		.phone-item[aria-current='page'] {
+			background: var(--surface-selected);
+			color: var(--text);
+		}
+
+		.palette-desktop {
+			display: none;
+		}
+
+		/* The page's own heading names the section on a phone. */
 		.crumbs {
 			display: none;
 		}
@@ -651,22 +642,15 @@
 		.tools {
 			flex-wrap: wrap;
 			width: 100%;
-		}
-
-		.tools :global(form.search) {
-			flex: 1 1 160px;
-		}
-
-		.tools :global(form.search input) {
-			width: 100%;
+			justify-content: flex-end;
 		}
 
 		.tools .demo-note {
-			flex-basis: 100%;
+			flex: 1 1 auto;
 			margin: 0;
 			padding: 0;
 			border: 0;
-			order: 3;
+			text-align: left;
 		}
 	}
 </style>

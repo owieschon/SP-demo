@@ -276,12 +276,12 @@
 				<table>
 					<thead>
 						<tr>
-							<th>Label</th>
-							<th>Acts as</th>
-							<th>Scopes</th>
-							<th>Last used</th>
-							<th class="right">Today</th>
-							<th></th>
+							<th scope="col">Label</th>
+							<th scope="col">Acts as</th>
+							<th scope="col">Scopes</th>
+							<th scope="col">Last used</th>
+							<th scope="col" class="right">Today</th>
+							<th scope="col"></th>
 						</tr>
 					</thead>
 					<tbody>

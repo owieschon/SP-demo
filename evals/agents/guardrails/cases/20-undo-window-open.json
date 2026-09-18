@@ -1,0 +1,16 @@
+{
+  "about": "An action can be taken back inside its window and not afterwards.",
+  "check": "undo_window_open",
+  "refuses": {
+    "undoUntil": "2026-09-17T09:00:00.000Z",
+    "now": "2026-09-17T10:00:00.000Z"
+  },
+  "expect": {
+    "verdict": "refuse",
+    "reason_contains": "has closed"
+  },
+  "passes": {
+    "undoUntil": "2026-09-17T11:00:00.000Z",
+    "now": "2026-09-17T10:00:00.000Z"
+  }
+}

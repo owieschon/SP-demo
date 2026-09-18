@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { page } from '$app/state';
+	import RowCount from '$lib/components/ui/RowCount.svelte';
 	import PartFlags from '$lib/components/catalog/PartFlags.svelte';
 	import TableSkeleton from '$lib/components/catalog/TableSkeleton.svelte';
 	import VendorContacts from '$lib/components/catalog/VendorContacts.svelte';
@@ -175,13 +177,13 @@
 
 	{#await data.parts}
 		<TableSkeleton rows={8} title="Loading parts" />
-	{:then parts}
+	{:then supplied}
 		<section class="panel" aria-labelledby="parts">
 			<header class="panel-head">
 				<h2 id="parts">Parts supplied</h2>
 				<span class="faint">short and low stock first, then best sellers</span>
 			</header>
-			{#if parts.length === 0}
+			{#if supplied.parts.length === 0}
 				<p class="body muted">
 					No part on the item master names this vendor.
 					<a class="link" href="/parts">Look at the parts list</a>.
@@ -191,17 +193,17 @@
 					<table>
 						<thead>
 							<tr>
-								<th>Item</th>
-								<th>Description</th>
-								<th class="num">Cost</th>
-								<th class="num">On hand</th>
-								<th class="num">On order</th>
-								<th class="num">Reorder at</th>
-								<th class="num">Revenue 12m</th>
+								<th scope="col">Item</th>
+								<th scope="col">Description</th>
+								<th scope="col" class="num">Cost</th>
+								<th scope="col" class="num">On hand</th>
+								<th scope="col" class="num">On order</th>
+								<th scope="col" class="num">Reorder at</th>
+								<th scope="col" class="num">Revenue 12m</th>
 							</tr>
 						</thead>
 						<tbody>
-							{#each parts as part (part.itemNo)}
+							{#each supplied.parts as part (part.itemNo)}
 								<tr>
 									<td class="mono"><a class="link" href={partHref(part.itemNo)}>{part.itemNo}</a></td>
 									<td class="desc">
@@ -218,10 +220,23 @@
 						</tbody>
 					</table>
 				</div>
+				{#if supplied.total > supplied.parts.length}
+					<p class="body">
+						<RowCount
+							shown={supplied.parts.length}
+							total={supplied.total}
+							noun="parts"
+							order="short and low stock first, then best sellers"
+						/>
+					</p>
+				{/if}
 			{/if}
 		</section>
 	{:catch}
-		<p class="notice error" role="alert">The parts could not be loaded.</p>
+		<p class="notice error" role="alert">
+			The parts could not be loaded.
+			<a class="button" href={page.url.pathname} data-sveltekit-reload>Try again</a>
+		</p>
 	{/await}
 </main>
 

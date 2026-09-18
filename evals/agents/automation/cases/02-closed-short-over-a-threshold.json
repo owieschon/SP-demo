@@ -1,0 +1,24 @@
+{
+  "about": "The same trigger with a condition on the shortfall, which should match fewer subjects than the one above.",
+  "rule": {
+    "name": "Closed short over ten thousand",
+    "description": "An eval fixture.",
+    "trigger": "window_closed_short",
+    "conditions": [
+      {
+        "field": "shortfall",
+        "op": "gte",
+        "value": 14000
+      }
+    ],
+    "action": {
+      "kind": "note",
+      "body": "{customer} is {shortfall} short."
+    },
+    "enabled": false
+  },
+  "expected": {
+    "matches": 2,
+    "recorded": true
+  }
+}

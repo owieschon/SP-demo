@@ -119,12 +119,12 @@
 				<table>
 					<thead>
 						<tr>
-							<th>Customer</th>
-							<th>Item</th>
-							<th>Order</th>
-							<th>Ships</th>
-							<th class="num">Qty</th>
-							<th class="num">Short</th>
+							<th scope="col">Customer</th>
+							<th scope="col">Item</th>
+							<th scope="col">Order</th>
+							<th scope="col">Ships</th>
+							<th scope="col" class="num">Qty</th>
+							<th scope="col" class="num">Short</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -182,13 +182,13 @@
 				<table>
 					<thead>
 						<tr>
-							<th>Change</th>
-							<th>Customer</th>
-							<th>Item</th>
-							<th>Order</th>
-							<th>Ships</th>
-							<th class="num">Qty</th>
-							<th class="num">Short</th>
+							<th scope="col">Change</th>
+							<th scope="col">Customer</th>
+							<th scope="col">Item</th>
+							<th scope="col">Order</th>
+							<th scope="col">Ships</th>
+							<th scope="col" class="num">Qty</th>
+							<th scope="col" class="num">Short</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -230,13 +230,13 @@
 			<table>
 				<thead>
 					<tr>
-						<th>Snapshot</th>
-						<th>Report</th>
-						<th>Status</th>
-						<th class="num">Rows</th>
-						<th>Flags</th>
-						<th>Loaded</th>
-						<th>Decided</th>
+						<th scope="col">Snapshot</th>
+						<th scope="col">Report</th>
+						<th scope="col">Status</th>
+						<th scope="col" class="num">Rows</th>
+						<th scope="col">Flags</th>
+						<th scope="col">Loaded</th>
+						<th scope="col">Decided</th>
 					</tr>
 				</thead>
 				<tbody>

@@ -16,7 +16,9 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		// Fresh for each page load: sending the same form twice saves once.
 		requestId: randomUUID(),
 		// Set when the rule was just created (see actions.ts).
-		justSaved: url.searchParams.has('saved')
+		justSaved: url.searchParams.has('saved'),
+		// So a due date in another year says which one.
+		year: new Date().getFullYear()
 	};
 };
 

@@ -108,12 +108,12 @@
 		<table>
 			<thead>
 				<tr>
-					<th>Bin</th>
-					<th>Item</th>
-					<th class="num">Expected</th>
-					<th class="num">Counted</th>
-					<th class="num">Off by</th>
-					<th>Why</th>
+					<th scope="col">Bin</th>
+					<th scope="col">Item</th>
+					<th scope="col" class="num">Expected</th>
+					<th scope="col" class="num">Counted</th>
+					<th scope="col" class="num">Off by</th>
+					<th scope="col">Why</th>
 				</tr>
 			</thead>
 			<tbody>

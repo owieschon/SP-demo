@@ -435,9 +435,16 @@ export async function getOrders(db: Db, userId: number, customerNo: string): Pro
 			short: number;
 			open_value: number;
 			bucket: Orders['openLines'][number]['bucket'];
+			total_lines: number;
+			total_value: number;
 		}>`
 			select l.document_no, l.line_no, l.customer_no, l.item_no, l.description, l.ship_date,
-			       l.quantity, l.short, l.open_value, l.bucket
+			       l.quantity, l.short, l.open_value, l.bucket,
+			       -- The window runs over every matching line, before the limit
+			       -- below cuts the list down, so the page can state the real
+			       -- figures instead of summing the fifty rows it was handed.
+			       count(*) over ()::int as total_lines,
+			       sum(l.open_value) over () as total_value
 			from nl.open_line_allocation l
 			where l.customer_no in (select customer_no from nl.customer_family(${customerNo}))
 			order by l.ship_date, l.document_no, l.line_no
@@ -467,6 +474,10 @@ export async function getOrders(db: Db, userId: number, customerNo: string): Pro
 			limit 20`;
 
 		return {
+			// The window functions above put the same two totals on every row,
+			// so read them off the first one. No rows means no open orders.
+			openLineCount: openLines[0]?.total_lines ?? 0,
+			openLineValue: openLines[0]?.total_value ?? 0,
 			openLines: openLines.map((l) => ({
 				documentNo: l.document_no,
 				lineNo: l.line_no,

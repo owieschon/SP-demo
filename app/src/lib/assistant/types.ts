@@ -40,6 +40,16 @@ export interface LookupView {
 	ms: number;
 	/** Why it was gated, refused or failed. Empty when it just ran. */
 	note: string;
+	/**
+	 * Did the result match the shape the tool declares it answers with?
+	 * null when the tool declares no shape, or when it did not run.
+	 *
+	 * The MCP server sends the payload as structuredContent only when this
+	 * is true. Here it is recorded rather than acted on, so a query that
+	 * quietly stops returning a promised column is visible in the
+	 * conversation as well as in the test that holds the contract.
+	 */
+	conforms: boolean | null;
 }
 
 export type ProposalStatus = 'draft' | 'approved' | 'rejected' | 'executed';

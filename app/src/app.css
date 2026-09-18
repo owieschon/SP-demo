@@ -601,6 +601,19 @@ input[type='radio'] {
 	min-width: 0;
 }
 
+/*
+  The heading block most pages already use: the h1, and a line under it.
+
+  Selected as header.head, not .head, because four components use the same
+  class name on a dl, a div and a button for something else, and a global
+  .head rule would lay those out too.
+*/
+header.head {
+	display: grid;
+	gap: var(--space-1);
+	align-items: start;
+}
+
 .page-head .actions {
 	display: flex;
 	align-items: center;

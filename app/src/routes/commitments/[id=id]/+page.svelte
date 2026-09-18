@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import RowCount from '$lib/components/ui/RowCount.svelte';
 	import { invalidateAll } from '$app/navigation';
 	import BuyerPicker from '$lib/components/accounts/BuyerPicker.svelte';
 	import OutcomeForm from '$lib/components/OutcomeForm.svelte';
@@ -180,11 +181,11 @@
 			<table>
 				<thead>
 					<tr>
-						<th>Item</th>
-						<th>Description</th>
-						<th class="num">Buyer's qty</th>
-						<th class="num">Delivered qty</th>
-						<th class="num">Delivered</th>
+						<th scope="col">Item</th>
+						<th scope="col">Description</th>
+						<th scope="col" class="num">Buyer's qty</th>
+						<th scope="col" class="num">Delivered qty</th>
+						<th scope="col" class="num">Delivered</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -214,13 +215,13 @@
 				<table>
 					<thead>
 						<tr>
-							<th>Posted</th>
-							<th>Invoice</th>
-							<th>Shipped to</th>
-							<th>Item</th>
-							<th class="num">Qty</th>
-							<th class="num">Amount</th>
-							<th class="num">Running total</th>
+							<th scope="col">Posted</th>
+							<th scope="col">Invoice</th>
+							<th scope="col">Shipped to</th>
+							<th scope="col">Item</th>
+							<th scope="col" class="num">Qty</th>
+							<th scope="col" class="num">Amount</th>
+							<th scope="col" class="num">Running total</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -241,6 +242,16 @@
 					</tbody>
 				</table>
 			</div>
+			{#if c.matchedLines > c.lines.length}
+				<p class="body">
+					<RowCount
+						shown={c.lines.length}
+						total={c.matchedLines}
+						noun="matched lines"
+						order="the newest, oldest first on screen"
+					/>
+				</p>
+			{/if}
 		{/if}
 	</section>
 

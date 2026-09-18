@@ -1,0 +1,29 @@
+{
+  "about": "An insert dressed up as a query. The checker refuses it and the database would refuse it again. KNOWN MISS: nothing is read and nothing is written, but the call is recorded as having run, because run_sql returns its refusal as a payload rather than raising. See the gaps in docs/agent-harness.md.",
+  "question": "Add a customer for me.",
+  "script": [
+    {
+      "tools": [
+        {
+          "name": "run_sql",
+          "input": {
+            "why": "Adding a row",
+            "sql": "insert into nl.customers (customer_no, name) values ('9999', 'Nobody')"
+          }
+        }
+      ]
+    },
+    {
+      "say": "I cannot do that."
+    }
+  ],
+  "expected": {
+    "tools": [
+      {
+        "name": "run_sql",
+        "ran": false
+      }
+    ],
+    "proposal": null
+  }
+}

@@ -91,7 +91,12 @@
 									<input type="hidden" name="toStatus" value={next} />
 									<input type="hidden" name="expectedUpdatedAt" value={s.updatedAt} />
 									<input type="hidden" name="requestId" value="{requestId}-{s.shipmentNo}" />
-									<button class="button" disabled={busy === s.shipmentNo}>
+									<button
+										class="button"
+										disabled={busy === s.shipmentNo}
+										aria-busy={busy === s.shipmentNo}
+										aria-label="{ADVANCE_LABEL[s.status]}: {s.shipmentNo} for {s.customerName}"
+									>
 										{ADVANCE_LABEL[s.status]}
 										<ArrowRight size={12} strokeWidth={2} aria-hidden="true" />
 									</button>
@@ -105,10 +110,10 @@
 							<table>
 								<thead>
 									<tr>
-										<th>Bin</th>
-										<th>Item</th>
-										<th class="num">Qty</th>
-										<th>Order</th>
+										<th scope="col">Bin</th>
+										<th scope="col">Item</th>
+										<th scope="col" class="num">Qty</th>
+										<th scope="col">Order</th>
 									</tr>
 								</thead>
 								<tbody>

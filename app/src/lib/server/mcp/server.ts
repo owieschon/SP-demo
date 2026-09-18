@@ -157,13 +157,19 @@ function buildServer(deps: McpDeps, token: TokenIdentity, today: () => Promise<s
 			title: tool.title,
 			description: tool.description,
 			inputSchema: tool.inputSchema,
+			// What comes back, so a client can validate a result rather than
+			// parse the text rendering of it.
+			outputSchema: tool.outputSchema,
 			annotations: {
 				title: tool.title,
 				readOnlyHint: tool.readOnly,
 				// A propose_* tool writes a proposal and nothing else, so it can
 				// never destroy anything and running it twice only asks twice.
 				destructiveHint: false,
-				idempotentHint: tool.readOnly
+				idempotentHint: tool.readOnly,
+				// Every tool reads or writes this database and nothing else:
+				// no web, no third-party call, no open set of resources.
+				openWorldHint: false
 			}
 		}))
 	}));
@@ -238,7 +244,24 @@ function buildServer(deps: McpDeps, token: TokenIdentity, today: () => Promise<s
 				outcome: answer.isError ? 'refused' : 'ok',
 				note: fitted.truncated ? 'Truncated to fit 16 KB.' : ''
 			});
-			return { content: [{ type: 'text' as const, text: fitted.json }], isError: answer.isError };
+			/*
+			  Two renderings of one answer. `structuredContent` is the payload,
+			  for a caller that wants the data; the text block is the same
+			  thing rendered for a reader, and is what a model sees. The text
+			  is no longer the payload, it is a view of it.
+
+			  Only a payload that matches the declared schema goes in
+			  structuredContent. A truncated one does not, because it is no
+			  longer the whole answer, and a mismatch is reported rather than
+			  passed off as conforming: the text still carries everything, so
+			  nothing is lost either way.
+			*/
+			const conforms = !fitted.truncated && tool.checkOutput(answer.payload).ok;
+			return {
+				content: [{ type: 'text' as const, text: fitted.json }],
+				...(conforms ? { structuredContent: answer.payload as Record<string, unknown> } : {}),
+				isError: answer.isError
+			};
 		} catch (error) {
 			// A refusal the database raised (no such record, a rule the catalog
 			// does not allow) is something the agent can act on.
@@ -252,7 +275,12 @@ function buildServer(deps: McpDeps, token: TokenIdentity, today: () => Promise<s
 			});
 			if (refusal) {
 				return {
-					content: [{ type: 'text' as const, text: JSON.stringify({ error: refusal.message }) }],
+					content: [
+						{
+							type: 'text' as const,
+							text: JSON.stringify({ error: refusal.message, code: refusal.code })
+						}
+					],
 					isError: true
 				};
 			}

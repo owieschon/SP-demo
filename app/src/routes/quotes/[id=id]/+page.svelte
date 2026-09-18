@@ -103,12 +103,12 @@
 				<caption class="sr-only">The lines of quote SQ-{q.quoteId}</caption>
 				<thead>
 					<tr>
-						<th class="num">#</th>
-						<th>Part</th>
-						<th>Description</th>
-						<th class="num">Qty</th>
-						<th class="num">Unit price</th>
-						<th class="num">Extended</th>
+						<th scope="col" class="num">#</th>
+						<th scope="col">Part</th>
+						<th scope="col">Description</th>
+						<th scope="col" class="num">Qty</th>
+						<th scope="col" class="num">Unit price</th>
+						<th scope="col" class="num">Extended</th>
 					</tr>
 				</thead>
 				<tbody>

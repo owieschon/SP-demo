@@ -1,0 +1,25 @@
+{
+  "about": "A condition on a field the trigger does not have. The catalog refuses it, and it is never compiled into SQL.",
+  "rule": {
+    "name": "A field that does not exist",
+    "description": "An eval fixture.",
+    "trigger": "account_gone_quiet",
+    "conditions": [
+      {
+        "field": "margin_percent",
+        "op": "gte",
+        "value": 40
+      }
+    ],
+    "action": {
+      "kind": "note",
+      "body": "Never written."
+    },
+    "enabled": false
+  },
+  "expected": {
+    "matches": 0,
+    "recorded": false,
+    "refused": true
+  }
+}

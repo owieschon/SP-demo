@@ -22,6 +22,16 @@
 
 	let submitting = $state(false);
 
+	/*
+	  Every date on this panel goes through day(iso, thisYear). Without the
+	  second argument day() prints "Mar 3" and drops the year, so an
+	  availability date in the next calendar year looked like one in this
+	  year, on the one screen whose job is telling a customer a date on the
+	  phone. `today` is already here, so the year comes from the same clock
+	  the answer did.
+	*/
+	const thisYear = $derived(Number(today.slice(0, 4)));
+
 	const basis = $derived(
 		answer === null
 			? ''
@@ -75,10 +85,10 @@
 			<p class="verdict">
 				{#if answer.canMeet}
 					Yes: {count(answer.quantity)} of <span class="mono">{answer.itemNo}</span> can be there by
-					{day(answer.neededBy)}, {basis}.
+					{day(answer.neededBy, thisYear)}, {basis}.
 				{:else}
 					No: {count(answer.quantity)} of <span class="mono">{answer.itemNo}</span> cannot be there by
-					{day(answer.neededBy)}. The earliest is {day(answer.earliestDate)}, {basis}.
+					{day(answer.neededBy, thisYear)}. The earliest is {day(answer.earliestDate, thisYear)}, {basis}.
 				{/if}
 			</p>
 			<dl class="facts">
@@ -96,7 +106,7 @@
 				</div>
 				<div>
 					<dt>Earliest date</dt>
-					<dd class="num">{day(answer.earliestDate)}</dd>
+					<dd>{day(answer.earliestDate, thisYear)}</dd>
 				</div>
 			</dl>
 			{#if answer.covering}
@@ -107,7 +117,7 @@
 					{:else}
 						<span class="mono">{answer.covering.documentNo}</span>
 						{#if answer.covering.party}({answer.covering.party}){/if}
-						due {day(answer.covering.dueDate ?? answer.covering.availableOn)}{answer.covering.overdue
+						due {day(answer.covering.dueDate ?? answer.covering.availableOn, thisYear)}{answer.covering.overdue
 							? ', which is itself past due'
 							: ''}.
 					{/if}
@@ -120,7 +130,7 @@
 							<span class="mono">{i.documentNo}</span>
 							<span class="faint">
 								{count(i.quantity)} pcs, {i.source === 'purchase' ? 'due' : 'off the floor'}
-								{day(i.dueDate)}{i.overdue ? ' (past due)' : ''}
+								{day(i.dueDate, thisYear)}{i.overdue ? ' (past due)' : ''}
 							</span>
 						</li>
 					{/each}

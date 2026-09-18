@@ -1,6 +1,6 @@
 <script lang="ts">
 	// What is being sold to this account: commitments across its billing
-	// family, the quotes behind them, and this reader's own RFQ drafts.
+	// family, the quotes behind them, and this reader's own quote requests.
 	import ProgressBar from '$lib/components/ProgressBar.svelte';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import { day, money, percent } from '$lib/format';
@@ -11,6 +11,14 @@
 		customerNo,
 		year
 	}: { deals: Deals; customerNo: string; year: number } = $props();
+
+	// Every other status in the app goes through a label map; this one used to
+	// print the raw value from the table.
+	const REQUEST_STATUS = {
+		draft: 'Waiting for review',
+		approved: 'Approved',
+		rejected: 'Rejected'
+	} as const;
 </script>
 
 <section class="panel" aria-labelledby="deals-title">
@@ -61,12 +69,12 @@
 				<caption class="sr-only">Quotes for this account</caption>
 				<thead>
 					<tr>
-						<th>Quote</th>
-						<th>Quoted</th>
-						<th>Valid until</th>
-						<th>For</th>
-						<th class="num">Lines</th>
-						<th class="num">Total</th>
+						<th scope="col">Quote</th>
+						<th scope="col">Quoted</th>
+						<th scope="col">Valid until</th>
+						<th scope="col">For</th>
+						<th scope="col" class="num">Lines</th>
+						<th scope="col" class="num">Total</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -94,11 +102,12 @@
 	{/if}
 
 	{#if deals.rfqDrafts.length > 0}
+		<h3 class="eyebrow requests-head">Quote requests</h3>
 		<ul class="list drafts">
 			{#each deals.rfqDrafts as draft (draft.id)}
 				<li class="draft">
 					<a class="link" href="/rfq/{draft.id}">R-{draft.id}</a>
-					<span class="muted">{draft.status}</span>
+					<span class="muted">{REQUEST_STATUS[draft.status] ?? draft.status}</span>
 					{#if draft.needsReview > 0}
 						<span class="chip warn">{draft.needsReview} to check</span>
 					{/if}
@@ -175,6 +184,10 @@
 
 	.nowrap {
 		white-space: nowrap;
+	}
+
+	.requests-head {
+		padding: var(--space-3) var(--space-3) 0;
 	}
 
 	.drafts {

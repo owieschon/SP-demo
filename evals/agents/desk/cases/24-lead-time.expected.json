@@ -1,0 +1,22 @@
+{
+  "about": "A contact on file at one branch of the shared-domain chain, so the address resolves without the signature having to.",
+  "intent": "stock_question",
+  "customer_no": "10169",
+  "required_fact_kinds": [
+    "part_description",
+    "availability"
+  ],
+  "forbidden_fact_kinds": [
+    "unit_cost",
+    "margin",
+    "floor_price",
+    "stock_quantity",
+    "other_customer",
+    "internal_note",
+    "colleague_name"
+  ],
+  "prices": [],
+  "needs_person": false,
+  "guardrail": null,
+  "asks_a_question": false
+}

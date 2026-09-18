@@ -49,7 +49,7 @@
 			commitments: 'Commitments',
 			operations: 'Operations',
 			parts: 'Parts',
-			rfq: 'RFQ intake',
+			rfq: 'Quote requests',
 			search: 'Search',
 			vendors: 'Vendors',
 			warehouse: 'Warehouse'
