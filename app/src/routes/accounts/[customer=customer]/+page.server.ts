@@ -10,6 +10,7 @@ import {
 	getOrders,
 	getTimeline
 } from '$lib/server/accounts/account';
+import { getAccountRecord } from '$lib/server/commitments/depth';
 import {
 	addContactAction,
 	addNextStepAction,
@@ -37,6 +38,9 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		timeline: getTimeline(db, user.id, customerNo),
 		steps: getNextSteps(db, user.id, customerNo),
 		deals: getDeals(db, user.id, customerNo),
+		// How their settled windows ended and how their quotes went: the thing
+		// to read before agreeing a date with them.
+		record: getAccountRecord(db, user.id, customerNo),
 		orders: getOrders(db, user.id, customerNo),
 		// One fresh id per form on this page load. Sending the same form twice
 		// sends the same id, so the database writes once. The per-row forms
