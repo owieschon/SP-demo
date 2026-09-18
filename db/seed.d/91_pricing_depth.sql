@@ -35,7 +35,7 @@
 --      average, because a median of 18 days with a ninetieth of 45 is a
 --      different supplier from 24 days every time, and the promise rule has
 --      to be able to tell them apart.
-create or replace function nl_seed.extra_90_pricing_depth()
+create or replace function nl_seed.extra_91_pricing_depth()
 returns void
 language plpgsql
 set search_path = ''
@@ -770,4 +770,4 @@ begin
   drop table if exists pg_temp.ladder_part;
 end $$;
 
-revoke execute on function nl_seed.extra_90_pricing_depth() from public;
+revoke execute on function nl_seed.extra_91_pricing_depth() from public;
