@@ -508,8 +508,12 @@ begin
     m.item_no,
     m.stock_base,
     0,
-    case when nl_seed.chance(0.3, 'mfg.onpo|' || m.item_no)
-         then greatest(50, round(m.stock_base * 0.4))::int else 0 end,
+    -- Nothing on order, deliberately. The daily ERP sample
+    -- (nl.sample_open_purchase_lines) does not carry purchase orders for raw
+    -- material, so a figure here would be a quantity with no order behind it:
+    -- exactly the drift the supply seed test exists to catch, and exactly the
+    -- lie a buyer would find first. Material shows what is on hand.
+    0,
     s.shelf,
     s.shelf || '-' || nl_seed.ri(1, 6, 'mfg.bin|' || m.item_no),
     v_today

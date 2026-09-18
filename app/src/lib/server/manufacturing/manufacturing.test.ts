@@ -309,7 +309,14 @@ describe('the plant the seed builds', () => {
 		// itself first and ends at something bought.
 		expect(part!.lead.days).toBeGreaterThan(0);
 		expect(part!.lead.criticalPath[0]).toContain(item_no);
-		expect(part!.lead.criticalPath.at(-1)).toMatch(/buy \d+ days?$/);
+		/*
+		  The last leg is something bought, and since decision records landed
+		  it also names the basis the number came from: "buy 42 days (quoted)"
+		  rather than a bare figure. A promise that does not say what it rests
+		  on is the thing that work exists to stop, so the basis is expected
+		  rather than tolerated.
+		*/
+		expect(part!.lead.criticalPath.at(-1)).toMatch(/buy \d+ days? \((quoted|committed|observed|default)\)$/);
 		// The promise date is arithmetic off the same figures.
 		expect(part!.promise.earliestDate >= part!.today).toBe(true);
 	});
@@ -513,10 +520,13 @@ describe('a three level tree', () => {
 		expect(lead.lead_days).toBe(30);
 		expect(lead.basis).toBe('make');
 		expect(lead.critical_child).toBe('MF-MID');
+		// The bought leg names its basis since decision records landed. Nothing
+		// has been received against MF-RAW, so there is no observed history to
+		// correct it with and the house default stands, and the path says so rather than implying somebody quoted it.
 		expect(lead.critical_path).toEqual([
 			'MF-TOP: make 1 day',
 			'MF-MID: make 1 day',
-			'MF-RAW: buy 28 days'
+			'MF-RAW: buy 28 days (default)'
 		]);
 	});
 
