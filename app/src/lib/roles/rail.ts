@@ -72,6 +72,12 @@ export const RAIL_RULES: RailRequirement[] = [
 		because: 'A rule that runs itself is a policy.'
 	},
 	{
+		href: '/agents',
+		authorities: ['change_policy', 'review_exception'],
+		because:
+			'How far an agent may go is a policy, and what it stopped on is the exception handler’s.'
+	},
+	{
 		href: '/people',
 		always: true,
 		because: 'Who may approve what is not a secret inside a company.'

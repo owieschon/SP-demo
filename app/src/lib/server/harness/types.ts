@@ -1,23 +1,12 @@
 // The shapes the harness hands to its page and its tests. One file, so the
 // server and the components cannot drift.
 
-export type Level = 'shadow' | 'suggest' | 'auto_review' | 'auto';
-
-export const LEVELS: Level[] = ['shadow', 'suggest', 'auto_review', 'auto'];
-
-export const LEVEL_LABEL: Record<Level, string> = {
-	shadow: 'Shadow',
-	suggest: 'Suggest',
-	auto_review: 'Auto, with undo',
-	auto: 'Auto, sampled'
-};
-
-export const LEVEL_MEANING: Record<Level, string> = {
-	shadow: 'It drafts and nobody is asked to look. The draft is kept for the record.',
-	suggest: 'It drafts and a person decides every one.',
-	auto_review: 'It acts, and a person can undo it inside a window.',
-	auto: 'It acts. A sampled share is reviewed afterwards, and a bad sample drops it back.'
-};
+// The ladder's four names and their sentences live in $lib/harness/levels,
+// so a page component can import the labels as values without importing out
+// of $lib/server. They are re-exported here because everything on the server
+// already asks this file for them.
+export { LEVELS, LEVEL_LABEL, LEVEL_MEANING, LEVEL_ORDER, type Level } from '$lib/harness/levels';
+import type { Level } from '$lib/harness/levels';
 
 /** What the harness decided to do with one run, before it did it. */
 export type Plan =
