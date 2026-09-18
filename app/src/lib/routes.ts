@@ -57,5 +57,13 @@ export const routes = {
 	signin: () => '/signin',
 	/** Who is responsible for what, what they may approve, and what they may see. */
 	people: () => '/people',
+	/** What each agent did, what it refused, and how far it may go on its own. */
+	agents: (agent?: string) => (agent ? `/agents?agent=${encodeURIComponent(agent)}` : '/agents'),
+	/**
+	 * One eval case, as the file itself. `suite` is the CASE FOLDER, which is
+	 * what EvalSuite.folder carries: the desk suite is reported as "order desk"
+	 * and keeps its cases in `desk`.
+	 */
+	agentEvalCase: (suite: string, name: string) => `/agents/evals/${seg(suite)}/${seg(name)}`,
 	search: (q?: string) => (q ? `/search?q=${encodeURIComponent(q)}` : '/search')
 } as const;

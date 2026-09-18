@@ -11,9 +11,15 @@ import {
 	revokeGrantedAutonomy,
 	setGrantedAutonomy
 } from '$lib/server/harness/promotion';
-import { listLevelChanges, listRefusals, listUndoable } from '$lib/server/harness/runs';
+import { listLevelChanges, listUndoable, runSources } from '$lib/server/harness/runs';
 import { AGENTS, type AgentId } from '$lib/server/harness/scope';
-import { readAgentTrust, readEvalSummary, readTrustTrend } from '$lib/server/harness/trust';
+import {
+	guardrailRoster,
+	readAgentTrust,
+	readEvalSummary,
+	readRefusals,
+	readTrustTrend
+} from '$lib/server/harness/trust';
 import { undoAction } from '$lib/server/harness/wake';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -59,9 +65,22 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		// Awaited: the row per agent and the refusals are the page. Arriving
 		// without them would be arriving without the answer.
 		agents: await readAgentTrust(db, user.id),
-		refusals: await listRefusals(db, user.id, 12),
+		// Each refusal with the rule that refused, and where that rule is
+		// really enforced. A count on its own is not an argument.
+		refusals: await readRefusals(db, user.id, 12),
+		// Every named check, including the ones that have never had to refuse
+		// anything, so the page answers "what would stop it" as well.
+		roster: guardrailRoster(),
 		mayPromote: await mayPromote(db, user.id),
-		// The evals are three file reads, so there is nothing to stream.
+		/*
+		  Which of the feature tables the unified run view is actually built
+		  from in this database. It matters on this page: the procurement
+		  desk's own table is not in the view yet, so its row reads as nothing
+		  yet, and the page should say why rather than let it look like an
+		  agent that never works.
+		*/
+		sources: await runSources(db, user.id),
+		// The evals are file reads, so there is nothing to stream.
 		evals: readEvalSummary(),
 		// Not awaited on purpose: these three stream in behind the page, with
 		// skeleton rows meanwhile. The trend walks every run in the window and
