@@ -33,7 +33,7 @@
 
 <main class="page">
 	<header class="head">
-		<h1 class="sr-only">Accounts</h1>
+		<h1>Accounts</h1>
 		<!-- No JavaScript needed: this form navigates, it does not post. -->
 		<form class="bar" method="GET" action="/accounts" role="search">
 			<!-- Keep the switches that are not fields of this form. -->

@@ -1,0 +1,14 @@
+{
+  "about": "A proposal may only name a gated tool.",
+  "check": "proposal_is_gated",
+  "refuses": {
+    "toolName": "get_account"
+  },
+  "expect": {
+    "verdict": "refuse",
+    "reason_contains": "nothing to propose"
+  },
+  "passes": {
+    "toolName": "record_outcome"
+  }
+}

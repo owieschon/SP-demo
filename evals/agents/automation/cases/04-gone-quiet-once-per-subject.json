@@ -1,0 +1,32 @@
+{
+  "about": "The property that is not a count: a rule fires at most once per subject, however often it runs. Run twice, and the second run fires for nobody.",
+  "rule": {
+    "name": "Quiet account follow-up",
+    "description": "An eval fixture.",
+    "trigger": "account_gone_quiet",
+    "conditions": [
+      {
+        "field": "quiet_ratio",
+        "op": "gte",
+        "value": 2
+      },
+      {
+        "field": "days_quiet",
+        "op": "gte",
+        "value": 21
+      }
+    ],
+    "action": {
+      "kind": "next_step",
+      "title": "Call {customer}: no order in {days_quiet} days",
+      "dueInDays": 3,
+      "assignTo": "record_owner"
+    },
+    "enabled": false
+  },
+  "expected": {
+    "matches": 6,
+    "recorded": true,
+    "fires_once_per_subject": true
+  }
+}

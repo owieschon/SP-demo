@@ -1,0 +1,26 @@
+{
+  "about": "Commitments behind their own pace, which is the trigger a rep would actually switch on. The condition is in points behind, which is one of that trigger's own fields.",
+  "rule": {
+    "name": "Behind pace",
+    "description": "An eval fixture.",
+    "trigger": "commitment_behind_pace",
+    "conditions": [
+      {
+        "field": "gap_pts",
+        "op": "gte",
+        "value": 25
+      }
+    ],
+    "action": {
+      "kind": "next_step",
+      "title": "Check {customer}: behind pace",
+      "dueInDays": 3,
+      "assignTo": "record_owner"
+    },
+    "enabled": false
+  },
+  "expected": {
+    "matches": 1,
+    "recorded": true
+  }
+}

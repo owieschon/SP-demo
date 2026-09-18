@@ -14,7 +14,7 @@
 	  where they came from and when.
 	*/
 	import type { Snippet } from 'svelte';
-	import { day } from '$lib/format';
+	import { day, dayFull } from '$lib/format';
 
 	let {
 		title,
@@ -23,6 +23,8 @@
 		asOf,
 		/** Where the figures came from, in a person's words. */
 		source,
+		/** The year that does not need saying in the as-of date. */
+		thisYear,
 		/** True while the data is still arriving, so the region says so. */
 		busy = false,
 		/** Set when the panel's own content already supplies its padding. */
@@ -34,6 +36,7 @@
 		id?: string;
 		asOf?: string;
 		source?: string;
+		thisYear?: number;
 		busy?: boolean;
 		flush?: boolean;
 		actions?: Snippet;
@@ -49,7 +52,7 @@
 		<div class="right">
 			{#if source || asOf}
 				<span class="t-meta muted provenance">
-					{#if source}{source}{/if}{#if source && asOf}, {/if}{#if asOf}as of {day(asOf)}{/if}
+					{#if source}{source}{/if}{#if source && asOf}, {/if}{#if asOf}as of {thisYear === undefined ? dayFull(asOf) : day(asOf, thisYear)}{/if}
 				</span>
 			{/if}
 			{#if actions}{@render actions()}{/if}

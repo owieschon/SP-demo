@@ -27,7 +27,7 @@ import {
 	signAdminCookie,
 	verifyAdminCookie
 } from '$lib/server/settings/admin';
-import { readDiagnostics } from '$lib/server/settings/diagnostics';
+import { readExactChecks, readHealth } from '$lib/server/settings/diagnostics';
 import { MIN_PASSCODE_LENGTH } from '$lib/server/settings/keys';
 import { readSettingStatus, rowVersions } from '$lib/server/settings/read';
 import { clearInput, clearSetting, saveSetting, settingInput } from '$lib/server/settings/write';
@@ -43,11 +43,21 @@ function unlockedFor(event: Pick<RequestEvent, 'cookies' | 'locals'>): boolean {
 	return verifyAdminCookie(event.cookies.get(ADMIN_COOKIE), event.locals.user!.id, secretFor());
 }
 
-export const load: PageServerLoad = async ({ cookies, locals }) => {
+export const load: PageServerLoad = async ({ cookies, locals, url }) => {
 	// hooks.server.ts guarantees somebody is signed in on this page.
 	const user = locals.user!;
 	const db = await getDb();
-	const lock = await readLockState(db, user.id);
+
+	// The page itself waits for three small reads, in parallel: who owns this
+	// instance, what is set, and the row version per key. Everything expensive
+	// is a promise below, streamed in after the page has been sent.
+	const [lock, settings, versions] = await Promise.all([
+		readLockState(db, user.id),
+		// Never a secret: whether it is set, its last four characters, when it changed.
+		readSettingStatus(db),
+		// The row version per key, so a save from a page somebody left open is refused.
+		rowVersions(db)
+	]);
 	const unlocked = lock.claimed && verifyAdminCookie(cookies.get(ADMIN_COOKIE), user.id, secretFor());
 
 	return {
@@ -57,10 +67,8 @@ export const load: PageServerLoad = async ({ cookies, locals }) => {
 		unlocked,
 		unlockHours: ADMIN_HOURS,
 		minPasscode: MIN_PASSCODE_LENGTH,
-		// Never a secret: whether it is set, its last four characters, when it changed.
-		settings: await readSettingStatus(db),
-		// The row version per key, so a save from a page somebody left open is refused.
-		versions: await rowVersions(db),
+		settings,
+		versions,
 		// Fresh ids for this page load. The forms also make a new one per submit
 		// (see the enhance handler in +page.svelte), so a second try is a second
 		// write rather than a replay of the first.
@@ -71,8 +79,12 @@ export const load: PageServerLoad = async ({ cookies, locals }) => {
 			save: randomUUID(),
 			clear: randomUUID()
 		},
-		// Not awaited: the page arrives first and the health checks stream in.
-		diagnostics: readDiagnostics(db, user.id)
+		// Not awaited: the page arrives first and the health checks stream in
+		// behind it. These are the bounded ones (see diagnostics.ts).
+		health: readHealth(db, user.id),
+		// The exact drift checks read whole tables, so they run only when
+		// somebody follows the link. They stream in the same way.
+		exact: url.searchParams.get('checks') === 'exact' ? readExactChecks(db, user.id) : null
 	};
 };
 

@@ -1,0 +1,40 @@
+{
+  "about": "An agent at suggest may not act on its own, whatever the code around it believes.",
+  "check": "autonomy_level",
+  "refuses": {
+    "autonomy": {
+      "agent": "order_desk",
+      "workKind": "rfq",
+      "level": "suggest",
+      "undoWindowMinutes": 0,
+      "sampleRate": 0,
+      "paused": false,
+      "pauseReason": "",
+      "pausedByName": null,
+      "mayAct": false,
+      "needsReview": true,
+      "hidden": false
+    },
+    "wants": "act"
+  },
+  "expect": {
+    "verdict": "refuse",
+    "reason_contains": "may not act on its own"
+  },
+  "passes": {
+    "autonomy": {
+      "agent": "order_desk",
+      "workKind": "rfq",
+      "level": "auto",
+      "undoWindowMinutes": 0,
+      "sampleRate": 0,
+      "paused": false,
+      "pauseReason": "",
+      "pausedByName": null,
+      "mayAct": true,
+      "needsReview": false,
+      "hidden": false
+    },
+    "wants": "act"
+  }
+}

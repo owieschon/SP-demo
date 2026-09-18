@@ -1,0 +1,14 @@
+{
+  "about": "A gated tool never runs when a model asks for it.",
+  "check": "risk_class_gate",
+  "refuses": {
+    "toolName": "record_outcome"
+  },
+  "expect": {
+    "verdict": "refuse",
+    "reason_contains": "gated"
+  },
+  "passes": {
+    "toolName": "get_account"
+  }
+}

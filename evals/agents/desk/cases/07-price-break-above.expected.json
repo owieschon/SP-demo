@@ -1,0 +1,28 @@
+{
+  "about": "A quantity that reaches a published break, which the reply should apply and name.",
+  "intent": "price_question",
+  "customer_no": "10143",
+  "required_fact_kinds": [
+    "account_identity",
+    "part_description",
+    "own_price"
+  ],
+  "forbidden_fact_kinds": [
+    "unit_cost",
+    "margin",
+    "floor_price",
+    "stock_quantity",
+    "other_customer",
+    "internal_note",
+    "colleague_name"
+  ],
+  "prices": [
+    {
+      "item_no": "CL6SZ",
+      "quantity": 50
+    }
+  ],
+  "needs_person": false,
+  "guardrail": null,
+  "asks_a_question": false
+}

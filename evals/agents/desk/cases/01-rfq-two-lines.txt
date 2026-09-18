@@ -1,0 +1,18 @@
+From: "Micah Crowley" <micah.crowley@driftlessmachinefab.example>
+To: order-desk@agentmail.to
+Subject: Quote request for a fleet refresh
+Date: Mon, 15 Sep 2026 08:12:00 -0500
+
+Good morning,
+
+Can you quote the following, delivered to Charleston:
+
+  L490-168B   qty 8
+  L660-1018SC qty 4
+
+We need these on the shelf by October 6 for a fleet refresh. Please include freight.
+
+Thanks,
+Micah Crowley
+Driftless Machine & Fab
+Charleston, WV

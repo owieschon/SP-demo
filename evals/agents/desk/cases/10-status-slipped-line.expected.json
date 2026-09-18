@@ -1,0 +1,22 @@
+{
+  "about": "A status question about a line that has slipped: promised the fifth, still open on the sixteenth.",
+  "intent": "order_status",
+  "customer_no": "10062",
+  "required_fact_kinds": [
+    "account_identity",
+    "own_open_order"
+  ],
+  "forbidden_fact_kinds": [
+    "unit_cost",
+    "margin",
+    "floor_price",
+    "stock_quantity",
+    "other_customer",
+    "internal_note",
+    "colleague_name"
+  ],
+  "prices": [],
+  "needs_person": false,
+  "guardrail": null,
+  "asks_a_question": false
+}

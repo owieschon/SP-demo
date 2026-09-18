@@ -1,0 +1,28 @@
+{
+  "about": "What is written comes from the stored proposal, never from the form that approved it.",
+  "check": "input_matches_stored_option",
+  "refuses": {
+    "stored": {
+      "commitment_id": 3009,
+      "outcome": "pushed"
+    },
+    "submitted": {
+      "commitment_id": 3010,
+      "outcome": "pushed"
+    }
+  },
+  "expect": {
+    "verdict": "refuse",
+    "reason_contains": "different input"
+  },
+  "passes": {
+    "stored": {
+      "commitment_id": 3009,
+      "outcome": "pushed"
+    },
+    "submitted": {
+      "outcome": "pushed",
+      "commitment_id": 3009
+    }
+  }
+}
