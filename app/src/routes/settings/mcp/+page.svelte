@@ -1,42 +1,31 @@
 <script lang="ts">
-	// Connect a coding agent to Northline. Everyone sees the instructions and
-	// what the server exposes. Only an admin sees the token controls.
+	// Connect a coding agent to Northline. An admin picks their provider, and
+	// the click mints the token and assembles that provider's config around
+	// it. Everyone sees what the server exposes. Only an admin sees the
+	// token controls.
 	import Check from '@lucide/svelte/icons/check';
 	import Copy from '@lucide/svelte/icons/copy';
+	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import Plus from '@lucide/svelte/icons/plus';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import { enhance } from '$app/forms';
+	import ConnectButtons from '$lib/components/settings/ConnectButtons.svelte';
+	import ProviderMark from '$lib/components/settings/ProviderMark.svelte';
 	import { count, moment } from '$lib/format';
+	import { assembleConfig, deepLink, PLACEHOLDER_SECRET } from '$lib/mcp/providers';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
 
-	// The token stands in for the real one in every snippet until one is
-	// minted on this page, and then the real one is pasted in for you.
-	const secret = $derived(form?.from === 'mint' && form.secret ? form.secret : '<token>');
-
-	const claudeCommand = $derived(
-		`claude mcp add --transport http northline ${data.endpoint} --header "Authorization: Bearer ${secret}"`
+	// The token stands in for the real one in every panel until one is minted
+	// on this page, and then the real one is pasted in for you. A connect
+	// button and the mint form both land here.
+	const secret = $derived(
+		(form?.from === 'connect' || form?.from === 'mint') && form.secret ? form.secret : PLACEHOLDER_SECRET
 	);
 
-	const cursorConfig = $derived(
-		JSON.stringify(
-			{
-				mcpServers: {
-					northline: {
-						url: data.endpoint,
-						headers: { Authorization: `Bearer ${secret}` }
-					}
-				}
-			},
-			null,
-			2
-		)
-	);
-
-	const codexConfig = $derived(
-		`[mcp_servers.northline]\nurl = "${data.endpoint}"\nhttp_headers = { Authorization = "Bearer ${secret}" }`
-	);
+	/** The provider whose button was just pressed, or null. */
+	const connected = $derived(form?.from === 'connect' && form.secret ? (form.provider ?? null) : null);
 
 	const curlCommand = $derived(
 		`curl -s ${data.endpoint} \\\n  -H "Authorization: Bearer ${secret}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'`
@@ -79,38 +68,38 @@
 		</div>
 	</header>
 
-	{#if form?.from === 'mint' && form.secret}
-		<section class="panel fresh">
-			<div class="panel-head">
-				<h2>Token minted: {form.label}</h2>
-				<span class="chip warn">
-					<TriangleAlert size={12} strokeWidth={1.75} aria-hidden="true" />
-					Shown once
-				</span>
-			</div>
-			<div class="body">
-				<p>{form.message}</p>
-				<div class="snippet">
-					<pre><code>{form.secret}</code></pre>
-					<button class="button" type="button" onclick={() => copy('secret', form?.secret ?? '')}>
-						{#if copied === 'secret'}
-							<Check size={14} strokeWidth={1.75} aria-hidden="true" /> Copied
-						{:else}
-							<Copy size={14} strokeWidth={1.75} aria-hidden="true" /> Copy
-						{/if}
-					</button>
-				</div>
-				<p class="faint">
-					Only its SHA-256 is stored, so this cannot be shown again. If you lose it, revoke it and mint
-					another. The snippets below already have it in them.
-				</p>
-			</div>
-		</section>
-	{/if}
-
-	{#if form?.message && !(form.from === 'mint' && form.secret)}
+	{#if form?.message && !(form.from === 'connect' && form.secret) && !(form.from === 'mint' && form.secret)}
 		<p class="notice error" role="alert">{form.message}</p>
 	{/if}
+
+	<section class="panel">
+		<div class="panel-head"><h2>Pick your agent</h2></div>
+		<div class="body">
+			<p>
+				One click mints a token that acts as {data.personName}, and fills it into the block that agent
+				needs. Nothing is typed by hand and no secret is stored: only the token's SHA-256 is kept.
+			</p>
+			<ConnectButtons
+				providers={data.providers}
+				requestIds={data.connectIds}
+				canConnect={data.isAdmin}
+				reason="Only an admin can mint a token, so these are off for you. Ask an admin for one with your name on it, or ask them to make you an admin of this deployment."
+			/>
+			{#if form?.from === 'connect' && form.secret}
+				<!-- The block itself is in that provider's panel below, so the
+				     message carries a link to it rather than leaving somebody on a
+				     phone to scroll and guess which panel changed. -->
+				<p class="notice" role="status">
+					<span>{form.message}</span>
+					<a class="button" href={`#provider-${connected}`}>Go to the block</a>
+				</p>
+			{/if}
+			<p class="faint small">
+				Claude Code, Cursor and Codex are third party tools. The marks above are ours, drawn to
+				identify each one, and the names belong to their owners. None of them endorses this app.
+			</p>
+		</div>
+	</section>
 
 	<section class="panel">
 		<div class="panel-head"><h2>The endpoint</h2></div>
@@ -133,59 +122,66 @@
 		</div>
 	</section>
 
-	<section class="panel">
-		<div class="panel-head"><h2>Claude Code</h2></div>
-		<div class="body">
-			<div class="snippet">
-				<pre><code>{claudeCommand}</code></pre>
-				<button class="button" type="button" onclick={() => copy('claude', claudeCommand)}>
-					{#if copied === 'claude'}
-						<Check size={14} strokeWidth={1.75} aria-hidden="true" /> Copied
-					{:else}
-						<Copy size={14} strokeWidth={1.75} aria-hidden="true" /> Copy
-					{/if}
-				</button>
+	<!--
+	  One panel per provider, each with the finished thing rather than a
+	  template. The panel for the agent just connected carries the real token
+	  and says so; the other two show <token> so a person can see what they
+	  would get before they press anything.
+	-->
+	{#each data.providers as provider (provider.id)}
+		{@const block = assembleConfig(provider.id, { endpoint: data.endpoint, secret })}
+		{@const link = deepLink(provider.id, { endpoint: data.endpoint, secret })}
+		<section class="panel" class:fresh={connected === provider.id} id={`provider-${provider.id}`}>
+			<div class="panel-head">
+				<h2><ProviderMark provider={provider.id} /> {provider.name}</h2>
+				{#if connected === provider.id}
+					<span class="chip warn">
+						<TriangleAlert size={12} strokeWidth={1.75} aria-hidden="true" />
+						Token shown once
+					</span>
+				{/if}
 			</div>
-		</div>
-	</section>
-
-	<section class="panel">
-		<div class="panel-head"><h2>Cursor</h2></div>
-		<div class="body">
-			<p class="faint">Put this in <code class="mono">~/.cursor/mcp.json</code>, or in the project's <code class="mono">.cursor/mcp.json</code>.</p>
-			<div class="snippet">
-				<pre><code>{cursorConfig}</code></pre>
-				<button class="button" type="button" onclick={() => copy('cursor', cursorConfig)}>
-					{#if copied === 'cursor'}
-						<Check size={14} strokeWidth={1.75} aria-hidden="true" /> Copied
-					{:else}
-						<Copy size={14} strokeWidth={1.75} aria-hidden="true" /> Copy
-					{/if}
-				</button>
+			<div class="body">
+				<p class="faint">{provider.pasteWhere}</p>
+				<div class="snippet">
+					<pre><code>{block}</code></pre>
+					<div class="stack">
+						<button class="button" type="button" onclick={() => copy(provider.id, block)}>
+							{#if copied === provider.id}
+								<Check size={14} strokeWidth={1.75} aria-hidden="true" /> Copied
+							{:else}
+								<Copy size={14} strokeWidth={1.75} aria-hidden="true" /> Copy
+							{/if}
+						</button>
+						{#if link}
+							<!-- Cursor is the only one of the three with an install link. It
+							     opens the app on this machine, so the token stays here. -->
+							<a class="button" href={link}>
+								<ExternalLink size={14} strokeWidth={1.75} aria-hidden="true" />
+								Open in {provider.name}
+							</a>
+						{/if}
+					</div>
+				</div>
+				{#if connected === provider.id}
+					<p class="faint">
+						Only its SHA-256 is stored, so this cannot be shown again. If you lose it, revoke
+						"{form?.from === 'connect' ? form.label : ''}" below and press the button again.
+					</p>
+				{:else if data.isAdmin}
+					<p class="faint">
+						Press <strong>{provider.name}</strong> above to mint a token and fill it in here.
+					</p>
+				{/if}
+				{#if provider.id === 'codex'}
+					<p class="faint">
+						Codex has moved its HTTP server settings around between versions. If it does not take
+						this, check <code class="mono">codex mcp add --help</code>.
+					</p>
+				{/if}
 			</div>
-		</div>
-	</section>
-
-	<section class="panel">
-		<div class="panel-head"><h2>Codex</h2></div>
-		<div class="body">
-			<p class="faint">Put this in <code class="mono">~/.codex/config.toml</code>.</p>
-			<div class="snippet">
-				<pre><code>{codexConfig}</code></pre>
-				<button class="button" type="button" onclick={() => copy('codex', codexConfig)}>
-					{#if copied === 'codex'}
-						<Check size={14} strokeWidth={1.75} aria-hidden="true" /> Copied
-					{:else}
-						<Copy size={14} strokeWidth={1.75} aria-hidden="true" /> Copy
-					{/if}
-				</button>
-			</div>
-			<p class="faint">
-				Codex has moved its HTTP server settings around between versions. If it does not take this, check
-				<code class="mono">codex mcp add --help</code>.
-			</p>
-		</div>
-	</section>
+		</section>
+	{/each}
 
 	<section class="panel">
 		<div class="panel-head"><h2>Try it without a client</h2></div>
@@ -226,8 +222,37 @@
 	</section>
 
 	{#if data.isAdmin}
+		{#if form?.from === 'mint' && form.secret}
+			<section class="panel fresh">
+				<div class="panel-head">
+					<h2>Token minted: {form.label}</h2>
+					<span class="chip warn">
+						<TriangleAlert size={12} strokeWidth={1.75} aria-hidden="true" />
+						Shown once
+					</span>
+				</div>
+				<div class="body">
+					<p>{form.message}</p>
+					<div class="snippet">
+						<pre><code>{form.secret}</code></pre>
+						<button class="button" type="button" onclick={() => copy('secret', form?.secret ?? '')}>
+							{#if copied === 'secret'}
+								<Check size={14} strokeWidth={1.75} aria-hidden="true" /> Copied
+							{:else}
+								<Copy size={14} strokeWidth={1.75} aria-hidden="true" /> Copy
+							{/if}
+						</button>
+					</div>
+					<p class="faint">
+						Only its SHA-256 is stored, so this cannot be shown again. If you lose it, revoke it and
+						mint another. The panels above already have it in them.
+					</p>
+				</div>
+			</section>
+		{/if}
+
 		<section class="panel">
-			<div class="panel-head"><h2>Mint a token</h2></div>
+			<div class="panel-head"><h2>Mint a token for somebody else</h2></div>
 			<form class="body mint" method="POST" action="?/mint" use:enhance>
 				<input type="hidden" name="requestId" value={data.mintId} />
 				<label>
@@ -256,7 +281,8 @@
 					Mint
 				</button>
 				<p class="faint wide">
-					The token acts as the person you choose and sees exactly what they see. Give it
+					The buttons at the top mint for you. This one is for handing a token to somebody else: it
+					acts as the person you choose and sees exactly what they see. Give it
 					<code class="mono">read</code> only unless it needs to ask for changes.
 				</p>
 			</form>
@@ -270,7 +296,7 @@
 			{#if data.tokens.length === 0}
 				<div class="body">
 					<p>No tokens yet.</p>
-					<p class="faint">Mint one above, then paste the command into Claude Code.</p>
+					<p class="faint">Press your agent's button at the top of this page.</p>
 				</div>
 			{:else}
 				<table>
@@ -361,6 +387,19 @@
 		border-color: color-mix(in srgb, var(--warning) 35%, transparent);
 	}
 
+	/* A notice with a link in it wraps on a phone rather than squeezing both. */
+	.notice {
+		justify-content: space-between;
+		flex-wrap: wrap;
+	}
+
+	/* A provider panel's title carries its mark, so the two sit on one line. */
+	.panel-head h2 {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
 	/* A snippet and its copy button, side by side, wrapping on a phone. */
 	.snippet {
 		display: flex;
@@ -382,6 +421,14 @@
 		line-height: 1.5;
 		white-space: pre-wrap;
 		word-break: break-all;
+	}
+
+	/* Copy, and the install link under it when a provider has one. */
+	.stack {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		flex: none;
 	}
 
 	.scoped {
@@ -477,6 +524,13 @@
 	@media (max-width: 640px) {
 		.page {
 			padding: var(--space-2) var(--space-2) var(--space-5);
+		}
+
+		/* On a phone the copy button and the install link go side by side
+		   under the block rather than in a column beside it. */
+		.stack {
+			flex-direction: row;
+			flex-wrap: wrap;
 		}
 	}
 </style>
