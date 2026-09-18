@@ -333,8 +333,6 @@ function proposeTool(gated: Tool): McpTool {
 		),
 		check: (input) => {
 			const shape = (input ?? {}) as Record<string, unknown>;
-			const summary = summarySchema.safeParse(shape.summary);
-			if (!summary.success) return { ok: false, message: `summary: ${summary.error.issues[0].message}` };
 			/*
 			  The unknown-field check belongs here rather than in the gated
 			  tool, which has never heard of `summary`: delegating it would
@@ -342,6 +340,11 @@ function proposeTool(gated: Tool): McpTool {
 			  without the one the caller had just got right. Anything nested
 			  inside a field is still caught by the gated tool's own strict
 			  schema below.
+
+			  It runs before the summary check for the same reason the zod
+			  formatting prefers an unrecognized key: a misspelled `summary`
+			  is both a missing field and an unknown one, and only the second
+			  reading says what the caller typed.
 			*/
 			const unknown = Object.keys(shape).filter((key) => !accepted.includes(key));
 			if (unknown.length > 0) {
@@ -350,6 +353,8 @@ function proposeTool(gated: Tool): McpTool {
 					message: `${unknown.join(', ')}: there is no input by that name. This tool takes ${accepted.join(', ')}.`
 				};
 			}
+			const summary = summarySchema.safeParse(shape.summary);
+			if (!summary.success) return { ok: false, message: `summary: ${summary.error.issues[0].message}` };
 			return checkGatedInput(withoutSummary(shape));
 		},
 		run: async (ctx, input) => {

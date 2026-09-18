@@ -203,7 +203,7 @@ describe('the protocol', () => {
 		const tools = answer.json.result.tools as {
 			name: string;
 			description: string;
-			inputSchema: { type?: string; properties?: Record<string, unknown> };
+			inputSchema: { type?: string; properties?: Record<string, unknown>; additionalProperties?: unknown };
 		}[];
 		expect(tools.length).toBe(MCP_TOOLS.length);
 		expect(tools.map((tool) => tool.name).sort()).toEqual([...mcpToolNames()].sort());
@@ -212,6 +212,10 @@ describe('the protocol', () => {
 			expect(tool.description.length, `${tool.name} has no real description`).toBeGreaterThan(40);
 			expect(tool.inputSchema.type, `${tool.name} has no object schema`).toBe('object');
 			expect(typeof tool.inputSchema.properties, `${tool.name} has no properties`).toBe('object');
+			// The strictness is part of what is published, not only something
+			// the server does: a client can read this and refuse the call
+			// itself rather than find out by sending it.
+			expect(tool.inputSchema.additionalProperties, `${tool.name} publishes a loose input`).toBe(false);
 		}
 	});
 
@@ -572,6 +576,93 @@ describe('proposing a change', () => {
 		});
 		expect(answer.json.error.code).toBe(-32602);
 		expect(answer.json.error.message).toContain('summary');
+	});
+});
+
+// ---------------------------------------------------------------------------
+
+describe('a field the tool does not have', () => {
+	/*
+	  What a real agent did, driving this endpoint as a client: it read a
+	  filter out of an answer, sent that word back as an input, and got a
+	  confident answer to a different question. The filter it sent was dropped
+	  because the field it should have used has a default. No error, no sign,
+	  one person's rows presented as everyone's.
+
+	  These tests are written so they keep holding whatever the filter ends up
+	  being called: they send a name the tool does not take under any spelling
+	  and require an error that says so.
+	*/
+	it('answers -32602 and names the field, instead of applying the default', async () => {
+		// owner_id is a real column in this tool's own answer rows, which is
+		// exactly how a client talks itself into sending it as a filter.
+		const answer = await callTool(readOnly, 'list_windows_closed_short', { owner_id: DANA });
+
+		expect(answer.json.error.code).toBe(-32602);
+		expect(answer.json.error.message).toContain('owner_id');
+		expect(answer.json.result, 'it answered a question nobody asked').toBeUndefined();
+	});
+
+	it('names the field on a read tool, a propose tool and the approvals list', async () => {
+		/** The tool, the input, and the one word in it that is wrong. */
+		const cases: [string, Record<string, unknown>, string][] = [
+			['get_account', { account_no: CUSTOMER }, 'account_no'],
+			// customer_name is a column the answers carry, so it is the kind of
+			// word a client picks up from a reply and sends back as a filter.
+			['search_accounts', { customer_name: 'Mesa' }, 'customer_name'],
+			['list_pending_approvals', { state: 'draft' }, 'state'],
+			[
+				'propose_set_confidence',
+				{ commitment_id: closedShort, confidence: 40, summary: 'Two quotes are out.', reason: 'extra' },
+				'reason'
+			]
+		];
+
+		for (const [tool, args, bad] of cases) {
+			const answer = await callTool(readWrite, tool, args);
+			expect(answer.json.error?.code, tool).toBe(-32602);
+			expect(answer.json.error.message, tool).toContain(bad);
+		}
+	});
+
+	it('lists what the tool does take, so the next call can be right', async () => {
+		const answer = await callTool(readOnly, 'get_account', { account_no: CUSTOMER });
+		expect(answer.json.error.message).toContain('customer_no');
+	});
+
+	it('writes nothing and creates no proposal on the way out', async () => {
+		const before = await businessCounts();
+		await callTool(readWrite, 'propose_record_outcome', {
+			commitment_id: closedShort,
+			outcome: 'kept',
+			notes: 'the field is called note',
+			summary: 'A misspelled field must not become a proposal.'
+		});
+		expect(await businessCounts()).toEqual(before);
+	});
+});
+
+describe('the filter an answer applied', () => {
+	it('says which one it used when nobody asked', async () => {
+		const answer = await callTool(readOnly, 'list_windows_closed_short', {});
+		const { payload } = toolResult(answer);
+
+		// Read without naming the field, so this keeps working through a
+		// rename: the point is that the applied value is in the answer at all.
+		expect(Object.values(payload), 'the answer does not say whose commitments these are').toContain('me');
+		expect(payload.limit, 'the answer does not say what it capped at').toBe(10);
+	});
+
+	it('reports the value that was asked for, not the default', async () => {
+		const answer = await callTool(readOnly, 'list_windows_closed_short', { limit: 3 });
+		expect(toolResult(answer).payload.limit).toBe(3);
+	});
+
+	it('says which status the approvals list was filtered to', async () => {
+		const answer = await callTool(readOnly, 'list_pending_approvals', {});
+		const { payload } = toolResult(answer);
+		expect(payload.status).toBe('draft');
+		expect(payload.limit).toBe(10);
 	});
 });
 
