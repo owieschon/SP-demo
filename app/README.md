@@ -1,25 +1,21 @@
-# Northline app
+# Northline application
 
-SvelteKit 2, Svelte 5 (runes), TypeScript, Vitest, deployed on Vercel.
+This directory contains the SvelteKit application. Use the repository
+[quickstart](../README.md#run-it-locally) for the credential-free local setup and
+the [focused tour](../README.md#take-the-focused-tour) for the shortest review path.
 
-```sh
-npm install
+Run application commands from this directory:
+
+```bash
+npm ci
 npm run dev        # http://localhost:5180
+npm run check      # Svelte and TypeScript checks
+npm test           # Vitest against in-memory PGlite
+npm run build      # production build with the Vercel adapter
+npm run eval:rfq   # rules-only RFQ regression evaluation
 ```
 
-With no `.env`, the app builds a local Postgres (PGlite) in `.pglite/` from
-`../db` on first start; that takes a minute or two. With `DATABASE_URL` set
-(see `.env.example`), it uses Supabase instead.
-
-```sh
-npm run check      # svelte-check and TypeScript
-npm test           # Vitest, database tests on PGlite
-npm run build      # production build (Vercel adapter)
-```
-
-Helper scripts (Node 24 runs TypeScript directly):
-
-```sh
-node scripts/world.ts small           # build a world in memory and print the board
-node scripts/fingerprint.ts           # hashes to compare with Supabase
-```
+With no `.env`, development uses a persistent PGlite database in `.pglite/` and
+needs no external services. `DATABASE_URL` switches the app to hosted Postgres;
+leave it unset for a local review. See the [database guide](../db/README.md) for the
+schema and world-building commands.
