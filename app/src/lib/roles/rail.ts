@@ -29,6 +29,14 @@ export interface RailRequirement {
 }
 
 export const RAIL_RULES: RailRequirement[] = [
+	/*
+	  Today is everybody's, and it has to be FIRST and unconditional. A rule
+	  missing here does not grey an entry out, it removes it, so the home page
+	  vanished from every rail in the app until somebody looked. The rule to
+	  keep: nav.ts and this list are two halves of one thing, and a test holds
+	  them together at the bottom of this file.
+	*/
+	{ href: '/', always: true, because: 'The home page is what is waiting on you, and everybody has one.' },
 	{ href: '/ask', always: true, because: 'Anybody may ask a question about their own book.' },
 	{
 		href: '/workspace',
@@ -70,6 +78,27 @@ export const RAIL_RULES: RailRequirement[] = [
 		href: '/automations',
 		authorities: ['change_policy'],
 		because: 'A rule that runs itself is a policy.'
+	},
+	{
+		href: '/operations/forecast',
+		authorities: ['run_import', 'resolve_shortage', 'release_purchase_order'],
+		because: 'What is late and what it is waiting on is the same work as the daily load.'
+	},
+	{
+		href: '/procurement',
+		dimensions: ['vendor'],
+		authorities: ['release_purchase_order', 'accept_price_increase'],
+		because: 'The buying desk belongs to whoever may commit money to a supplier.'
+	},
+	{
+		href: '/policies',
+		authorities: ['change_policy'],
+		because: 'The rules everybody decides by are the policy holder’s.'
+	},
+	{
+		href: '/dictionary',
+		always: true,
+		because: 'What a field means is not a secret, and an agent reading this app needs it.'
 	},
 	/*
 	  Everybody, deliberately. A trust surface only works if the sceptic can
