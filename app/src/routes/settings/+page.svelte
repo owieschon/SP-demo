@@ -67,7 +67,7 @@
 	<section class="panel">
 		<header class="panel-head">
 			<h2>Keys and models</h2>
-			<span class="faint">what Ask Northline and the RFQ reader use</span>
+			<span class="faint">what Ask Northline and the quote request reader use</span>
 		</header>
 		{#each section(KEYS_AND_MODELS) as setting, i (setting.key)}
 			<SettingField

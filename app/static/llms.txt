@@ -47,11 +47,10 @@ handed to someone else.
 - /automations               the rule list
 - /automations/new           build a rule
 - /automations/<id>          one rule and what it has done
-- /rfq                       turn a customer email into a draft quote
-- /rfq/<id>                  one draft quote: what was read, what was checked
 - /quotes/<id>               a quote, and the PDF of it
-- /desk                      the order desk mailboxes and what arrived. ?desk
-- /desk/<id>                 one message, what the agent made of it, its draft reply
+- /desk                      the order desk mailboxes and what arrived, and hand entry. ?desk
+- /desk/<id>                 one message, what the agent did step by step, its draft reply
+- /desk/requests/<id>        one quote request: what was read, what was checked
 - /workspace                 one queue for every agent proposal. ?source ?account
 - /ask                       ask a question in plain English
 - /ask/<id>                  one conversation and any proposal waiting

@@ -2,6 +2,7 @@
 	// One quote, as a web page: the same object the PDF is drawn from, so the
 	// two can never show different numbers.
 	import { day, moneyExact, place } from '$lib/format';
+	import { routes } from '$lib/routes';
 	import QuoteActions from '$lib/components/rfq/QuoteActions.svelte';
 	import type { PageProps } from './$types';
 
@@ -47,7 +48,7 @@
 			{#if q.draftId !== null}
 				<div>
 					<dt>From request</dt>
-					<dd><a class="link mono" href="/rfq/{q.draftId}">R-{q.draftId}</a></dd>
+					<dd><a class="link mono" href={routes.quoteRequest(q.draftId)}>R-{q.draftId}</a></dd>
 				</div>
 			{/if}
 		</dl>

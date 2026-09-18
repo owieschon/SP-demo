@@ -4,8 +4,11 @@
 	// The one thing this page has to make unmissable is that the agent cannot
 	// send. The banner says so, and every draft below it is a draft.
 	import { enhance } from '$app/forms';
+	import Lock from '@lucide/svelte/icons/lock';
+	import PhoneIncoming from '@lucide/svelte/icons/phone-incoming';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import ShieldCheck from '@lucide/svelte/icons/shield-check';
+	import Sparkles from '@lucide/svelte/icons/sparkles';
 	import DeskListSkeleton from '$lib/components/desk/DeskListSkeleton.svelte';
 	import DraftCard from '$lib/components/desk/DraftCard.svelte';
 	import { INTENT_LABEL, MESSAGE_STATUS_LABEL } from '$lib/desk/types';
@@ -16,6 +19,24 @@
 
 	let tab = $state<'inbox' | 'outbox'>('outbox');
 	let checking = $state(false);
+	let reading = $state(false);
+	let unlocking = $state(false);
+	let request = $state('');
+	let sampleName = $state('');
+	/** The names of the files chosen, so the person can see what is going up. */
+	let attached = $state<string[]>([]);
+
+	// One notice each, because the two forms fail for different reasons.
+	const checkMessage = $derived(form && 'message' in form ? form.message : null);
+	const entryMessage = $derived(form && 'entryMessage' in form ? form.entryMessage : null);
+	const liveMessage = $derived(form && 'liveMessage' in form ? form.liveMessage : null);
+	const conflicted = $derived(form !== null && form !== undefined && 'conflict' in form && form.conflict === true);
+
+	function loadSample(name: string) {
+		const sample = data.entry.samples.find((s) => s.name === name);
+		request = sample?.text ?? '';
+		sampleName = sample?.name ?? '';
+	}
 
 	const totals = $derived({
 		waiting: data.mailboxes.reduce((sum, m) => sum + m.waiting, 0),
@@ -104,10 +125,155 @@
 		</div>
 	</section>
 
-	{#if form?.message}
-		<p class="notice" class:error={'conflict' in (form ?? {}) || form.message.includes('not')} role="status">
-			{form.message}
-		</p>
+	<details class="panel entry">
+		<summary>
+			<PhoneIncoming size={13} aria-hidden="true" />
+			<span class="name">Add a quote request by hand</span>
+			<span class="faint small">for one that came in on the telephone</span>
+		</summary>
+
+		<form
+			method="POST"
+			action="?/enter"
+			enctype="multipart/form-data"
+			class="body intake"
+			use:enhance={() => {
+				reading = true;
+				return async ({ update }) => {
+					await update({ reset: false });
+					reading = false;
+				};
+			}}
+		>
+			<input type="hidden" name="requestId" value={data.requestId} />
+			<input type="hidden" name="sampleName" value={sampleName} />
+
+			<div class="row">
+				<label>
+					<span>Which desk</span>
+					<select name="desk">
+						{#each data.mailboxes as mailbox (mailbox.id)}
+							<option value={mailbox.id} selected={mailbox.kind === 'orders'}>{mailbox.label}</option>
+						{/each}
+					</select>
+				</label>
+				<label>
+					<span>Who it came from <span class="faint">(name)</span></span>
+					<input name="fromName" autocomplete="off" maxlength="200" placeholder="The buyer who called" />
+				</label>
+				<label>
+					<span>Their email <span class="faint">(if you have it)</span></span>
+					<input name="from" type="email" autocomplete="off" maxlength="200" placeholder="buyer@shop.example" />
+				</label>
+			</div>
+
+			<div class="row">
+				<label class="wide">
+					<span>What to call it</span>
+					<input name="subject" autocomplete="off" maxlength="300" placeholder="Quote for two trucks" />
+				</label>
+				<label>
+					<span>Load a sample <span class="faint">(invented requests)</span></span>
+					<select onchange={(e) => loadSample(e.currentTarget.value)} value={sampleName}>
+						<option value="">Choose one...</option>
+						{#each data.entry.samples as s (s.name)}
+							<option value={s.name}>{s.name.slice(0, 2)}. {s.label}</option>
+						{/each}
+					</select>
+				</label>
+				<label class="file">
+					<span>Anything they sent <span class="faint">(up to four files)</span></span>
+					<input
+						type="file"
+						name="files"
+						multiple
+						accept={data.entry.accept}
+						onchange={(e) => (attached = [...(e.currentTarget.files ?? [])].map((f) => f.name))}
+					/>
+				</label>
+			</div>
+
+			{#if attached.length > 0}
+				<p class="faint small">Attached: {attached.join(', ')}</p>
+			{/if}
+
+			<label>
+				<span>What they asked for</span>
+				<textarea
+					name="email"
+					rows="8"
+					class="mono"
+					spellcheck="false"
+					placeholder={'Called about a second truck to the same spec.\n\n  L760-128B  qty 12\n  S5-48KS  qty 2\n\nNeeded by October 5. Freight to Mobile.'}
+					bind:value={request}
+					oninput={() => (sampleName = '')}
+				></textarea>
+			</label>
+
+			<p class="faint small">
+				Read the same way an emailed request is: spreadsheets, PDFs and CSV parts lists are all read, a table
+				wins over prose, and every line says which file, sheet and row it came from. Nothing is created until
+				somebody approves it.
+			</p>
+
+			{#if entryMessage}
+				<p class="notice error" role="alert">{entryMessage}</p>
+			{/if}
+
+			<div class="actions">
+				<button class="button primary" disabled={reading} aria-busy={reading}>
+					{reading ? 'Reading...' : 'Read and check'}
+				</button>
+				<span class="faint small">
+					{#if data.entry.live.unlocked}
+						Claude reads it; code checks the result.
+					{:else}
+						The rules extractor reads it; no AI is called.
+					{/if}
+				</span>
+			</div>
+		</form>
+
+		<div class="body live-mode">
+			{#if !data.entry.live.configured}
+				<p class="faint small">
+					Live reading is off on this server (no API key is set), so the rules extractor reads every request.
+				</p>
+			{:else if data.entry.live.unlocked}
+				<form method="POST" action="?/lock" use:enhance class="inline">
+					<Sparkles size={13} aria-hidden="true" />
+					<span class="small muted">
+						Live reading is on for you ({data.entry.live.model}). Each request read costs API credit.
+					</span>
+					<button class="button quiet">Turn off</button>
+				</form>
+			{:else}
+				<form
+					method="POST"
+					action="?/unlock"
+					class="inline"
+					use:enhance={() => {
+						unlocking = true;
+						return async ({ update }) => {
+							await update();
+							unlocking = false;
+						};
+					}}
+				>
+					<Lock size={13} aria-hidden="true" />
+					<label class="inline-label" for="passphrase">Live reading passphrase</label>
+					<input id="passphrase" name="passphrase" type="password" autocomplete="off" required />
+					<button class="button" disabled={unlocking}>Unlock for an hour</button>
+				</form>
+			{/if}
+			{#if liveMessage}
+				<p class="small" role="status">{liveMessage}</p>
+			{/if}
+		</div>
+	</details>
+
+	{#if checkMessage}
+		<p class="notice" class:error={conflicted} role="status">{checkMessage}</p>
 	{/if}
 
 	<div class="segmented tabs" role="tablist" aria-label="Desk view">
@@ -306,6 +472,83 @@
 	.rules p {
 		flex: 1 1 320px;
 		max-width: 80ch;
+	}
+
+	/* Hand entry: available, and not the first thing on the page. */
+	.entry > summary {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-2);
+		padding: 8px var(--space-3);
+		cursor: pointer;
+		border-radius: var(--radius-lg);
+		transition: background-color var(--speed) var(--ease);
+	}
+
+	.entry > summary:hover {
+		background: var(--surface-hover);
+	}
+
+	.entry > summary .name {
+		font-weight: 500;
+	}
+
+	.intake {
+		display: grid;
+		gap: var(--space-3);
+		border-top: 1px solid var(--hairline);
+	}
+
+	.row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-3);
+	}
+
+	.row label {
+		flex: 1 1 200px;
+	}
+
+	.row label.wide {
+		flex: 2 1 320px;
+	}
+
+	.file input {
+		padding: 3px;
+	}
+
+	.actions {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-3);
+	}
+
+	.live-mode {
+		display: grid;
+		gap: 6px;
+		border-top: 1px solid var(--hairline);
+		background: var(--surface-sunken);
+		border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+	}
+
+	.inline {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-2);
+		margin: 0;
+		color: var(--text-muted);
+	}
+
+	.inline-label {
+		display: inline;
+	}
+
+	.inline input {
+		height: var(--control-h);
+		width: 200px;
 	}
 
 	.tabs {

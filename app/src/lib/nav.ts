@@ -214,7 +214,6 @@ export const UNRAILED = [
 	{ href: routes.accounts(), label: 'Accounts', hint: 'The book: who buys, how often, and what is promised' },
 	{ href: routes.parts(), label: 'Parts', hint: 'What we sell, what it earns and what is on the shelf' },
 	{ href: routes.vendors(), label: 'Vendors', hint: 'Who supplies the bought parts, and on what terms' },
-	{ href: routes.quoteRequests(), label: 'Quote requests', hint: 'Emailed requests read into a checked draft quote' },
 	{ href: routes.ask(), label: 'Ask', hint: 'Put a question to the whole database' },
 	{ href: routes.search(), label: 'Search', hint: 'Accounts, parts and vendors on one results page' },
 	{ href: routes.settingsMcp(), label: 'Coding agents', hint: 'Connect an outside agent to this app' }
