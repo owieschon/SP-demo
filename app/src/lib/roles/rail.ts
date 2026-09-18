@@ -43,11 +43,11 @@ export const RAIL_RULES: RailRequirement[] = [
 	},
 	{ href: '/commitments', dimensions: ['account'], because: 'A commitment sits on an account.' },
 	{ href: '/accounts', dimensions: ['account'], because: 'The book is the account list.' },
-	{
-		href: '/rfq',
-		authorities: ['approve_quote'],
-		because: 'A quote request ends in a quote somebody signs.'
-	},
+	// There was a rule for '/rfq' here. That screen is retired: a quote request
+	// arrives at the order desk and is read there, so '/desk' above is the rule
+	// that governs it and '/desk/requests/<id>' is reached from the desk item
+	// rather than from the rail. The rule was already matching nothing, because
+	// nav.ts has no '/rfq' entry for it to filter.
 	{ href: '/parts', always: true, because: 'The catalog is everybody’s.' },
 	{
 		href: '/vendors',

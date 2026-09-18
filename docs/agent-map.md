@@ -94,8 +94,8 @@ no assistant tool and no MCP tool reaches it.
 | `/warehouse?part=` | bins, the stock ledger, the pick queue, count sheets, transfers | advance a shipment, post a count, post an adjustment | **nothing.** No tool, and the 0019 tables are not in the read-only grant |
 | `/automations` | every rule as one plain-English sentence, and what it has done | nothing | **nothing lists saved rules** |
 | `/automations/new`, `/automations/<id>` | the rule builder: trigger, conditions, action, a test run | test, save `W` | `test_automation_rule` `R` tests an unsaved rule; `save_automation_rule` `W` (gated) |
-| `/rfq` | paste an email, get a draft | extract | **nothing** |
-| `/rfq/<id>` | what was read, what code checked, what approval will create | revise a field, approve, reject | **nothing** |
+| `/desk`, `/desk/<id>` | what arrived, what the agent did step by step, what it refused and under which rule, the document beside its reading | check mail, enter a request by hand | **nothing reads a run trail** |
+| `/desk/requests/<id>` | what was read, what code checked, what approval will create | revise a field, approve, reject | **nothing** |
 | `/ask`, `/ask/<id>` | the assistant, its lookups and its proposals | ask, approve or reject a proposal | private by design: RLS keeps a conversation to its owner |
 | `/signin` | the people you may be | sign in | n/a |
 | `/workspace` (branch) | one queue for every agent proposal, from four features | approve, edit and approve, reject | `list_pending_approvals` on the other branch covers the assistant slice only |

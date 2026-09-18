@@ -56,7 +56,7 @@ export const AGENT_SCOPES: AgentScope[] = [
 			'nl.mail_messages, through nl.record_mail_message, keyed on a content hash so one message is stored once',
 			'nl.mail_runs, through nl.start_mail_run and nl.finish_mail_run',
 			'nl.mail_drafts, through nl.queue_mail_draft, which is a queue nobody has approved',
-			'An RFQ draft for a quote or an order, through the existing RFQ pipeline',
+			'A quote request for a quote or an order, through the existing quote request pipeline',
 			'Nothing else. No role has INSERT, UPDATE or DELETE on any of those tables'
 		],
 		says: [
