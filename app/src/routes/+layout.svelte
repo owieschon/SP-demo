@@ -41,6 +41,11 @@
 			'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#0d4a47"/><path d="M10 23V9h2.2l7.6 10V9H22v14h-2.2l-7.6-10v10z" fill="#e6f2f0"/></svg>'
 		);
 
+	/*
+	  No authority filter here yet: a roles branch will pass one that hides an
+	  entry a person has nothing behind. visibleSections already drops any
+	  group that filter empties.
+	*/
 	const sections = $derived(visibleSections());
 	const phone = $derived(data.user ? phoneItems(data.user.role) : []);
 
@@ -86,6 +91,7 @@
 		if (route === '/quotes/[id=id]') return [{ label: `Quote SQ-${page.params.id}`, href: null }];
 		if (route === '/workspace') return [{ label: 'Approval queue', href: null }];
 		if (route === '/desk') return [{ label: 'Order desk', href: null }];
+		if (route === '/procurement') return [{ label: 'Procurement desk', href: null }];
 		if (route === '/desk/[id=id]') {
 			return [
 				{ label: 'Order desk', href: routes.desk() },

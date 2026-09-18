@@ -146,6 +146,8 @@
 				</div>
 			</dl>
 			<div class="chart">
+				<!-- A chart's title is the question it answers. -->
+				<h3>Is this account still buying the way it used to?</h3>
 				<RevenueBars months={numbers.months} />
 			</div>
 		</section>

@@ -77,6 +77,14 @@ export const ACTIONS: PaletteEntry[] = [
 		keywords: 'activity history audit trust autonomy edited rejected'
 	},
 	{
+		id: 'action-queue-purchase',
+		kind: 'action',
+		label: 'Approve or correct what the procurement desk wants to buy',
+		hint: 'Suggested orders, with the vendor email already drafted',
+		href: routes.workspace('purchase'),
+		keywords: 'purchase order buy reorder vendor procurement'
+	},
+	{
 		id: 'action-upload',
 		kind: 'action',
 		label: "Load this morning's ERP export",
@@ -133,6 +141,27 @@ export const ACTIONS: PaletteEntry[] = [
 		keywords: 'user switch role permissions'
 	}
 ];
+
+/**
+ * "Ask Northline: <what you typed>", as a row.
+ *
+ * This is the part of the argument that has to hold up in front of an
+ * audience. Searching and asking are the same act, so a box that finds a
+ * part by its number must also take a sentence and do something sensible
+ * with it. It is always offered last, and it is a link to the assistant with
+ * the question pre-filled, not a question already sent.
+ */
+export function askEntry(query: string): PaletteEntry | null {
+	const q = query.trim();
+	if (q.length < 3) return null;
+	return {
+		id: 'action-ask-this',
+		kind: 'action',
+		label: `Ask Northline: ${q}`,
+		hint: 'It answers from the database and shows every lookup it made',
+		href: `${routes.ask()}?q=${encodeURIComponent(q)}`
+	};
+}
 
 /*
   The screens. The rail's own entries come straight from nav.ts so the two

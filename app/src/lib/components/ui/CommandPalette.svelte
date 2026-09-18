@@ -27,10 +27,12 @@
 	import CornerDownLeft from '@lucide/svelte/icons/corner-down-left';
 	import Search from '@lucide/svelte/icons/search';
 	import Drawer from './Drawer.svelte';
+	import { routes } from '$lib/routes';
 	import { palette } from './palette.svelte';
 	import {
 		KIND_LABEL,
 		STATIC_ENTRIES,
+		askEntry,
 		groupEntries,
 		matchEntries,
 		type PaletteEntry
@@ -46,7 +48,13 @@
 
 	const staticMatches = $derived(matchEntries(query, STATIC_ENTRIES, 10));
 	const recordMatches = $derived(matchEntries(query, records, 12));
-	const shown = $derived([...staticMatches, ...recordMatches]);
+	/*
+	  Last, always: whatever was typed, handed to the assistant. A sentence
+	  matches no screen and no part number, and "nothing matches" would be
+	  the wrong answer to a question.
+	*/
+	const ask = $derived(askEntry(query));
+	const shown = $derived([...staticMatches, ...recordMatches, ...(ask ? [ask] : [])]);
 	const groups = $derived(groupEntries(shown));
 
 	/*
@@ -175,7 +183,7 @@
 			{#if shown.length === 0}
 				<p class="none">
 					Nothing matches "{query}".
-					<a class="link" href="/search?q={encodeURIComponent(query)}">Search every record</a>
+					<a class="link" href={routes.search(query)}>Search every record</a>
 				</p>
 			{/if}
 		</div>
