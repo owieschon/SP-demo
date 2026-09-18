@@ -1,0 +1,16 @@
+{
+  "about": "A rule fires at most once for one subject, ever.",
+  "check": "one_firing_per_subject",
+  "refuses": {
+    "subjectKey": "commitment:3009",
+    "alreadyFired": true
+  },
+  "expect": {
+    "verdict": "refuse",
+    "reason_contains": "already fired"
+  },
+  "passes": {
+    "subjectKey": "commitment:3010",
+    "alreadyFired": false
+  }
+}

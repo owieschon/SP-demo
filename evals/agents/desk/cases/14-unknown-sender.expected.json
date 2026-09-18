@@ -1,0 +1,19 @@
+{
+  "about": "No contact, no domain and no name we know. It asks for the account number rather than pricing somebody we cannot identify.",
+  "intent": "rfq",
+  "customer_no": null,
+  "required_fact_kinds": [],
+  "forbidden_fact_kinds": [
+    "unit_cost",
+    "margin",
+    "floor_price",
+    "stock_quantity",
+    "other_customer",
+    "internal_note",
+    "colleague_name"
+  ],
+  "prices": [],
+  "needs_person": true,
+  "guardrail": "sender_resolved",
+  "asks_a_question": true
+}

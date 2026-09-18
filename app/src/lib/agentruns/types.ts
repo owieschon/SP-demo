@@ -1,52 +1,53 @@
-// The run trail, as the server hands it to the components. Shared by both,
-// so neither can drift from the other.
+// The run trail, as the server hands it to the components. Shared by both, so
+// neither can drift from the other.
 //
-// A run is one waking of one agent. A step is one thing it did. The whole
-// point of the shape is that a sceptical reader can go top to bottom and see
-// what was read, what was called, what was decided and what was refused.
+// A run is one waking of one agent, and the harness owns it (migration 0028,
+// nl.agent_runs). A TRAIL is how that run reached its decision: the steps, in
+// order, with each tool call's arguments and each refusal's rule. This file
+// is the trail's half of the shape, plus the few run fields the trail is read
+// beside.
 
 import type { Disclosure } from '$lib/desk/types';
 
-/**
- * Which agent. Text, not a union, for the same reason the column is text and
- * not an enum: a new agent needs no migration. The two that exist today are
- * `order_desk` and `procurement_desk`.
- */
-export type AgentName = string;
-
 export const AGENT_LABEL: Record<string, string> = {
 	order_desk: 'Order desk agent',
-	procurement_desk: 'Procurement desk agent'
+	procurement_desk: 'Procurement desk agent',
+	assistant: 'Assistant',
+	automation: 'Automation',
+	mcp: 'Coding agent'
 };
 
+export function agentLabel(agent: string): string {
+	return AGENT_LABEL[agent] ?? agent.replace(/_/g, ' ');
+}
+
 /** The only ways anything in this app starts. */
-export type WokeBy = 'mail' | 'signal' | 'schedule' | 'person' | 'replay';
+export type WokeBy = 'mail' | 'signal' | 'schedule' | 'person';
 
 export const WOKE_LABEL: Record<WokeBy, string> = {
 	mail: 'Mail arrived',
 	signal: 'A signal fired',
 	schedule: 'A schedule came round',
-	person: 'A person asked',
-	replay: 'A replay'
+	person: 'A person asked'
 };
 
-export type RunOutcome =
-	| 'running'
-	| 'drafted'
-	| 'needs_person'
-	| 'ignored'
-	| 'refused'
-	| 'failed'
-	| 'replayed';
-
-export const OUTCOME_LABEL: Record<RunOutcome, string> = {
+/** The harness's outcomes (nl.agent_runs), said in plain English. */
+export const OUTCOME_LABEL: Record<string, string> = {
+	ok: 'Drafted',
 	running: 'Still running',
-	drafted: 'Drafted a reply',
 	needs_person: 'Handed to a person',
 	ignored: 'Left alone',
 	refused: 'Refused',
-	failed: 'Failed',
-	replayed: 'Replayed'
+	failed: 'Failed'
+};
+
+/** What a person did to what the run produced (nl.agent_run_log). */
+export const REVIEW_LABEL: Record<string, string> = {
+	none: 'nothing to review',
+	waiting: 'not looked at yet',
+	approved: 'approved as written',
+	edited_approved: 'edited, then approved',
+	rejected: 'rejected'
 };
 
 export type StepKind = 'read' | 'tool' | 'decision' | 'refusal' | 'output' | 'note';
@@ -85,41 +86,45 @@ export interface RunStep {
 	withheldReason: string;
 }
 
-/** A run without its steps: the row the run list shows. */
+/**
+ * One run as the trail shows it: the harness's row, plus the trail's own
+ * wake, decision and counts. A run with no trail has `hasTrail` false and no
+ * steps, which is every run made before this was built.
+ */
 export interface RunSummary {
-	id: number;
-	agent: AgentName;
+	runKey: string;
+	agent: string;
+	workKind: string;
+	sourceId: number;
+	hasTrail: boolean;
 	wokeBy: WokeBy;
 	wokeNote: string;
 	entity: string | null;
 	entityId: number | null;
 	reader: Disclosure;
 	subjectNo: string | null;
-	mode: 'mock' | 'live';
-	model: string | null;
-	/** The version of the context bundle it read, when there is one. */
 	bundleVersion: string | null;
-	startedAt: string;
-	finishedAt: string | null;
-	durationMs: number | null;
-	inputTokens: number;
-	outputTokens: number;
-	outcome: RunOutcome;
 	decision: string;
 	refusals: number;
 	stepCount: number;
-	producedKind: string | null;
-	producedId: number | null;
-	replayOf: number | null;
-	/** On a replay: what changed. */
-	diff: ReplayDiffKind | null;
-	replays: number;
-	/** What a person did to what it produced, in plain English, or null. */
-	humanChange: string | null;
-	error: string | null;
+	mode: string;
+	model: string | null;
+	inputTokens: number;
+	outputTokens: number;
+	startedAt: string;
+	finishedAt: string | null;
+	ms: number;
+	outcome: string;
+	produced: string;
+	/** What a person did to it afterwards: the harness's review state. */
+	reviewState: string;
+	reviewedAt: string | null;
+	/** A guardrail the harness stopped the run with, if one did. */
+	guardrail: string | null;
+	guardrailReason: string | null;
 }
 
-export interface RunView extends RunSummary {
+export interface RunTrail extends RunSummary {
 	steps: RunStep[];
 }
 
@@ -134,9 +139,7 @@ export const DIFF_LABEL: Record<ReplayDiffKind, string> = {
 
 /** The outcome of one replay, side by side with the run it replays. */
 export interface ReplayResult {
-	runId: number;
-	/** The run row the replay itself was recorded as, when it was recorded. */
-	replayRunId: number | null;
+	runKey: string;
 	diff: ReplayDiffKind;
 	before: ReplayOutcome;
 	after: ReplayOutcome;
@@ -147,14 +150,18 @@ export interface ReplayResult {
 export interface ReplayOutcome {
 	intent: string;
 	confidence: number;
-	outcome: RunOutcome;
+	outcome: 'drafted' | 'needs_person' | 'refused';
 	/** Every reason the disclosure policy gave, in order. */
 	refusedFor: string[];
 	/** The sentence the run recorded as its decision. */
 	decision: string;
 }
 
-/** A refusal always names a rule. These are the rules that exist. */
+/**
+ * A refusal always names a rule. These are the trail's own rules: the ones
+ * the desk agent applies to itself, as opposed to the harness's guardrails,
+ * which are recorded as nl.agent_events and count against a promotion.
+ */
 export const RULES = {
 	disclosure: {
 		id: 'disclosure.policy',

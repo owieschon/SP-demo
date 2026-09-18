@@ -1,30 +1,36 @@
 // The order desk's runs, as a trail.
 //
 // The desk agent already keeps a record of its own work: migration 0021
-// stores one row per run with every lookup on it, and the message it worked
-// carries what it decided. This file reads that record and writes the trail
-// from it, which is why it does not touch the agent's own code at all. The
-// agent runs; the trail is taken from what the agent recorded.
+// stores one row per run with every lookup on it, the message it worked
+// carries what it decided, and migration 0028 reads both into nl.agent_runs
+// under the key '<agent>:<mail_run_id>'. This file reads that same record and
+// writes the trail beside it, which is why it does not touch the agent's code
+// at all. The agent runs; the trail is taken from what the agent recorded,
+// under the harness's own key.
 //
-// It is idempotent on the mail run id, so the same work is never transcribed
-// twice however many times a poll, a retry or a page asks for it.
+// It is idempotent on that key, so the same work is never transcribed twice
+// however many times a poll, a retry or a page asks for it.
 //
 // What it cannot show, it says. The desk records each lookup's name, its
 // arguments, how many rows came back and how long it took, and not the rows
-// themselves, so the trail says "eight rows in 4 ms" and not what was in
-// them. docs/agent-runs.md says what a real deployment would add.
+// themselves, so the trail says "eight rows back" and not what was in them.
+// docs/agent-runs.md says what a real deployment would add.
 import type { Disclosure, Fact, Intent } from '$lib/desk/types';
 import { INTENT_LABEL } from '$lib/desk/types';
-import type { RunOutcome } from '$lib/agentruns/types';
 import type { Db, Tx } from '../db/types.ts';
 import { guarded } from '../errors.ts';
 import { LOW_CONFIDENCE } from '../desk/classify.ts';
 import { Trail, readTrailCapabilities } from './trail.ts';
-import { appendSteps, finishRun, startRun } from './writes.ts';
+import { recordTrail } from './writes.ts';
 
-/** The agent behind each desk. */
+/** The agent behind each desk, in the harness's vocabulary. */
 export function deskAgentName(kind: 'orders' | 'procurement'): string {
 	return kind === 'orders' ? 'order_desk' : 'procurement_desk';
+}
+
+/** The harness's key for one desk run (migration 0028). */
+export function deskRunKey(kind: 'orders' | 'procurement', mailRunId: number): string {
+	return `${deskAgentName(kind)}:${mailRunId}`;
 }
 
 export interface ItemSource {
@@ -35,7 +41,7 @@ export interface ItemSource {
 }
 
 /**
- * How one desk item arrived. Two columns migration 0027 added, read on their
+ * How one desk item arrived. Two columns migration 0031 added, read on their
  * own rather than widening the desk's own query.
  */
 export async function readItemSource(
@@ -72,12 +78,8 @@ interface SourceRow {
 	run_id: number;
 	mode: 'mock' | 'live';
 	model: string | null;
-	started_at: Date;
-	finished_at: Date | null;
 	lookups: { name: string; input: Record<string, unknown>; rows: number; ms: number }[];
 	rounds: number;
-	input_tokens: number;
-	output_tokens: number;
 	run_outcome: 'running' | 'drafted' | 'needs_person' | 'ignored' | 'failed';
 	draft_id: number | null;
 	run_error: string | null;
@@ -88,7 +90,6 @@ interface SourceRow {
 	body_text: string;
 	body_stripped: string;
 	message_source: 'mail' | 'person';
-	received_at: Date;
 	intent: Intent | null;
 	intent_confidence: number | null;
 	summary: string;
@@ -97,11 +98,11 @@ interface SourceRow {
 	match_reason: string;
 	rfq_draft_id: number | null;
 	attachments: number;
-	mailbox_id: number;
 	mailbox_address: string;
 	mailbox_label: string;
 	mailbox_kind: 'orders' | 'procurement';
 	disclosure: Disclosure;
+	entered_by_name: string | null;
 	draft_subject: string | null;
 	draft_body: string | null;
 	draft_facts: Fact[] | null;
@@ -111,22 +112,22 @@ interface SourceRow {
 
 async function readSource(tx: Tx, mailRunId: number): Promise<SourceRow | null> {
 	const [row] = await tx.sql<SourceRow>`
-		select r.id as run_id, r.mode, r.model, r.started_at, r.finished_at, r.lookups, r.rounds,
-		       r.input_tokens, r.output_tokens, r.outcome as run_outcome, r.draft_id,
-		       r.error as run_error,
+		select r.id as run_id, r.mode, r.model, r.lookups, r.rounds,
+		       r.outcome as run_outcome, r.draft_id, r.error as run_error,
 		       m.id as message_id, m.from_address, m.from_name, m.subject, m.body_text,
-		       m.body_stripped, m.source as message_source, m.received_at, m.intent,
+		       m.body_stripped, m.source as message_source, m.intent,
 		       m.intent_confidence, m.summary, m.customer_no, m.vendor_no, m.match_reason,
 		       m.rfq_draft_id,
 		       (select count(*)::int from nl.mail_attachments a where a.message_id = m.id) as attachments,
-		       b.id as mailbox_id, b.address as mailbox_address, b.label as mailbox_label,
-		       b.kind as mailbox_kind, b.disclosure,
+		       b.address as mailbox_address, b.label as mailbox_label, b.kind as mailbox_kind,
+		       b.disclosure, eu.full_name as entered_by_name,
 		       d.subject as draft_subject, d.body as draft_body, d.facts as draft_facts,
 		       d.blocked_reason,
 		       nl.today() as today
 		from nl.mail_runs r
 		join nl.mail_messages m on m.id = r.message_id
 		join nl.mailboxes b on b.id = r.mailbox_id
+		left join nl.users eu on eu.id = m.entered_by
 		left join nl.mail_drafts d on d.id = r.draft_id
 		where r.id = ${mailRunId}`;
 	return row ?? null;
@@ -182,8 +183,8 @@ export interface RecordDeskTrailInput {
 }
 
 /**
- * Write the trail for one desk run. Returns the run id, or null when there
- * is no such desk run (a message that was deleted under us, say).
+ * Write the trail for one desk run. Returns its run key, or null when there
+ * is no such desk run (a message deleted under us, say).
  *
  * `userId` is the desk's reviewer, the same person the agent worked as, so
  * the trail is written under the row-level security the work happened under.
@@ -192,10 +193,10 @@ export async function recordDeskTrail(
 	db: Db,
 	userId: number,
 	input: RecordDeskTrailInput
-): Promise<number | null> {
+): Promise<string | null> {
 	// Deterministic, so transcribing the same run twice writes it once. The
-	// user is in it because nl.request_log is per person: another person
-	// asking gets their own claim and then finds the run already there.
+	// user is in it because nl.request_log is per person: another person asking
+	// gets their own claim and then finds the trail already there.
 	const request = `trail-${input.mailRunId}-u${userId}`;
 
 	return guarded(() =>
@@ -203,7 +204,7 @@ export async function recordDeskTrail(
 			const row = await readSource(tx, input.mailRunId);
 			if (!row) return null;
 
-			const agent = deskAgentName(row.mailbox_kind);
+			const runKey = deskRunKey(row.mailbox_kind, row.run_id);
 			const reader: Disclosure = input.reader ?? 'internal';
 			const subject = row.customer_no ?? row.vendor_no;
 			const capabilities = await readTrailCapabilities(tx);
@@ -212,71 +213,9 @@ export async function recordDeskTrail(
 			// arriving, whichever of the three doors it came through.
 			const wokeBy = row.message_source === 'person' ? 'person' : 'mail';
 			const wokeNote =
-				input.wokeNote ??
-				(wokeBy === 'person'
-					? 'Somebody entered a request at the desk'
-					: `Mail arrived at ${row.mailbox_address}`);
-
-			const { runId, existing } = await startRun(
-				tx,
-				{
-					agent,
-					wokeBy,
-					wokeNote,
-					entity: 'mail_message',
-					entityId: row.message_id,
-					reader,
-					subjectNo: subject,
-					mode: row.mode,
-					model: row.model,
-					bundleVersion: capabilities.bundleVersion,
-					inputs: {
-						kind: 'desk_message',
-						message: {
-							id: row.message_id,
-							from: row.from_address,
-							fromName: row.from_name,
-							subject: row.subject,
-							body: row.body_text,
-							bodyStripped: row.body_stripped,
-							receivedAt: row.received_at.toISOString(),
-							today: row.today
-						},
-						mailbox: {
-							id: row.mailbox_id,
-							address: row.mailbox_address,
-							label: row.mailbox_label,
-							kind: row.mailbox_kind,
-							disclosure: row.disclosure
-						},
-						subjectNo: subject,
-						decision: {
-							intent: row.intent,
-							confidence: row.intent_confidence,
-							outcome: row.run_outcome,
-							summary: row.summary,
-							reason: classifierReason(row.summary)
-						},
-						draft: row.draft_id
-							? {
-									id: row.draft_id,
-									subject: row.draft_subject,
-									body: row.draft_body,
-									facts: row.draft_facts ?? []
-								}
-							: null
-					},
-					replayOf: null,
-					sourceKind: 'mail_run',
-					sourceId: row.run_id,
-					startedAt: row.started_at.toISOString()
-				},
-				`${request}:start`
-			);
-
-			// Already transcribed. Nothing to add: the agent's record has not
-			// changed, so neither has the trail of it.
-			if (existing) return runId;
+				row.message_source === 'person'
+					? `${row.entered_by_name ?? 'Somebody'} entered a request at ${row.mailbox_label}`
+					: (input.wokeNote ?? `Mail arrived at ${row.mailbox_address}`);
 
 			const trail = new Trail({ reader, subject });
 			const facts = row.draft_facts ?? [];
@@ -307,7 +246,9 @@ export async function recordDeskTrail(
 					`Read it as ${INTENT_LABEL[row.intent].toLowerCase()}`,
 					[
 						row.intent_confidence !== null ? `${Math.round(row.intent_confidence * 100)}% sure.` : '',
-						row.mode === 'live' ? `Classified by ${row.model ?? 'the live model'}.` : 'Classified by the rules classifier, with no model call.',
+						row.mode === 'live'
+							? `Classified by ${row.model ?? 'the live model'}.`
+							: 'Classified by the rules classifier, with no model call.',
 						`${row.rounds} ${row.rounds === 1 ? 'round' : 'rounds'}.`
 					]
 						.filter(Boolean)
@@ -326,10 +267,14 @@ export async function recordDeskTrail(
 			if (subject) {
 				trail.decide('Matched the sender', row.match_reason || `Matched to ${subject}.`);
 			} else {
-				trail.refuse('Did not price anything', 'unmatchedSender', row.match_reason || 'The sender matched no contact, no domain and no company name.');
+				trail.refuse(
+					'Did not price anything',
+					'unmatchedSender',
+					row.match_reason || 'The sender matched no contact, no domain and no company name.'
+				);
 			}
 
-			// 4. Every lookup, in the order it made them.
+			// 4. Every lookup, in the order it made them, WITH what it asked.
 			for (const lookup of row.lookups ?? []) {
 				trail.tool(lookup.name, lookup.input ?? null, `${lookup.rows} ${lookup.rows === 1 ? 'row' : 'rows'} back.`, {
 					rows: lookup.rows,
@@ -369,8 +314,8 @@ export async function recordDeskTrail(
 					held
 						? 'A held reply, with the reason on it and nothing sendable in it'
 						: 'A reply, into the queue nobody has approved yet',
-					// A held draft's body is the refusal, which quotes the figure
-					// it refused. That figure is by definition one no fact stands
+					// A held draft's body is the refusal, which quotes the figure it
+					// refused. That figure is by definition one no fact stands
 					// behind, so it is masked rather than repeated here.
 					shorten(held ? withoutMoney(produced) : produced),
 					facts
@@ -379,54 +324,73 @@ export async function recordDeskTrail(
 			if (row.rfq_draft_id !== null) {
 				trail.produce(
 					`A quote request, R-${row.rfq_draft_id}`,
-					'Put through the same validation as one a person entered, in the reviewer\'s name, so approving the quote and approving the reply are one flow.'
+					"Put through the same validation as one a person entered, in the reviewer's name, so approving the quote and approving the reply are one flow."
 				);
 			}
 			if (row.run_error) {
 				trail.note('The run failed', row.run_error);
 			}
 
-			await appendSteps(tx, runId, trail.rows(), `${request}:steps`);
-
-			const outcome: Exclude<RunOutcome, 'running'> =
-				row.run_outcome === 'running'
-					? 'failed'
-					: policyRefusals.length > 0
-						? 'refused'
-						: row.run_outcome;
-
-			const finished = row.finished_at ?? new Date();
-			await finishRun(
+			await recordTrail(
 				tx,
 				{
-					runId,
-					outcome,
+					runKey,
+					agent: deskAgentName(row.mailbox_kind),
+					wokeBy,
+					wokeNote,
+					entity: 'mail_message',
+					entityId: row.message_id,
+					reader,
+					subjectNo: subject,
+					bundleVersion: capabilities.bundleVersion,
 					decision: row.summary || (row.run_error ?? ''),
-					durationMs: Math.max(0, finished.getTime() - row.started_at.getTime()),
-					inputTokens: row.input_tokens,
-					outputTokens: row.output_tokens,
-					producedKind: row.draft_id !== null ? 'mail_draft' : row.rfq_draft_id !== null ? 'quote_request' : null,
-					producedId: row.draft_id ?? row.rfq_draft_id,
-					produced: {
-						mail_draft_id: row.draft_id,
-						quote_request_id: row.rfq_draft_id
+					inputs: {
+						kind: 'desk_message',
+						message: {
+							id: row.message_id,
+							from: row.from_address,
+							fromName: row.from_name,
+							subject: row.subject,
+							body: row.body_text,
+							bodyStripped: row.body_stripped,
+							today: row.today
+						},
+						mailbox: {
+							address: row.mailbox_address,
+							label: row.mailbox_label,
+							kind: row.mailbox_kind,
+							disclosure: row.disclosure
+						},
+						subjectNo: subject,
+						decision: {
+							intent: row.intent,
+							confidence: row.intent_confidence,
+							outcome: row.run_outcome,
+							summary: row.summary,
+							reason: classifierReason(row.summary)
+						},
+						draft: row.draft_id
+							? {
+									id: row.draft_id,
+									subject: row.draft_subject,
+									body: row.draft_body,
+									facts
+								}
+							: null
 					},
-					diff: null,
-					error: row.run_error,
-					finishedAt: finished.toISOString()
+					steps: trail.rows()
 				},
-				`${request}:finish`
+				request
 			);
 
-			return runId;
+			return runKey;
 		})
 	);
 }
 
 /**
- * The trails for a whole poll. One desk's failure does not stop the others,
- * and a trail that cannot be written is never a reason a poll fails: the
- * work is already done and recorded by the agent itself.
+ * The trails for a whole poll. A trail that cannot be written is never a
+ * reason a poll fails: the work is already done and recorded by the agent.
  */
 export async function recordDeskTrails(
 	db: Db,
@@ -437,12 +401,12 @@ export async function recordDeskTrails(
 	const problems: string[] = [];
 	for (const result of results) {
 		try {
-			const id = await recordDeskTrail(db, options.userId, {
+			const key = await recordDeskTrail(db, options.userId, {
 				mailRunId: result.runId,
 				refusals: result.policyRefusals,
 				wokeNote: options.wokeNote
 			});
-			if (id !== null) recorded += 1;
+			if (key !== null) recorded += 1;
 		} catch (error) {
 			problems.push(error instanceof Error ? error.message : String(error));
 		}

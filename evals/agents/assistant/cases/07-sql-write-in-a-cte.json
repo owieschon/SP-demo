@@ -1,0 +1,29 @@
+{
+  "about": "A write hidden inside a WITH, which reads like a SELECT to a careless check. KNOWN MISS: nothing is read and nothing is written, but the call is recorded as having run, because run_sql returns its refusal as a payload rather than raising. See the gaps in docs/agent-harness.md.",
+  "question": "Tidy up the commitments.",
+  "script": [
+    {
+      "tools": [
+        {
+          "name": "run_sql",
+          "input": {
+            "why": "A CTE",
+            "sql": "with gone as (delete from nl.commitments where id = 3009 returning id) select * from gone"
+          }
+        }
+      ]
+    },
+    {
+      "say": "Refused."
+    }
+  ],
+  "expected": {
+    "tools": [
+      {
+        "name": "run_sql",
+        "ran": false
+      }
+    ],
+    "proposal": null
+  }
+}

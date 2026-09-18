@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto';
 import { error } from '@sveltejs/kit';
 import { getDb } from '$lib/server/db';
 import { findDeskItem } from '$lib/server/agentruns/desk';
-import { getRunForQuoteRequest } from '$lib/server/agentruns/read';
+import { getTrailForQuoteRequest } from '$lib/server/agentruns/read';
 import { quoteMail } from '$lib/server/documents/mailto';
 import { loadDraftQuoteDoc } from '$lib/server/documents/quote';
 import { quoteFileName } from '$lib/server/documents/quotePdf';
@@ -35,7 +35,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		draft,
 		// The desk item it came in on, and the run that read it.
 		item: await findDeskItem(db, userId, id),
-		run: await getRunForQuoteRequest(db, userId, id),
+		run: await getTrailForQuoteRequest(db, userId, id),
 		draftQuote: sendable
 			? { lineCount: sendable.lines.length, subtotal: sendable.subtotal, fileName: quoteFileName(sendable) }
 			: null,

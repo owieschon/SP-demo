@@ -1,0 +1,46 @@
+{
+  "about": "A figure in the body that no fact accounts for is how a leak looks.",
+  "check": "amount_traceable",
+  "refuses": {
+    "draft": {
+      "level": "customer",
+      "subject": "1214",
+      "facts": [
+        {
+          "kind": "own_price",
+          "text": "L490-168B at 8: $79.95 each",
+          "subject": "1214",
+          "ids": {},
+          "amounts": [
+            79.95
+          ]
+        }
+      ],
+      "subjectLine": "Re: your request",
+      "body": "Your price is $79.95 each, and our floor is $52.00."
+    }
+  },
+  "expect": {
+    "verdict": "refuse",
+    "reason_contains": "not one of the figures"
+  },
+  "passes": {
+    "draft": {
+      "level": "customer",
+      "subject": "1214",
+      "facts": [
+        {
+          "kind": "own_price",
+          "text": "L490-168B at 8: $79.95 each",
+          "subject": "1214",
+          "ids": {},
+          "amounts": [
+            79.95
+          ]
+        }
+      ],
+      "subjectLine": "Re: your request",
+      "body": "Your price is $79.95 each."
+    }
+  }
+}

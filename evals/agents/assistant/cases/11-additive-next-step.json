@@ -1,0 +1,31 @@
+{
+  "about": "The same for a next step.",
+  "question": "Remind me to call them next week.",
+  "script": [
+    {
+      "tools": [
+        {
+          "name": "add_next_step",
+          "input": {
+            "customer_no": "1214",
+            "title": "Call about the stack order",
+            "due_in_days": 7,
+            "commitment_id": null
+          }
+        }
+      ]
+    },
+    {
+      "say": "Added."
+    }
+  ],
+  "expected": {
+    "tools": [
+      {
+        "name": "add_next_step",
+        "ran": true
+      }
+    ],
+    "proposal": null
+  }
+}

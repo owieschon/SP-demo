@@ -1,92 +1,102 @@
-// What the run trail hands to the pages. Queries only, every one of them as
-// the signed-in person, so row-level security decides what comes back.
+// What the trail hands to the pages. Queries only, every one of them as the
+// signed-in person, so row-level security decides what comes back.
 //
-// Three questions get asked of this file:
-//
-//   getRunFor(...)      the run that produced this draft, for a desk item
-//   listRuns(agent)     one agent's runs, newest first, for the run list
-//   getRun(id)          one run and its steps
+// Everything about the run itself comes from nl.agent_run_trail_log, which is
+// the harness's own run log (migration 0028) with the trail joined on. This
+// file adds no second run model; it reads theirs and the steps beside it.
 //
 // The `inputs` column is never selected here. It is the recorded material a
-// replay needs, not something a page shows, and it is the one place on the
-// run that can hold more than a summary.
+// replay needs, not something a page shows.
 import type { Disclosure } from '$lib/desk/types';
-import type {
-	ReplayDiffKind,
-	RunOutcome,
-	RunStep,
-	RunSummary,
-	RunView,
-	StepKind,
-	WokeBy
-} from '$lib/agentruns/types';
+import type { RunStep, RunSummary, RunTrail, StepKind, WokeBy } from '$lib/agentruns/types';
 import type { Db, Tx } from '../db/types.ts';
 
 interface RunRow {
-	id: number;
+	run_key: string;
 	agent: string;
-	woke_by: WokeBy;
-	woke_note: string;
-	entity: string | null;
-	entity_id: number | null;
-	reader: Disclosure;
+	work_kind: string;
+	source_id: number;
+	woke_by: string;
+	wake_detail: string;
 	subject_no: string | null;
-	mode: 'mock' | 'live';
+	mode: string;
 	model: string | null;
-	bundle_version: string | null;
-	started_at: Date;
-	finished_at: Date | null;
-	duration_ms: number | null;
 	input_tokens: number;
 	output_tokens: number;
-	outcome: RunOutcome;
-	decision: string;
-	refusals: number;
-	step_count: number;
-	produced_kind: string | null;
-	produced_id: number | null;
-	replay_of: number | null;
-	diff: ReplayDiffKind | null;
-	replays: number;
-	human_change: string | null;
-	error: string | null;
+	started_at: Date;
+	finished_at: Date | null;
+	ms: number;
+	outcome: string;
+	produced: string;
+	review_state: string;
+	reviewed_at: Date | null;
+	guardrail: string | null;
+	guardrail_reason: string | null;
+	trail_woke_by: WokeBy | null;
+	trail_woke_note: string | null;
+	trail_entity: string | null;
+	trail_entity_id: number | null;
+	trail_reader: Disclosure | null;
+	trail_subject_no: string | null;
+	trail_bundle_version: string | null;
+	trail_decision: string | null;
+	trail_steps: number;
+	trail_refusals: number;
+	trail_recorded_at: Date | null;
 }
 
 const RUN_COLUMNS = `
-	r.id, r.agent, r.woke_by, r.woke_note, r.entity, r.entity_id, r.reader, r.subject_no,
-	r.mode, r.model, r.bundle_version, r.started_at, r.finished_at, r.duration_ms,
-	r.input_tokens, r.output_tokens, r.outcome, r.decision, r.refusals, r.step_count,
-	r.produced_kind, r.produced_id, r.replay_of, r.diff, r.replays, r.human_change, r.error`;
+	l.run_key, l.agent, l.work_kind, l.source_id, l.woke_by, l.wake_detail, l.subject_no,
+	l.mode, l.model, l.input_tokens, l.output_tokens, l.started_at, l.finished_at, l.ms,
+	l.outcome, l.produced, l.review_state, l.reviewed_at, l.guardrail, l.guardrail_reason,
+	l.trail_woke_by, l.trail_woke_note, l.trail_entity, l.trail_entity_id, l.trail_reader,
+	l.trail_subject_no, l.trail_bundle_version, l.trail_decision, l.trail_steps,
+	l.trail_refusals, l.trail_recorded_at`;
+
+/**
+ * The wake, as honestly as the two records together can say it. The harness
+ * reads it off the source table, which cannot tell a message somebody typed
+ * from one that was delivered; the trail was written by the code that knows,
+ * so it wins where it has an answer.
+ */
+function wokeBy(row: RunRow): WokeBy {
+	if (row.trail_woke_by) return row.trail_woke_by;
+	const theirs = row.woke_by;
+	return theirs === 'mail' || theirs === 'signal' || theirs === 'schedule' || theirs === 'person'
+		? theirs
+		: 'schedule';
+}
 
 function toRun(row: RunRow): RunSummary {
 	return {
-		id: row.id,
+		runKey: row.run_key,
 		agent: row.agent,
-		wokeBy: row.woke_by,
-		wokeNote: row.woke_note,
-		entity: row.entity,
-		entityId: row.entity_id,
-		reader: row.reader,
-		subjectNo: row.subject_no,
+		workKind: row.work_kind,
+		sourceId: Number(row.source_id),
+		hasTrail: row.trail_recorded_at !== null,
+		wokeBy: wokeBy(row),
+		wokeNote: row.trail_woke_note || row.wake_detail || '',
+		entity: row.trail_entity,
+		entityId: row.trail_entity_id === null ? null : Number(row.trail_entity_id),
+		reader: row.trail_reader ?? 'internal',
+		subjectNo: row.trail_subject_no ?? row.subject_no,
+		bundleVersion: row.trail_bundle_version,
+		decision: row.trail_decision ?? '',
+		refusals: Number(row.trail_refusals ?? 0),
+		stepCount: Number(row.trail_steps ?? 0),
 		mode: row.mode,
 		model: row.model,
-		bundleVersion: row.bundle_version,
+		inputTokens: Number(row.input_tokens ?? 0),
+		outputTokens: Number(row.output_tokens ?? 0),
 		startedAt: row.started_at.toISOString(),
 		finishedAt: row.finished_at?.toISOString() ?? null,
-		durationMs: row.duration_ms,
-		inputTokens: row.input_tokens,
-		outputTokens: row.output_tokens,
+		ms: Number(row.ms ?? 0),
 		outcome: row.outcome,
-		decision: row.decision,
-		refusals: row.refusals,
-		stepCount: row.step_count,
-		producedKind: row.produced_kind,
-		producedId: row.produced_id,
-		replayOf: row.replay_of,
-		diff: row.diff,
-		replays: row.replays,
-		humanChange: row.human_change,
-		error: row.error
+		produced: row.produced,
+		reviewState: row.review_state,
+		reviewedAt: row.reviewed_at?.toISOString() ?? null,
+		guardrail: row.guardrail,
+		guardrailReason: row.guardrail_reason
 	};
 }
 
@@ -124,148 +134,113 @@ function toStep(row: StepRow): RunStep {
 	};
 }
 
-async function readSteps(tx: Tx, runId: number): Promise<RunStep[]> {
+async function readSteps(tx: Tx, runKey: string): Promise<RunStep[]> {
 	const rows = await tx.sql<StepRow>`
 		select id, seq, kind, label, tool, args, result, row_count, ms, rule, rule_note,
 		       withheld, withheld_reason
 		from nl.agent_run_steps
-		where run_id = ${runId}
+		where run_key = ${runKey}
 		order by seq`;
 	return rows.map(toStep);
 }
 
-/** One agent's runs, newest first. */
+/**
+ * One agent's runs, newest first, with the trail's counts on them.
+ *
+ * This is the list a trust page shows. The harness has its own richer reader
+ * for the same view (app/src/lib/server/harness/runs.ts); this one exists
+ * because its rows are a shape a component may import, and because it carries
+ * the trail.
+ */
 export async function listRuns(
 	db: Db,
 	userId: number,
-	options: { agent?: string | null; limit?: number; includeReplays?: boolean } = {}
+	options: { agent?: string | null; withTrailOnly?: boolean; limit?: number } = {}
 ): Promise<RunSummary[]> {
 	const rows = await db.asUser(userId, (tx) =>
 		tx.query<RunRow>(
 			`select ${RUN_COLUMNS}
-			 from nl.agent_run_list r
-			 where ($1::text is null or r.agent = $1::text)
-			   and ($2::boolean or r.replay_of is null)
-			 order by r.started_at desc, r.id desc
+			 from nl.agent_run_trail_log l
+			 where ($1::text is null or l.agent = $1::text)
+			   and ($2::boolean is not true or l.trail_recorded_at is not null)
+			 order by l.started_at desc, l.source_id desc
 			 limit $3`,
-			[options.agent ?? null, options.includeReplays ?? false, options.limit ?? 50]
+			[options.agent ?? null, options.withTrailOnly ?? false, options.limit ?? 50]
 		)
 	);
 	return rows.map(toRun);
 }
 
-/** Which agents have runs, and how many, for the run list's own filter. */
-export async function listAgents(
-	db: Db,
-	userId: number
-): Promise<{ agent: string; runs: number; refusals: number; lastAt: string }[]> {
-	const rows = await db.asUser(userId, (tx) =>
-		tx.sql<{ agent: string; runs: number; refusals: number; last_at: Date }>`
-			select agent, count(*)::int as runs, sum(refusals)::int as refusals, max(started_at) as last_at
-			from nl.agent_runs
-			where replay_of is null
-			group by agent
-			order by agent`
-	);
-	return rows.map((r) => ({
-		agent: r.agent,
-		runs: r.runs,
-		refusals: r.refusals ?? 0,
-		lastAt: r.last_at.toISOString()
-	}));
-}
-
-/** One run, with its steps in order. */
-export async function getRun(db: Db, userId: number, id: number): Promise<RunView | null> {
-	return db.asUser(userId, async (tx) => {
-		const [row] = await tx.query<RunRow>(`select ${RUN_COLUMNS} from nl.agent_run_list r where r.id = $1`, [id]);
-		if (!row) return null;
-		return { ...toRun(row), steps: await readSteps(tx, id) };
-	});
-}
-
-/**
- * The run that produced one thing, with its steps: the trail a person reads
- * on the desk item before approving the draft it made.
- */
-export async function getRunFor(
-	db: Db,
-	userId: number,
-	produced: { kind: string; id: number }
-): Promise<RunView | null> {
+/** One run and its steps, by the harness's run key. */
+export async function getTrail(db: Db, userId: number, runKey: string): Promise<RunTrail | null> {
 	return db.asUser(userId, async (tx) => {
 		const [row] = await tx.query<RunRow>(
-			`select ${RUN_COLUMNS} from nl.agent_run_list r
-			 where r.produced_kind = $1 and r.produced_id = $2
-			 order by r.id desc limit 1`,
-			[produced.kind, produced.id]
+			`select ${RUN_COLUMNS} from nl.agent_run_trail_log l where l.run_key = $1 limit 1`,
+			[runKey]
 		);
 		if (!row) return null;
-		return { ...toRun(row), steps: await readSteps(tx, row.id) };
+		return { ...toRun(row), steps: await readSteps(tx, runKey) };
 	});
 }
 
-/**
- * The run behind one quote request, with its steps.
- *
- * Two runs can produce one: a hand-entered request, where the quote request
- * IS what the run produced, and an emailed one, where the run produced a
- * reply and the quote request alongside it. Both are found here, so the
- * request's own page never has to know which kind it is.
- */
-export async function getRunForQuoteRequest(
-	db: Db,
-	userId: number,
-	draftId: number
-): Promise<RunView | null> {
-	return db.asUser(userId, async (tx) => {
-		const [row] = await tx.query<RunRow>(
-			`select ${RUN_COLUMNS} from nl.agent_run_list r
-			 where (r.produced_kind = 'quote_request' and r.produced_id = $1)
-			    or (select a.produced ->> 'quote_request_id' from nl.agent_runs a where a.id = r.id) = $1::text
-			 order by r.id desc limit 1`,
-			[draftId]
-		);
-		if (!row) return null;
-		return { ...toRun(row), steps: await readSteps(tx, row.id) };
-	});
-}
-
-/** Every run on one thing (a desk message, say), newest first, with steps. */
-export async function getRunsOn(
+/** Every trail on one thing (a desk item, say), newest first, with its steps. */
+export async function getTrailsOn(
 	db: Db,
 	userId: number,
 	entity: { kind: string; id: number },
-	limit = 5
-): Promise<RunView[]> {
+	limit = 3
+): Promise<RunTrail[]> {
 	return db.asUser(userId, async (tx) => {
 		const rows = await tx.query<RunRow>(
-			`select ${RUN_COLUMNS} from nl.agent_run_list r
-			 where r.entity = $1 and r.entity_id = $2
-			 order by r.id desc limit $3`,
+			`select ${RUN_COLUMNS} from nl.agent_run_trail_log l
+			 where l.trail_entity = $1 and l.trail_entity_id = $2
+			 order by l.started_at desc, l.source_id desc
+			 limit $3`,
 			[entity.kind, entity.id, limit]
 		);
-		const runs: RunView[] = [];
+		const trails: RunTrail[] = [];
 		for (const row of rows) {
-			runs.push({ ...toRun(row), steps: await readSteps(tx, row.id) });
+			trails.push({ ...toRun(row), steps: await readSteps(tx, row.run_key) });
 		}
-		return runs;
+		return trails;
+	});
+}
+
+/**
+ * The trail behind one quote request.
+ *
+ * Two runs can produce one: a hand-entered request, where the quote request
+ * is what the run produced, and an emailed one, where the run produced a
+ * reply and the quote request alongside it. The harness's row carries both
+ * ids in produced_ref, so both are found here.
+ */
+export async function getTrailForQuoteRequest(
+	db: Db,
+	userId: number,
+	draftId: number
+): Promise<RunTrail | null> {
+	return db.asUser(userId, async (tx) => {
+		const [row] = await tx.query<RunRow>(
+			`select ${RUN_COLUMNS} from nl.agent_run_trail_log l
+			 where l.produced_ref ->> 'rfq_draft_id' = $1::text
+			 order by l.started_at desc, l.source_id desc
+			 limit 1`,
+			[draftId]
+		);
+		if (!row) return null;
+		return { ...toRun(row), steps: await readSteps(tx, row.run_key) };
 	});
 }
 
 /** The recorded inputs of one run. Only the replay reads this. */
-export async function readRunInputs(
+export async function readTrailInputs(
 	db: Db,
 	userId: number,
-	id: number
-): Promise<{ run: RunSummary; inputs: Record<string, unknown> } | null> {
-	return db.asUser(userId, async (tx) => {
-		const [row] = await tx.query<RunRow & { inputs: Record<string, unknown> }>(
-			`select ${RUN_COLUMNS}, (select a.inputs from nl.agent_runs a where a.id = r.id) as inputs
-			 from nl.agent_run_list r where r.id = $1`,
-			[id]
-		);
-		if (!row) return null;
-		return { run: toRun(row), inputs: row.inputs ?? {} };
-	});
+	runKey: string
+): Promise<{ agent: string; reader: Disclosure; inputs: Record<string, unknown> } | null> {
+	const [row] = await db.asUser(userId, (tx) =>
+		tx.sql<{ agent: string; reader: Disclosure; inputs: Record<string, unknown> }>`
+			select agent, reader, inputs from nl.agent_run_trails where run_key = ${runKey}`
+	);
+	return row ?? null;
 }

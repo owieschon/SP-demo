@@ -11,7 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { error } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { getDb } from '$lib/server/db';
-import { getRunsOn } from '$lib/server/agentruns/read';
+import { getTrailsOn } from '$lib/server/agentruns/read';
 import { readItemSource } from '$lib/server/agentruns/desk';
 import { approveAction, rejectAction, retryAction } from '$lib/server/desk/forms';
 import { chooseClient, listMailboxes } from '$lib/server/desk/poll';
@@ -35,7 +35,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		detail,
 		item: (await readItemSource(db, user.id, id)) ?? { source: 'mail' as const, enteredByName: null },
 		// The trail. Awaited: it is the reason a person is on this page.
-		runs: await getRunsOn(db, user.id, { kind: 'mail_message', id }, 3),
+		trails: await getTrailsOn(db, user.id, { kind: 'mail_message', id }, 3),
 		request: requestId === null ? null : await getQuoteRequest(db, user.id, requestId),
 		allowlist: { empty: allowlist.empty, describe: allowlist.describe },
 		provider: { live: Boolean(env.AGENTMAIL_API_KEY), label: env.AGENTMAIL_API_KEY ? 'AgentMail' : 'scripted demo mailbox' },

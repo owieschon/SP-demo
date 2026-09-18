@@ -1,0 +1,9 @@
+From: "Micah Petrakis" <micah.petrakis@hilltoptruckrepair.example>
+To: order-desk@agentmail.to
+Subject: M-4164 availability
+Date: Tue, 16 Sep 2026 09:30:00 -0500
+
+Do you have M-4164 in stock? If not, when could you ship?
+
+Micah Petrakis
+Hilltop Truck Repair

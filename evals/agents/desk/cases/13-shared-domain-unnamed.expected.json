@@ -1,0 +1,19 @@
+{
+  "about": "The same domain with no branch named. Quoting the wrong branch is a real mistake with real prices on it, so nothing is matched and a person is asked.",
+  "intent": "rfq",
+  "customer_no": null,
+  "required_fact_kinds": [],
+  "forbidden_fact_kinds": [
+    "unit_cost",
+    "margin",
+    "floor_price",
+    "stock_quantity",
+    "other_customer",
+    "internal_note",
+    "colleague_name"
+  ],
+  "prices": [],
+  "needs_person": true,
+  "guardrail": "sender_resolved",
+  "asks_a_question": true
+}

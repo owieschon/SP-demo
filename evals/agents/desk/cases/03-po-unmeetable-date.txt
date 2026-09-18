@@ -1,0 +1,16 @@
+From: "Morgan Navarro" <morgan.navarro@truckworksheavyduty.example>
+To: order-desk@agentmail.to
+Subject: PO TWK-48812
+Date: Mon, 15 Sep 2026 10:41:00 -0500
+
+Please enter our purchase order TWK-48812:
+
+  M-4164     qty 6
+  L490-168B  qty 10
+
+Ship to our Baton Rouge store. We need it on the truck by September 19.
+Same payment terms as last time.
+
+Morgan Navarro
+Purchasing
+Truckworks Heavy Duty

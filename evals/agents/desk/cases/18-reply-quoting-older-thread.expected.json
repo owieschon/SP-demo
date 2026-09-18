@@ -1,0 +1,22 @@
+{
+  "about": "A reply with an old quote quoted underneath. Only the new ask counts, and the old prices in the quoted text are not facts of this reply.",
+  "intent": "stock_question",
+  "customer_no": "10106",
+  "required_fact_kinds": [
+    "part_description",
+    "availability"
+  ],
+  "forbidden_fact_kinds": [
+    "unit_cost",
+    "margin",
+    "floor_price",
+    "stock_quantity",
+    "other_customer",
+    "internal_note",
+    "colleague_name"
+  ],
+  "prices": [],
+  "needs_person": false,
+  "guardrail": null,
+  "asks_a_question": false
+}
