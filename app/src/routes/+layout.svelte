@@ -57,9 +57,6 @@
 	const sections = $derived(visibleSections(railSections(data.rail)));
 	const phone = $derived(railItems(phoneItems(data.user?.role ?? 'account_manager'), data.rail));
 
-	const NAV = $derived(
-		SECTIONS.filter((item) => item.href === '/' || data.rail.includes(item.href))
-	);
 
 	// "Pat Doe" -> "PD"
 	const initials = $derived(

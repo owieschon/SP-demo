@@ -2,7 +2,7 @@
 //
 // Three orthogonal things, never one:
 //
-//   scope       which slice of the world is mine (migration 0027, nl.user_scope)
+//   scope       which slice of the world is mine (migration 0031, nl.user_scope)
 //   authority   what I may decide and up to what amount (nl.authority_grants)
 //   disclosure  what I may be shown at all (nl.disclosure_grants)
 //
@@ -21,6 +21,7 @@ export type Preset =
 	| 'planner'
 	| 'warehouse'
 	| 'ops_manager'
+	| 'ceo'
 	| 'account_manager'
 	| 'operations'
 	| 'admin'
@@ -32,6 +33,7 @@ export const PRESETS: Preset[] = [
 	'planner',
 	'warehouse',
 	'ops_manager',
+	'ceo',
 	'account_manager',
 	'operations',
 	'admin',
@@ -44,6 +46,7 @@ export const PRESET_LABEL: Record<Preset, string> = {
 	planner: 'Planner',
 	warehouse: 'Warehouse',
 	ops_manager: 'Operations manager',
+	ceo: 'Chief executive',
 	account_manager: 'Account manager',
 	operations: 'Operations',
 	admin: 'Admin',

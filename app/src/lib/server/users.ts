@@ -1,6 +1,6 @@
 // People who use the app.
 //
-// nl.users holds agents too since migration 0027, so both queries here say
+// nl.users holds agents too since migration 0031, so both queries here say
 // kind = 'person'. An agent has scope, authority and disclosure like anybody
 // else and no way in: no password, no session, and never in the picker.
 import type { Db } from './db/types.ts';
