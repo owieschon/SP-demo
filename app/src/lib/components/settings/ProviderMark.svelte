@@ -2,8 +2,8 @@
 	/*
 	  A small mark for one coding agent, drawn inline.
 
-	  Every path is in this file. There is no <img>, no CDN, no icon package
-	  and no fetch, so a connect panel renders the same on a plane as it does
+	  Every path is in this file. There is no image tag, no CDN, no icon
+	  package and no request, so a connect panel renders the same offline as
 	  in the office, and nothing about which agent a person uses leaves the
 	  page.
 

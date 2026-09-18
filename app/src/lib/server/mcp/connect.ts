@@ -22,7 +22,6 @@ import {
 	findProvider,
 	type McpProviderId
 } from '$lib/mcp/providers';
-import type { McpScope } from './tokens.ts';
 import type { Db } from '../db/types.ts';
 
 export interface ConnectRequest {
@@ -73,7 +72,7 @@ export async function connectProvider(
 		// The token acts as the person who clicked, not as somebody chosen from
 		// a list: a one-click connect has nobody else to mean.
 		actsAs: person.id,
-		scopes: [...CONNECT_SCOPES] as McpScope[],
+		scopes: [...CONNECT_SCOPES],
 		requestId: input.requestId
 	});
 
