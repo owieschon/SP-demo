@@ -22,7 +22,7 @@
 
 <main class="page">
 	<header class="head">
-		<h1 class="sr-only">Parts</h1>
+		<h1>Parts</h1>
 		<p class="faint">
 			Every part we sell, with what it sold in the last 12 months, what it earns and what
 			is promised against it. Search by number or by words from the description.
