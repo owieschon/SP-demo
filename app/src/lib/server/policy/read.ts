@@ -1,7 +1,7 @@
 // Reading the policy engine.
 //
 // Nothing here decides anything. The order of resolution, the explanation and
-// the trace are all worked out in migration 0031, so a page, the assistant
+// the trace are all worked out in migration 0034, so a page, the assistant
 // and an MCP client cannot disagree about what a policy says. This file asks
 // and renames.
 import type { Db, Tx } from '../db/types.ts';
@@ -366,7 +366,7 @@ interface BacktestRowDb {
  *
  * Two bounds and no prediction: what holding to the floor would have added if
  * every customer had still bought, and what was on those lines at all if none
- * of them had. The arithmetic is nl.margin_floor_backtest() (migration 0031);
+ * of them had. The arithmetic is nl.margin_floor_backtest() (migration 0034);
  * this orders it and adds up the totals.
  */
 export async function backtestMarginFloor(

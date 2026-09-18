@@ -5,14 +5,14 @@
 -- Two things happen here, in this order.
 --
 -- 1. The catalog is loaded again. nl.policy_types and nl.data_dictionary are
---    reference data, not invented data, and they live in migration 0031 so a
+--    reference data, not invented data, and they live in migration 0034 so a
 --    database built from migrations alone is complete. But nl.reset()
 --    truncates every table in schema nl, and the nightly job calls it, so the
 --    rows have to be put back after every rebuild. nl.load_policy_catalog()
 --    is the same function the migration calls, and it is idempotent.
 --
 -- 2. Policies are set. The company-wide rows deliberately repeat the numbers
---    that were hard-coded before 0031, because the point of the first release
+--    that were hard-coded before 0034, because the point of the first release
 --    of an engine like this is that nothing changes: the pipeline does not
 --    reprice, freight does not move, quotes hold for the same month. The
 --    exceptions on top are what the engine is for, and each one carries the
