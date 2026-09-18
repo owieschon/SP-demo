@@ -3,7 +3,7 @@
 Four questions, asked every morning in every parts business: what do we need
 to buy, how many, who from, and by when. Nobody should have to hold the answer
 in their head, because every input is already in the database. Migration
-`0022_procurement.sql` works it out, `db/seed.d/80_procurement.sql` shapes the
+`0029_procurement.sql` works it out, `db/seed.d/80_procurement.sql` shapes the
 invented world so the page has something real to show, and `/procurement`
 renders it.
 

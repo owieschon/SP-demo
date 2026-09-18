@@ -455,13 +455,14 @@ describe('undo', () => {
 describe('the run record', () => {
 	it('has one shape for every agent, from the tables the features already write', async () => {
 		const sources = await runSources(db, ADMIN);
-		// Four sources are here; the procurement desk's own table is not, which
-		// the log says rather than pretending.
+		// Every source is here, the procurement desk's own table included
+		// since 0029. The log reads the tables that exist rather than a list
+		// written down once.
 		expect(sources.desk).toBe(true);
 		expect(sources.assistant).toBe(true);
 		expect(sources.mcp_calls).toBe(true);
 		expect(sources.automation).toBe(true);
-		expect(sources.purchase).toBe(false);
+		expect(sources.purchase).toBe(true);
 
 		const runs = await listRuns(db, ADMIN, { limit: 100 });
 		expect(runs.length).toBeGreaterThan(0);
