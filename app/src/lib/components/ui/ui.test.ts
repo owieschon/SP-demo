@@ -4,10 +4,12 @@
   footer says, how the command palette ranks what a person typed, and where
   the highlight goes on an arrow key.
 
-  The parts that are the platform's (a modal <dialog>'s focus trap and its
-  Escape key) are not testable here and were checked in a real browser
-  instead; see docs/design-system.md.
+  A modal <dialog>'s focus trap is the platform's and is checked in a real
+  browser; see docs/design-system.md. Its Escape key was assumed to be the
+  platform's too, and that assumption shipped a palette nobody could put
+  down, so the two invariants behind that bug are held here instead.
 */
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { ariaSortValue, nextSortValue, rowCountLine, sortSearch } from './table';
 import { isBackdropClick, moveHighlight } from './dialog';
@@ -150,5 +152,39 @@ describe('the command palette', () => {
 		const groups = groupEntries(matchEntries('', entries));
 		expect(groups.map((group) => group.kind)).toEqual(['action', 'screen', 'account', 'part']);
 		expect(groups[1].entries.map((entry) => entry.id)).toEqual(['b', 'c']);
+	});
+});
+
+/*
+  Two things about Drawer that are markup and stylesheet rather than
+  arithmetic, and that a person cannot see going wrong until the app is in
+  front of them. Both of these were real: the palette drew itself over every
+  screen, all the time, and could not be dismissed.
+*/
+describe('the drawer, where CSS and the platform meet', () => {
+	const source = readFileSync(
+		new URL('./Drawer.svelte', import.meta.url),
+		'utf8'
+	);
+
+	it('never sets display on a centred dialog without scoping it to open', () => {
+		// The browser hides a closed dialog with `display: none`. Any display
+		// rule here outranks that, so an unscoped one leaves the panel on the
+		// page forever, with no backdrop and no way to close it, because
+		// closing something that was never hidden changes nothing you can see.
+		const rules = source.match(/dialog\.center[^{]*\{[^}]*\}/g) ?? [];
+		expect(rules.length).toBeGreaterThan(0);
+		for (const rule of rules) {
+			if (/(^|[^-])display\s*:/.test(rule)) {
+				expect(rule, rule).toMatch(/dialog\.center\[open\]/);
+			}
+		}
+	});
+
+	it('closes itself on Escape rather than trusting the platform to', () => {
+		// Measured in Chrome: a modal dialog does not always fire `cancel` on
+		// Escape, and when it does not, the panel stays up.
+		expect(source).toMatch(/onkeydown=/);
+		expect(source).toMatch(/event\.key === 'Escape'/);
 	});
 });
