@@ -520,7 +520,8 @@ async function agreementLeak(tx: Tx, key: string | null): Promise<LeakDetail> {
 		note:
 			'These are the lines the figure is a sum over. The price is the price that was billed and the cost is ' +
 			'the cost carried on the line, which is the cost that applied the day it was posted.',
-		rows: lines.map((l) => ({
+		rows: lines.map((l, i) => ({
+			key: `${l.invoice_no}-${i}`,
 			ref: l.invoice_no,
 			on: l.posted_on,
 			label: itemNo,
@@ -623,6 +624,7 @@ async function freightLeak(tx: Tx, key: string | null): Promise<LeakDetail> {
 			'The subtotal is what decided the band and whether the order shipped free. An invoice with no shortfall ' +
 			'is left in, so the rows add up to the figure rather than only supporting it.',
 		rows: invoices.map((i) => ({
+			key: i.invoice_no,
 			ref: i.invoice_no,
 			on: i.posted_on,
 			label: `Ships free over $${Number(i.free_over).toFixed(0)}`,
@@ -714,7 +716,8 @@ async function partLeak(tx: Tx, key: string | null): Promise<LeakDetail> {
 		note:
 			'Every line sold since the revision, with the price it went out at and the cost it carried. The cost on ' +
 			'the line is the cost that applied the day it was posted, which is why the rise shows up here at all.',
-		rows: lines.map((l) => ({
+		rows: lines.map((l, i) => ({
+			key: `${l.invoice_no}-${i}`,
 			ref: l.invoice_no,
 			on: l.posted_on,
 			label: l.customer_no,
@@ -878,7 +881,8 @@ export async function readRevenue(
 			note:
 				'Every line that made up this account revenue in the month. A credit memo line is negative, which ' +
 				'is how a return takes revenue back off.',
-			rows: lines.map((l) => ({
+			rows: lines.map((l, i) => ({
+				key: `${l.invoice_no}-${i}`,
 				ref: l.invoice_no,
 				on: l.posted_on,
 				label: l.item_no,

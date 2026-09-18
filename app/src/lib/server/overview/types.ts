@@ -154,6 +154,8 @@ export interface RiskSection {
 
 /** One row of evidence: the thing that produced a number. */
 export interface EvidenceRow {
+	/** Unique in its list. An invoice number can appear twice, one line each. */
+	key: string;
 	/** What to show in the first column: an invoice number, a run key, a date. */
 	ref: string;
 	on: string;
