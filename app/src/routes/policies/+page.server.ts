@@ -19,6 +19,7 @@ import {
 	allocationSummary,
 	listPolicies,
 	listPolicyTypes,
+	mayChangePolicy,
 	resolvePolicies,
 	traceFor,
 	type PolicyContext
@@ -64,6 +65,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			onDate: context.onDate ?? ''
 		},
 		role: user.role,
+		// The change_policy authority (migration 0031), not the person's role
+		// title. The database is asked the same question again on the write.
+		mayChange: await mayChangePolicy(db, user.id),
 		// Fresh ids for this page load. Each form makes a new one per submit as
 		// well, so a second try is a second write and not a replay of the first.
 		requestIds: { set: randomUUID(), end: randomUUID() },
@@ -117,14 +121,11 @@ export const actions: Actions = {
 				message: `${type.name} is not something the app can change yet.`
 			} satisfies Answer);
 		}
-		if (user.role !== 'admin' && user.role !== type.editRole) {
+		if (!(await mayChangePolicy(db, user.id))) {
 			return fail(403, {
 				from: 'set',
 				ok: false,
-				message:
-					type.editRole === 'admin'
-						? `Changing ${type.name} is for admins.`
-						: `Changing ${type.name} is for ${type.editRole.replace('_', ' ')} and admins.`
+				message: `Changing ${type.name} needs the change policy authority.`
 			} satisfies Answer);
 		}
 

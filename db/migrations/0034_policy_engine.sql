@@ -29,7 +29,8 @@
 --   nl.resolve_policy()    the value AND the explanation
 --   nl.resolve_policies()  many types in one call, for a screen or an agent
 --   nl.policy_trace()      every candidate and why each one lost
---   nl.set_policy()        the write, validated against the type's shape
+--   nl.set_policy()        the write, gated on the change_policy authority
+--                          and validated against the type's shape
 --   nl.end_policy()        stop an override without losing the history
 --
 --   nl.data_dictionary     every field, what it means, its unit, where it
@@ -306,7 +307,8 @@ create table nl.policy_types (
   -- hard-coded reader has not been moved yet is shown and not editable,
   -- because editing it would change a number on screen and nothing else.
   editable      boolean not null default true,
-  -- The role that may change it. An admin may change anything editable.
+  -- Who normally owns this policy. Shown on the page, and not a gate: the
+  -- change_policy authority (migration 0031) decides who may change one.
   edit_role     text not null default 'admin'
                   check (edit_role in ('admin', 'operations', 'account_manager')),
   created_at    timestamptz not null default now(),
@@ -925,13 +927,24 @@ end $$;
 -- Writes
 -- ---------------------------------------------------------------------------
 
--- Who may change what. An admin may change anything that is editable at all;
--- anyone else must hold exactly the role the type names. Kept as a function
--- so the rule is in one place and a test can read it.
-create function nl.policy_role_allows(p_edit_role text, p_actor_role text) returns boolean
-language sql immutable
+/*
+ * Who may change a policy: whoever holds the change_policy authority, and an
+ * admin.
+ *
+ * That authority is migration 0031's, not a second mechanism invented here.
+ * It is the same yes-or-no that decides who may edit the roles tables, which
+ * is the right company: what a person may approve and what the business
+ * charges are both statements about how the place runs.
+ *
+ * The type's edit_role stays on the catalog as a statement of who normally
+ * owns each policy, and the page shows it. It is not a second gate: two gates
+ * on one door is how somebody ends up unable to change a number nobody else
+ * owns either.
+ */
+create function nl.may_change_policy() returns boolean
+language sql stable
 set search_path = ''
-as $$ select p_actor_role = 'admin' or p_actor_role = p_edit_role $$;
+as $$ select nl.is_admin() or nl.i_have_authority('change_policy') $$;
 
 -- Set a policy, or change one that is already there.
 create function nl.set_policy(
@@ -973,11 +986,8 @@ begin
     raise exception '% is not something the app can change yet.', v_type.name
       using errcode = 'NL422';
   end if;
-  if not nl.policy_role_allows(v_type.edit_role, v_actor.role) then
-    raise exception '%', case when v_type.edit_role = 'admin'
-        then format('Changing %s is for admins.', v_type.name)
-        else format('Changing %s is for %s and admins.', v_type.name,
-                    replace(v_type.edit_role, '_', ' ')) end
+  if not nl.may_change_policy() then
+    raise exception 'Changing %s needs the change_policy authority.', v_type.name
       using errcode = 'NL403';
   end if;
 
@@ -1065,11 +1075,12 @@ begin
     raise exception 'Policy % does not exist.', p_policy_id using errcode = 'NL404';
   end if;
   select * into v_type from nl.policy_types where key = v_policy.policy_type;
-  if not v_type.editable or not nl.policy_role_allows(v_type.edit_role, v_actor.role) then
-    raise exception '%', case when v_type.edit_role = 'admin'
-        then format('Changing %s is for admins.', v_type.name)
-        else format('Changing %s is for %s and admins.', v_type.name,
-                    replace(v_type.edit_role, '_', ' ')) end
+  if not v_type.editable then
+    raise exception '%s is not something the app can change yet.', v_type.name
+      using errcode = 'NL422';
+  end if;
+  if not nl.may_change_policy() then
+    raise exception 'Changing %s needs the change_policy authority.', v_type.name
       using errcode = 'NL403';
   end if;
 
@@ -1793,7 +1804,7 @@ to nl_app, nl_readonly;
 
 grant execute on function
   nl.policy_scope_problem(text, text),
-  nl.policy_role_allows(text, text),
+  nl.may_change_policy(),
   nl.set_policy(bigint, text, text, text, jsonb, date, date, int, text, timestamptz, text),
   nl.end_policy(bigint, date, timestamptz, text)
 to nl_app;

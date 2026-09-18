@@ -27,7 +27,7 @@
 -- ones that collect on their own carrier account, the two with the most open
 -- order value, the pipe family), so the same story comes out at every world
 -- size.
-create or replace function nl_seed.extra_90_policies() returns void
+create or replace function nl_seed.extra_93_policies() returns void
 language plpgsql
 set search_path = ''
 as $$

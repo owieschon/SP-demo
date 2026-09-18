@@ -31,9 +31,9 @@
 
 	const answer = (from: string) => (form && form.from === from ? form : null);
 	const chosen = $derived(data.chosen);
-	const canEdit = $derived(
-		chosen !== null && chosen.editable && (data.role === 'admin' || data.role === chosen.editRole)
-	);
+	// Whether the form is drawn at all: the change_policy authority, and a
+	// policy whose old hard-coded reader has actually moved.
+	const canEdit = $derived(chosen !== null && chosen.editable && data.mayChange);
 	const hasContext = $derived(data.context.customerNo !== '' || data.context.itemNo !== '');
 </script>
 
@@ -123,10 +123,11 @@
 						<dd>{chosen.scopes.join(', ').replace(/_/g, ' ')}</dd>
 					</div>
 					<div>
-						<dt>Who may change it</dt>
+						<dt>Normally owned by</dt>
 						<dd>
 							{#if chosen.editable}
-								{chosen.editRole.replace('_', ' ')} and admins
+								{chosen.editRole.replace('_', ' ')}
+								<span class="faint">changing one needs the change policy authority</span>
 							{:else}
 								nobody yet
 							{/if}
@@ -204,9 +205,9 @@
 					{/key}
 				{:else}
 					<p class="empty">
-						{chosen.editable
-							? `Changing this one is for ${chosen.editRole.replace('_', ' ')} and admins.`
-							: 'This policy is not editable yet: the code that reads it still has the number written in.'}
+						{!chosen.editable
+							? 'This policy is not editable yet: the code that reads it still has the number written in.'
+							: 'Changing a policy needs the change policy authority, which you do not hold.'}
 					</p>
 				{/if}
 			{/await}

@@ -329,6 +329,18 @@ export async function allocationMoves(db: Db, userId: number, limit = 40): Promi
 	}));
 }
 
+/**
+ * May this person change a policy at all? The answer is the change_policy
+ * authority (migration 0031), asked in the database so the page and the write
+ * cannot disagree about it.
+ */
+export async function mayChangePolicy(db: Db, userId: number): Promise<boolean> {
+	const [row] = await db.asUser(userId, (tx) =>
+		tx.sql<{ may: boolean }>`select nl.may_change_policy() as may`
+	);
+	return row?.may === true;
+}
+
 /** How many open lines there are, and how many sit behind a priority. */
 export async function allocationSummary(
 	db: Db,
