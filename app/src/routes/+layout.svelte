@@ -85,6 +85,19 @@
 		}
 		if (route === '/quotes/[id=id]') return [{ label: `Quote SQ-${page.params.id}`, href: null }];
 		if (route === '/workspace') return [{ label: 'Approval queue', href: null }];
+		if (route === '/context') return [{ label: 'Context', href: null }];
+		if (route === '/context/conflicts') {
+			return [
+				{ label: 'Context', href: '/context' },
+				{ label: 'Conflicts and queries', href: null }
+			];
+		}
+		if (route === '/context/[kind]/[id]') {
+			return [
+				{ label: 'Context', href: '/context' },
+				{ label: page.params.id ?? 'Record', href: null }
+			];
+		}
 		if (route === '/desk') return [{ label: 'Order desk', href: null }];
 		if (route === '/desk/[id=id]') {
 			return [

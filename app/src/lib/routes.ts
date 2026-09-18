@@ -52,6 +52,13 @@ export const routes = {
 	operations: () => '/operations',
 	forecast: () => '/operations/forecast',
 	warehouse: (itemNo?: string) => (itemNo ? `/warehouse?part=${seg(itemNo)}` : '/warehouse'),
+	/** What the agents know, where it came from, and what is still missing. */
+	context: () => '/context',
+	/** The queue where a person decides between two claims that disagree. */
+	contextConflicts: () => '/context/conflicts',
+	/** Everything we hold about one customer, vendor, part or contact. */
+	contextFor: (kind: 'customer' | 'vendor' | 'item' | 'contact', id: string) =>
+		`/context/${seg(kind)}/${seg(id)}`,
 	settings: () => '/settings',
 	settingsMcp: () => '/settings/mcp',
 	signin: () => '/signin',
