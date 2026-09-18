@@ -571,20 +571,63 @@ describe('when the mill is behind', () => {
 // ---------------------------------------------------------------------------
 
 describe('the read path', () => {
-	it('answers in single-digit milliseconds', async () => {
+	/**
+	 * The number this test cares about is the DATABASE's own execution time,
+	 * read out of explain (analyze, buffers) the way docs/sql.md does it
+	 * everywhere else. A wall-clock measurement from JavaScript also counts
+	 * the transaction, the WebAssembly boundary and whatever else is running
+	 * on the machine, which on a loaded laptop is most of the number and none
+	 * of the claim. The claim is that serving a bundle is one index lookup and
+	 * one jsonb read.
+	 */
+	async function executionMs(sql: string, params: readonly (string | number)[]): Promise<{ ms: number; plan: string }> {
+		const rows = await db.asUser(DANA, (tx) =>
+			tx.query<Record<string, string>>(`explain (analyze, buffers) ${sql}`, params)
+		);
+		// The one column explain returns is called "QUERY PLAN".
+		const plan = rows.map((row) => Object.values(row)[0]).join('\n');
+		const match = /Execution Time: ([\d.]+) ms/.exec(plan);
+		expect(match).not.toBeNull();
+		return { ms: Number(match![1]), plan };
+	}
+
+	it('serves a bundle in single-digit milliseconds', async () => {
+		// Warm the plan cache and the page cache first, so the figure is the
+		// steady-state one an agent actually sees rather than a first read.
+		for (let i = 0; i < 5; i++) await contextFor(db, DANA, rich, 'quoting');
+
+		const served = await executionMs(`select nl.context_for($1, $2, 'quoting')`, [rich.kind, rich.id]);
+		expect(served.ms).toBeLessThan(10);
+	});
+
+	it('finds the current bundle by index, never by scanning', async () => {
+		// The index behind the claim: context_bundles_current_idx, unique on
+		// (subject_kind, subject_id, purpose) where is_current. A sequential
+		// scan here would still answer in milliseconds on a small world and
+		// would not on a real one, so the plan is what is asserted.
+		const lookup = await executionMs(
+			`select b.payload from nl.context_bundles b
+			 where b.subject_kind = $1 and b.subject_id = $2 and b.purpose = 'quoting' and b.is_current`,
+			[rich.kind, rich.id]
+		);
+		expect(lookup.plan).toMatch(/Index (Only )?Scan/);
+		expect(lookup.plan).not.toMatch(/Seq Scan on context_bundles/);
+		expect(lookup.ms).toBeLessThan(10);
+	});
+
+	it('still answers from JavaScript in a reasonable round trip', async () => {
 		const times: number[] = [];
-		for (let i = 0; i < 40; i++) {
+		for (let i = 0; i < 20; i++) {
 			const started = performance.now();
 			await contextFor(db, DANA, rich, 'quoting');
 			times.push(performance.now() - started);
 		}
 		times.sort((a, b) => a - b);
 		const median = times[Math.floor(times.length / 2)];
-		// PGlite is Postgres compiled to WebAssembly and is slower than the
-		// real thing, so this is a generous ceiling: the claim it holds to is
-		// that serving a bundle is one index lookup and a jsonb read, not that
-		// WebAssembly is fast.
-		expect(median).toBeLessThan(40);
+		// Deliberately loose. PGlite is Postgres compiled to WebAssembly and
+		// every call here opens its own transaction; this is a sanity bound on
+		// the round trip, not the performance claim.
+		expect(median).toBeLessThan(250);
 		expect(dictionary.size).toBeGreaterThan(10);
 	});
 });
