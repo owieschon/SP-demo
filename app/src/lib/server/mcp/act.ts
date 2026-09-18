@@ -83,8 +83,12 @@ export interface MayActAnswer {
 	allowed: boolean;
 	reason: string;
 	authority: string;
+	/** What this call is worth, which is what the two limits are compared to. */
 	amount: number;
+	/** The person's own ceiling. Null means no ceiling, or no grant at all. */
 	ceiling: number | null;
+	/** The company's cap from the policy engine. Null when nobody has set one. */
+	policyCap: number | null;
 }
 
 /**
@@ -102,7 +106,14 @@ export async function mayAct(
 ): Promise<MayActAnswer> {
 	const [row] = await db.asUser(userId, (tx) =>
 		tx.sql<{
-			result: { allowed: boolean; reason: string; authority: string; amount: string | number; ceiling: string | number | null };
+			result: {
+				allowed: boolean;
+				reason: string;
+				authority: string;
+				amount: string | number;
+				ceiling: string | number | null;
+				policy_cap: string | number | null;
+			};
 		}>`
 			select nl.mcp_may_act(${userId}, ${tool}, ${JSON.stringify(toolInput)}::jsonb) as result`
 	);
@@ -112,7 +123,10 @@ export async function mayAct(
 		reason: r.reason ?? '',
 		authority: r.authority,
 		amount: Number(r.amount ?? 0),
-		ceiling: r.ceiling === null ? null : Number(r.ceiling)
+		// A numeric comes back as a string from the driver, and null means "no
+		// limit" rather than zero, so neither can go through Number() blindly.
+		ceiling: r.ceiling === null || r.ceiling === undefined ? null : Number(r.ceiling),
+		policyCap: r.policy_cap === null || r.policy_cap === undefined ? null : Number(r.policy_cap)
 	};
 }
 

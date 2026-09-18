@@ -50,11 +50,20 @@ There is no MCP-shaped permission any more.
   than they would see signed in.
 - **The person's authority and its ceiling.** Before any change,
   `nl.mcp_may_act` asks `nl.may_approve` for `approve_agent_proposal` at the
-  value at risk. That one call reads the grant, its effective dates **and the
-  policy engine's cap** (`nl.authority_limit_override` resolves through
-  `nl.resolve_policy`). A request above the ceiling is refused with a message
-  naming the ceiling and the amount. It is never quietly turned back into a
-  proposal: the agent asked to act, and the honest answer is that it may not.
+  value at risk, which reads the grant and its effective dates.
+- **The policy engine's cap.** The same function asks
+  `nl.resolve_policy('agents.approval_threshold', ...)`, which is the policy
+  type migration 0034 wrote for exactly this question ("the value up to which
+  an agent may act without a person") and which can be set per account. Its
+  built-in default is 0 and its own note reads "nothing yet", so an answer
+  that came from the built-in default is read as unwired rather than as zero
+  dollars; the test is `policy_id`, which is null when nothing matched.
+  **Nothing in this database sets one today**, so the person's own ceiling is
+  what binds until somebody adds a policy on `/policies`.
+
+  Either limit refuses with a message naming its own figure and the amount.
+  Neither one quietly turns the call back into a proposal: the agent asked to
+  act, and the honest answer is that it may not.
 - **The pause switch.** A live pause on `mcp` (or on `all`) refuses every
   call that would change anything, at every level including suggest. Anybody
   signed in can pull it; only an admin can let it go.
@@ -67,6 +76,19 @@ There is no MCP-shaped permission any more.
   is no check the in-app path makes that this path skips.
 - **The day's cap and the log.** 200 tool calls per token per day, counted in
   the database, and a row in `nl.mcp_calls` for every call.
+
+### A note on the seam in migration 0031
+
+`nl.authority_limit_override` was left in 0031 as the place the policy engine
+would eventually cap an authority's limit, and it is still the null stub. It
+cannot work as written, for two reasons worth recording: 0031 runs before
+0034, so its own feature detection of `nl.resolve_policy` always fails on a
+fresh build; and it looks a policy up by the authority's bare name, while
+`nl.policy_types.key` must be dotted, so `approve_agent_proposal` could never
+be a policy type even with the function replaced. Fixing it means changing a
+function every `nl.may_approve` call in the app goes through, which is a
+separate job. `nl.mcp_may_act` asks the policy engine directly instead, which
+keeps the blast radius on this path.
 
 ### A note on the scopes
 
@@ -276,12 +298,14 @@ refusal before a write rather than after:
 1. **the brake.** `nl.agent_paused('mcp')`, asked of the database rather than
    of the identity read at the start of the request, because somebody may have
    pulled it in the seconds since;
-2. **the person's authority.** `nl.mcp_may_act`, which is one call to
-   `nl.may_approve` for `approve_agent_proposal` at
-   `nl.mcp_action_amount(tool, input)`. That amount is the commitment's
-   `committed_value` for a commitment tool and zero for the rest, because
-   those move no money. Refused above the ceiling, with the ceiling and the
-   amount in the message;
+2. **the person's authority and the company's cap.** `nl.mcp_may_act` asks
+   two things of what is already there: `nl.may_approve` for
+   `approve_agent_proposal` at `nl.mcp_action_amount(tool, input)`, and
+   `nl.resolve_policy('agents.approval_threshold', ...)` for the account the
+   call is about. That amount is the commitment's `committed_value` for a
+   commitment tool and zero for the rest, because those move no money.
+   Refused above either limit, with that limit's figure and the amount in the
+   message;
 3. **the proposal.** The change is still written down first, through
    `mcp/propose.ts`, because that is what validates the input against the
    gated tool's own schema and captures the row version the write is held to;
@@ -375,7 +399,9 @@ drops the rung back automatically (`nl.demote_agents_on_sample`).
   at risk. A person with no such grant cannot have an agent act for them at
   all, whatever their token's level says, and a person with a ceiling of
   10,000 cannot have one act on a commitment worth more;
-- **the policy engine's cap**, which resolves through the same call;
+- **the policy engine's cap**, `agents.approval_threshold`, company wide or
+  per account, asked in the same function. Unset in this database, so it is a
+  lever rather than a live limit today;
 - **the undo window** at `act with review`, and the whole action trail on
   `/agents` at both acting levels;
 - **the pause switch**, which anybody signed in can pull and which refuses

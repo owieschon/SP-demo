@@ -81,35 +81,33 @@ as $$
 $$;
 
 -- ---------------------------------------------------------------------------
--- 2. The policy engine's cap, actually wired
+-- 2. A note on the seam migration 0031 left, and why this is not it
 -- ---------------------------------------------------------------------------
 
--- Migration 0031 left a seam for this and feature-detected nl.resolve_policy
--- to fill it, but 0031 runs BEFORE 0034, so on a fresh build the detection
--- fails and the override stays the null stub. The seam has therefore never
--- carried anything. It is wired here, now that the policy engine exists, with
--- two fixes to what 0031 would have installed:
+-- 0031 left nl.authority_limit_override as a seam for the policy engine and
+-- feature-detected nl.resolve_policy to fill it. That seam cannot work as
+-- written, and it is worth saying why rather than quietly leaving it:
 --
---   * the context key is 'on_date', which is what nl.resolve_policy reads.
---     0031 wrote 'on', so the date would have been ignored;
---   * it only asks about an authority that IS a policy type. nl.policy_answer
---     raises NL404 for a type it does not know, and every nl.may_approve call
---     in the app goes through here, so asking blind would turn one unknown
---     key into an app-wide failure.
+--   * 0031 runs before 0034, so on a fresh build the detection fails and the
+--     override stays the null stub. It has never carried anything;
+--   * more fundamentally, it looks a policy up by the AUTHORITY's own name,
+--     and nl.policy_types.key must be dotted
+--     (check key ~ '^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$'). A bare name like
+--     'approve_agent_proposal' can never be a policy type, so the lookup
+--     could never match even with the function replaced.
 --
--- With no policy row for an authority this returns null, meaning "the policy
--- engine has nothing to say", and nl.authority_limit falls back to the grant,
--- exactly as before.
-create or replace function nl.authority_limit_override(p_user_id int, p_authority text, p_on date)
-returns numeric
-language sql stable
-set search_path = ''
-as $$
-  select (nl.resolve_policy(
-            p_authority,
-            jsonb_build_object('user_id', p_user_id, 'on_date', p_on)) #>> '{limit}')::numeric
-  where exists (select 1 from nl.policy_types t where t.key = p_authority)
-$$;
+-- Fixing that means changing a function every nl.may_approve call in the app
+-- goes through, and is not this migration's business. What IS this
+-- migration's business is that the policy engine's cap binds on the MCP path,
+-- and there is already a policy type that says exactly the right thing:
+-- 'agents.approval_threshold', "The value up to which an agent may act
+-- without a person". nl.mcp_may_act below consults it.
+--
+-- Its built-in default is 0 and its own note in 0034 reads "nothing yet". So
+-- a 0 that came from the built-in default means unwired, not zero dollars,
+-- and the only way to tell is that nl.resolve_policy answers with
+-- policy_id null when nothing matched. That is the test used below, which is
+-- why nothing changes until somebody actually sets a policy.
 
 -- ---------------------------------------------------------------------------
 -- 3. Two more kinds of MCP work, so the ladder has a rung to stand on
@@ -312,48 +310,113 @@ as $$
   end
 $$;
 
+-- Which account a tool call is about, so the policy engine can answer for that
+-- account rather than only for the company. A commitment tool names it through
+-- its commitment; the additive tools name it outright; the rest are not about
+-- one account at all, and an empty answer means the company default wins.
+create function nl.mcp_action_customer(p_tool text, p_input jsonb) returns text
+language sql stable
+set search_path = ''
+as $$
+  select case
+    when p_tool in ('record_outcome', 'set_confidence') then
+      coalesce((select c.customer_no
+                from nl.commitments c
+                where c.id = (p_input ->> 'commitment_id')::bigint), '')
+    when p_tool in ('add_note', 'add_next_step') then coalesce(p_input ->> 'customer_no', '')
+    else ''
+  end
+$$;
+
+-- The policy engine's own cap for this call, or null when nobody has set one.
+--
+-- 'agents.approval_threshold' is the policy type 0034 wrote for exactly this
+-- question. Its built-in default is 0 and its note says "nothing yet", so a
+-- built-in answer is read as "unwired" rather than as "zero dollars"; the
+-- difference is policy_id, which nl.policy_answer sets to null when nothing
+-- matched. Once a policy row exists at any scope, the number is real and it
+-- binds, at that account or company wide, exactly as every other policy does.
+create function nl.mcp_policy_cap(p_tool text, p_input jsonb) returns numeric
+language sql stable
+set search_path = ''
+as $$
+  select case
+    when answer.a -> 'policy_id' is null or answer.a ->> 'policy_id' is null then null
+    else (answer.a ->> 'value')::numeric
+  end
+  from (select nl.resolve_policy(
+                 'agents.approval_threshold',
+                 jsonb_build_object(
+                   'customer_no', nl.mcp_action_customer(p_tool, p_input),
+                   'on_date', nl.today()::text)) as a) answer
+$$;
+
 -- May this person let an agent act for them, on this, without approving it?
 --
--- One check, and it is the roles model's own: 'approve_agent_proposal' is the
--- authority migration 0031 defines as "run what the assistant proposed", and
--- running a gated tool from a coding agent is exactly that. nl.may_approve
--- reads the grant, its effective dates and the policy engine's cap in one
--- call, so there is nothing here for the MCP path to skip.
+-- Two questions, both asked of something that already existed:
 --
--- The answer names the ceiling, because "refused" without the number is not
--- something anybody can act on. It is never downgraded to a proposal: a token
--- asked to act and could not, and saying so is the honest answer.
+--   1. the PERSON's authority. 'approve_agent_proposal' is the authority
+--      migration 0031 defines as "run what the assistant proposed", and
+--      running a gated tool from a coding agent is exactly that.
+--      nl.may_approve reads the grant and its effective dates in one call;
+--   2. the COMPANY's cap, from the policy engine, which can be set per
+--      account. Null when nobody has set one, which is where this database
+--      stands today.
+--
+-- The answer names whichever one refused, with its number, because "refused"
+-- without the figure is not something anybody can act on. It is never
+-- downgraded to a proposal: a token asked to act and could not, and saying so
+-- is the honest answer.
 create function nl.mcp_may_act(p_user_id int, p_tool text, p_input jsonb) returns jsonb
 language sql stable
 set search_path = ''
 as $$
+  with asked as (
+    select nl.mcp_action_amount(p_tool, p_input) as amount,
+           nl.mcp_policy_cap(p_tool, p_input)    as policy_cap
+  ),
+  judged as (
+    select a.amount,
+           a.policy_cap,
+           nl.has_authority(p_user_id, 'approve_agent_proposal') as holds,
+           nl.authority_limit(p_user_id, 'approve_agent_proposal') as ceiling,
+           nl.may_approve(p_user_id, 'approve_agent_proposal', a.amount) as person_ok,
+           (a.policy_cap is null or a.amount <= a.policy_cap) as policy_ok,
+           (select u.full_name from nl.users u where u.id = p_user_id) as who
+    from asked a
+  )
   select jsonb_build_object(
-           'allowed', nl.may_approve(p_user_id, 'approve_agent_proposal', amt.amount),
+           'allowed', j.person_ok and j.policy_ok,
            'authority', 'approve_agent_proposal',
-           'amount', amt.amount,
-           'holds', nl.has_authority(p_user_id, 'approve_agent_proposal'),
-           'ceiling', case
-             when not nl.has_authority(p_user_id, 'approve_agent_proposal') then null
-             else nl.authority_limit(p_user_id, 'approve_agent_proposal')
-           end,
+           'amount', j.amount,
+           'holds', j.holds,
+           -- Null means "no ceiling" here as it does everywhere else in
+           -- nl.authority_grants, and also means "no grant"; 'holds' tells
+           -- the two apart.
+           'ceiling', case when j.holds then j.ceiling end,
+           'policy_cap', j.policy_cap,
            'reason', case
-             when nl.may_approve(p_user_id, 'approve_agent_proposal', amt.amount) then ''
-             when not nl.has_authority(p_user_id, 'approve_agent_proposal') then
-               (select u.full_name from nl.users u where u.id = p_user_id)
-               || ' does not hold approve_agent_proposal, so a token acting as them cannot make'
-               || ' this change. It stays a proposal.'
+             when j.person_ok and j.policy_ok then ''
+             when not j.holds then
+               j.who || ' does not hold approve_agent_proposal, so a token acting as them cannot'
+                     || ' make this change. Grant it on /people, or approve the change yourself.'
+             when not j.person_ok then
+               j.who || ' may let an agent act up to '
+                     || to_char(j.ceiling, 'FM999,999,999.00')
+                     || ', and this is worth ' || to_char(j.amount, 'FM999,999,999.00')
+                     || '. Raise the ceiling on /people or approve it yourself.'
              else
-               (select u.full_name from nl.users u where u.id = p_user_id)
-               || ' may let an agent act up to '
-               || to_char(nl.authority_limit(p_user_id, 'approve_agent_proposal'), 'FM999,999,999.00')
-               || ', and this is worth ' || to_char(amt.amount, 'FM999,999,999.00')
-               || '. Raise the ceiling on /people or approve it yourself.'
+               'The company lets an agent act up to '
+                     || to_char(j.policy_cap, 'FM999,999,999.00')
+                     || ' (agents.approval_threshold), and this is worth '
+                     || to_char(j.amount, 'FM999,999,999.00')
+                     || '. Change the policy on /policies or approve it yourself.'
            end)
-  from (select nl.mcp_action_amount(p_tool, p_input) as amount) amt
+  from judged j
 $$;
 
 comment on function nl.mcp_may_act(int, text, jsonb) is
-  'May a token acting as this person make this change without asking? Names the ceiling when not (migration 0044).';
+  'May a token acting as this person make this change without asking? Names the ceiling or the cap when not (migration 0044).';
 
 -- ---------------------------------------------------------------------------
 -- 7. Minting, authenticating, and moving the dial
@@ -558,6 +621,8 @@ grant execute on function
   nl.mcp_work_kind(text),
   nl.mcp_token_autonomy(bigint),
   nl.mcp_action_amount(text, jsonb),
+  nl.mcp_action_customer(text, jsonb),
+  nl.mcp_policy_cap(text, jsonb),
   nl.mcp_may_act(int, text, jsonb),
   nl.set_mcp_token_autonomy(bigint, text, date, text, text)
 to nl_app;
