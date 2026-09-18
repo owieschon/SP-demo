@@ -267,8 +267,11 @@ describe('the protocol', () => {
 		expect(answer.json.result.serverInfo.name).toBe(SERVER_NAME);
 		expect(answer.json.result.protocolVersion).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 		expect(answer.json.result.capabilities.tools).toBeTruthy();
-		// The instructions say what the server will and will not do.
+		// The instructions say what the server will and will not do, AT THIS
+		// TOKEN'S LEVEL. Telling an agent it can only propose when it can act,
+		// or the other way round, makes it plan around a rule that is not there.
 		expect(answer.json.result.instructions).toContain('propose');
+		expect(answer.json.result.instructions).toContain('ceiling');
 	});
 
 	it('answers ping', async () => {
