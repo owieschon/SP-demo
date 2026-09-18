@@ -26,6 +26,10 @@ import { sendApproved, type Allowlist } from '../desk/send.ts';
 import { approveDraft, markFailed, rejectDraft } from '../desk/writes.ts';
 import type { RunResult as RuleRunResult } from '$lib/automation/types';
 import { runRule, testRule } from '../automation/rules.ts';
+// The entity an outside coding agent's change is recorded against, so the undo
+// below can recognise one. Imported rather than written out again, because a
+// second copy of the string is a second thing to keep in step.
+import { MCP_ACTION_ENTITY } from '../mcp/act.ts';
 import { classifyFailure, recordDegradation, type DegradeReason } from './degrade.ts';
 import { firstFailure, type GuardrailInput } from './guardrails.ts';
 import { planRun, readAutonomy } from './ladder.ts';
@@ -646,6 +650,126 @@ export async function undoAction(
 				status: done.status,
 				what: steps.length > 0 ? `${steps.length} next step(s) closed.` : 'Nothing was left to close.'
 			};
+		}
+
+		if (claim.entity === MCP_ACTION_ENTITY) {
+			/*
+			  A change an outside coding agent made at act-with-review
+			  (mcp/act.ts, migration 0044). What can be reversed depends on the
+			  tool, and the honest answer is that only some of it can:
+
+			    set_confidence   the number before it is in the action's detail,
+			                     so put it back through the same checked
+			                     function a person would use;
+			    add_next_step    close the step, the same undo the automation
+			                     rules get;
+			    everything else  not reversible by rule. A note cannot be
+			                     unwritten, an outcome settles a commitment, an
+			                     applied export snapshot replaced the live open
+			                     order lines, and a saved rule has a history of
+			                     its own. Each of those is a person's job, and
+			                     saying so is better than a half reversal that
+			                     looks complete.
+
+			  The window still closed the same way for all of them:
+			  nl.claim_agent_undo refused before we got here if it had passed.
+			*/
+			const detail = claim.detail as {
+				tool?: string;
+				input?: Record<string, unknown>;
+				before?: Record<string, unknown> | null;
+				result?: Record<string, unknown> | null;
+			};
+			const tool = String(detail.tool ?? '');
+
+			if (tool === 'set_confidence') {
+				const commitmentId = Number((detail.input ?? {}).commitment_id);
+				// The figure as it stood before the change, read by act.ts before
+				// it changed anything. Without it there is nothing to put back.
+				const was = Number((detail.before ?? {}).confidence ?? NaN);
+				if (!Number.isInteger(commitmentId) || !Number.isInteger(was)) {
+					await finishUndo(db, userId, {
+						actionId: input.actionId,
+						undone: false,
+						irreversible: true,
+						note: 'The confidence before the change was not recorded, so there is nothing to put back. Set it by hand.',
+						requestId: `${input.requestId}-finish`
+					});
+					throw new AppError(
+						422,
+						'NL422',
+						'The confidence before the change was not recorded, so there is nothing to put back. Set it by hand.'
+					);
+				}
+				const [row] = await db.asUser(userId, (tx) =>
+					tx.sql<{ updated_at: Date | string }>`
+						select updated_at from nl.commitments where id = ${commitmentId}`
+				);
+				if (!row) throw new AppError(404, 'NL404', `C-${commitmentId} does not exist any more.`);
+				// The same SQL function the page uses, held to the row as it is
+				// now, so a person who changed it since is not overwritten.
+				await db.asUser(userId, (tx) =>
+					tx.sql`select nl.set_confidence(${commitmentId}, ${was},
+					                                ${new Date(row.updated_at).toISOString()}::timestamptz,
+					                                ${`${input.requestId}-put-back`}, 'ui')`
+				);
+				const done = await finishUndo(db, userId, {
+					actionId: input.actionId,
+					undone: true,
+					note: `Confidence on C-${commitmentId} put back to ${was}%.`,
+					requestId: `${input.requestId}-finish`
+				});
+				return {
+					actionId: input.actionId,
+					status: done.status,
+					what: `Confidence on C-${commitmentId} is back at ${was}%.`
+				};
+			}
+
+			if (tool === 'add_next_step') {
+				const stepId = Number((detail.result ?? {}).next_step_id);
+				const [step] = await db.asUser(userId, (tx) =>
+					tx.sql<{ updated_at: Date | string }>`
+						select updated_at from nl.next_steps
+						where id = ${stepId} and completed_at is null`
+				);
+				if (!step) {
+					const done = await finishUndo(db, userId, {
+						actionId: input.actionId,
+						undone: false,
+						irreversible: true,
+						note: 'That next step is already closed, so there was nothing to take back.',
+						requestId: `${input.requestId}-finish`
+					});
+					return {
+						actionId: input.actionId,
+						status: done.status,
+						what: 'It was already closed.'
+					};
+				}
+				await db.asUser(userId, (tx) =>
+					tx.sql`select nl.complete_next_step(${stepId},
+					                                    ${new Date(step.updated_at).toISOString()}::timestamptz,
+					                                    ${`${input.requestId}-step`}, 'ui')`
+				);
+				const done = await finishUndo(db, userId, {
+					actionId: input.actionId,
+					undone: true,
+					note: 'The next step was closed.',
+					requestId: `${input.requestId}-finish`
+				});
+				return { actionId: input.actionId, status: done.status, what: 'The next step was closed.' };
+			}
+
+			const why = `${tool || 'That change'} is not reversible by rule: put it right in the app. The change itself, and the fact that an agent made it, are on the record.`;
+			await finishUndo(db, userId, {
+				actionId: input.actionId,
+				undone: false,
+				irreversible: true,
+				note: why,
+				requestId: `${input.requestId}-finish`
+			});
+			throw new AppError(422, 'NL422', why);
 		}
 
 		await finishUndo(db, userId, {
