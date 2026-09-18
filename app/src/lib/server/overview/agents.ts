@@ -26,7 +26,38 @@ import { readBoard, readPauses } from '../harness/ladder.ts';
 import { listRefusals, listRuns, runSources, getRun } from '../harness/runs.ts';
 import { LEVEL_LABEL, LEVEL_MEANING, type RunRow } from '../harness/types.ts';
 import { links } from './links.ts';
-import type { AgentRow, AgentSection, Figure, ValueLine } from './types.ts';
+import type { AgentRow, AgentSection, DeskRow, Figure, ValueLine } from './types.ts';
+
+/*
+  What each agent is for, in one line, and the order they belong in. The two
+  desks come first because they are the ones that talk to somebody outside the
+  company, so their trust is the trust that matters most, and they are never
+  added together: they do different work for different counterparties.
+*/
+const AGENT_LABEL: Record<string, { label: string; responsibility: string }> = {
+	order_desk: {
+		label: 'Order desk',
+		responsibility: 'Reads customer email and drafts the reply, the quote or the order status.'
+	},
+	procurement_desk: {
+		label: 'Procurement desk',
+		responsibility: 'Reads vendor email and works out what to buy, how much and by when.'
+	},
+	assistant: {
+		label: 'Assistant',
+		responsibility: 'Answers a question about the database, and proposes a change a person decides.'
+	},
+	automation: {
+		label: 'Automation rules',
+		responsibility: 'Runs the rules somebody set up, every night.'
+	},
+	mcp: {
+		label: 'Outside agents',
+		responsibility: 'An agent connected over the MCP server, working under a scoped token.'
+	}
+};
+
+const AGENT_ORDER = ['order_desk', 'procurement_desk', 'assistant', 'automation', 'mcp'];
 
 interface WeekRow {
 	acted: number;
@@ -99,23 +130,77 @@ export async function readAgents(db: Db, userId: number): Promise<AgentSection> 
 		actedHref: links.runs({ agent: b.agent, workKind: b.workKind, acted: true })
 	}));
 
-	// Totals across the board's own counts. Named "blended" wherever a rate is
-	// involved, because a rate of rates would be a different number.
+	/*
+	  One card per agent. Every number on a card is a sum of that agent's own
+	  board rows, so no card is mixed with another and nothing is recomputed
+	  from the run log a second time. A rate is arithmetic on those counts and
+	  the card says it is blended across that agent's kinds of work.
+	*/
+	// The two desks first, then the rest, then anything this file has not been
+	// told about, alphabetically, so a new agent appears rather than vanishes.
+	const rank = (agent: string) => {
+		const at = AGENT_ORDER.indexOf(agent);
+		return at === -1 ? AGENT_ORDER.length : at;
+	};
+	const agents = [...new Set(board.map((b) => b.agent))].sort(
+		(a, b) => rank(a) - rank(b) || a.localeCompare(b)
+	);
+	const desks: DeskRow[] = agents.map((agent) => {
+		const mine = board.filter((b) => b.agent === agent);
+		const sum = (pick: (row: (typeof mine)[number]) => number) =>
+			mine.reduce((total, row) => total + pick(row), 0);
+		const reviewedHere = sum((r) => r.reviewed);
+		const approvedHere = sum((r) => r.approved);
+		const editedHere = sum((r) => r.edited);
+		const named = AGENT_LABEL[agent];
+		// The kind furthest from its next step is the one worth naming: a card
+		// that says "ready" has to mean every kind of work it does.
+		const blocking = mine.find((r) => r.nextLevel !== null && !r.qualifies) ?? mine[0];
+		return {
+			agent,
+			label: named?.label ?? agent,
+			responsibility: named?.responsibility ?? '',
+			kinds: mine.length,
+			levels: [...new Set(mine.map((r) => LEVEL_LABEL[r.level]))],
+			runs: sum((r) => r.runs),
+			waiting: sum((r) => r.waiting),
+			reviewed: reviewedHere,
+			approved: approvedHere,
+			edited: editedHere,
+			rejected: sum((r) => r.rejected),
+			approvalRate: reviewedHere === 0 ? null : (approvedHere + editedHere) / reviewedHere,
+			editRate: approvedHere + editedHere === 0 ? null : editedHere / (approvedHere + editedHere),
+			refusals: sum((r) => r.refusals),
+			actedAlone: sum((r) => r.actedAlone),
+			undone: sum((r) => r.undone),
+			paused: mine.some((r) => r.paused),
+			pausedReason: mine.find((r) => r.paused)?.pausedReason ?? null,
+			readyForMore: mine.every((r) => r.nextLevel === null || r.qualifies),
+			verdict: blocking?.verdict ?? 'No work of this kind is set up.',
+			lastRunAt: mine.reduce<string | null>(
+				(latest, r) => (r.lastRunAt && (!latest || r.lastRunAt > latest) ? r.lastRunAt : latest),
+				null
+			),
+			href: links.runs({ agent }),
+			refusalsHref: links.runs({ agent, refused: true }),
+			actedHref: links.runs({ agent, acted: true })
+		};
+	});
+
+	/*
+	  Only the figures that are genuinely about all of them at once. There is
+	  deliberately no blended approval rate and no blended edit rate: those are
+	  the two numbers that decide whether an agent gets more rope, and a single
+	  figure across two desks hides the case where one is ready and one is not.
+	*/
 	const runsAll = rows.reduce((sum, r) => sum + r.runs, 0);
 	const waiting = rows.reduce((sum, r) => sum + r.waiting, 0);
-	const reviewed = rows.reduce((sum, r) => sum + r.reviewed, 0);
 	const refusals = rows.reduce((sum, r) => sum + r.refusals, 0);
 	const actedAlone = rows.reduce((sum, r) => sum + r.actedAlone, 0);
 	const undone = rows.reduce((sum, r) => sum + r.undone, 0);
-	// The three review outcomes come straight off the board rows, which is
-	// where the harness counts them.
-	const approved = board.reduce((sum, b) => sum + b.approved, 0);
-	const edited = board.reduce((sum, b) => sum + b.edited, 0);
-	const rejected = board.reduce((sum, b) => sum + b.rejected, 0);
-	const approvalRate = reviewed === 0 ? null : (approved + edited) / reviewed;
-	const editRate = approved + edited === 0 ? null : edited / (approved + edited);
 	const pausedAgents = pauses.filter((p) => p.paused);
 	const atAuto = rows.filter((r) => r.level === 'auto' || r.level === 'auto_review').length;
+	const ready = desks.filter((d) => d.readyForMore && d.reviewed > 0).length;
 
 	const figures: Figure[] = [
 		{
@@ -126,43 +211,27 @@ export async function readAgents(db: Db, userId: number): Promise<AgentSection> 
 			compare:
 				runsAll === 0
 					? 'no agent has run yet in this database, so there is nothing to judge'
-					: `${waiting} waiting on a person now, and ${refusals} stopped by a guardrail`,
+					: `${waiting} waiting on a person now, ${refusals} stopped by a guardrail, across ` +
+						`${desks.length} agents counted separately`,
 			source: 'the harness run log',
 			href: links.runs(),
 			hrefLabel: 'The feed',
 			tone: 'plain'
 		},
 		{
-			id: 'agent-approval',
-			label: 'Approved when a person looked',
-			value: approvalRate ?? 0,
-			unit: 'percent',
+			id: 'agent-ready',
+			label: 'Agents whose numbers clear the rule',
+			value: ready,
+			unit: 'count',
 			compare:
-				reviewed === 0
-					? 'nobody has decided an agent proposal yet'
-					: `blended over ${reviewed} decided runs: ${approved} sent as drafted, ${edited} corrected ` +
-						`first, ${rejected} rejected`,
-			source: 'the harness board',
-			href: links.queue(),
-			hrefLabel: 'The queue',
-			tone: approvalRate !== null && approvalRate < 0.8 ? 'warn' : 'plain',
-			toneWord: approvalRate !== null && approvalRate < 0.8 ? 'below the promotion rule' : undefined
-		},
-		{
-			id: 'agent-edit',
-			label: 'Corrected before approval',
-			value: editRate ?? 0,
-			unit: 'percent',
-			compare:
-				approved + edited === 0
-					? 'nothing has been approved yet, so nothing has been corrected'
-					: `of ${approved + edited} approved either way. A high edit rate is the honest reason a level ` +
-						`does not move`,
-			source: 'the harness board',
-			href: links.runs(),
-			hrefLabel: 'The runs',
-			tone: editRate !== null && editRate > 0.3 ? 'warn' : 'plain',
-			toneWord: editRate !== null && editRate > 0.3 ? 'a lot of correcting' : undefined
+				desks.length === 0
+					? 'no agent is set up in this database'
+					: `of ${desks.length}. The rule is the promotion rule in the harness, and a person still has ` +
+						`to sign the step off`,
+			source: 'the autonomy ladder',
+			href: links.autonomy(),
+			hrefLabel: 'The controls',
+			tone: 'plain'
 		},
 		{
 			id: 'agent-acted',
@@ -198,6 +267,7 @@ export async function readAgents(db: Db, userId: number): Promise<AgentSection> 
 	];
 
 	return {
+		desks,
 		rows,
 		figures,
 		value: valueLedger(w),

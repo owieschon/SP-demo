@@ -102,6 +102,10 @@ export const links = {
 	late: () => `${routes.forecast()}${query({ status: 'late', who: 'all' })}`,
 	/** Purchase and production orders past their own due date. */
 	riskTopic: (topic: RiskTopic) => `/overview/risk/${topic}`,
+	/** What nobody is answerable for. `kind` opens one of the three lists. */
+	coverage: (kind?: 'account' | 'part_family' | 'mailbox') => `/overview/coverage${query({ kind })}`,
+	/** Who may decide what, and up to how much. */
+	people: () => '/people',
 	/** The accounts list, filtered to the ones that have gone quiet, longest first. */
 	quietAccounts: () => `${routes.accounts()}${query({ quiet: '1', sort: 'quiet', who: 'all' })}`,
 

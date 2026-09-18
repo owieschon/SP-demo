@@ -26,10 +26,14 @@ import { links } from './links.ts';
 import { isLeak, readLeak, readMoney, readRevenue } from './money.ts';
 import { readPromiseDetail, readPromises } from './promises.ts';
 import { readAgents, readRunFeed } from './agents.ts';
-import { readLateSupply, readRisk } from './risk.ts';
+import { readCoverage, readLateSupply, readRisk } from './risk.ts';
 import type { Figure } from './types.ts';
 
 const ADMIN = 1;
+/** Hollis Vance, the chief executive: every scope, internal disclosure. */
+const CEO = 16;
+/** Ines Carver, inside sales: customer disclosure, so no cost and no margin. */
+const INSIDE_SALES = 2;
 
 let db: Db;
 
@@ -42,7 +46,7 @@ afterAll(async () => {
 });
 
 // ---------------------------------------------------------------------------
-// The stored month roll-up (migration 0034)
+// The stored month roll-up (migration 0039)
 // ---------------------------------------------------------------------------
 
 describe('nl.ledger_month', () => {
@@ -200,7 +204,7 @@ describe('money', () => {
 	});
 
 	it('leaves cost and margin out of the payload when disclosure says so', async () => {
-		const closed = await readMoney(db, ADMIN, { cost: false, margin: false, modelPresent: true });
+		const closed = await readMoney(db, ADMIN, { level: 'customer', cost: false, margin: false, modelPresent: true });
 		expect(closed.figures.map((f) => f.id)).not.toContain('margin');
 		expect(closed.figures.map((f) => f.id)).not.toContain('margin-pct');
 		expect(closed.showsMargin).toBe(false);
@@ -524,52 +528,185 @@ describe('risk', () => {
 // ---------------------------------------------------------------------------
 
 describe('disclosure', () => {
-	it('shows cost and margin when the roles model is not in this database', async () => {
-		const answer = await db.asUser(ADMIN, (tx) => readDisclosure(tx, ADMIN));
-		const [present] = await db.asUser(ADMIN, (tx) =>
-			tx.sql<{ ok: boolean }>`
-				select pg_catalog.to_regprocedure('nl.may_see(int,text)') is not null as ok`
+	it('reads the level the roles model gives this person', async () => {
+		const chief = await db.asUser(CEO, (tx) => readDisclosure(tx, CEO));
+		expect(chief).toEqual({ level: 'internal', cost: true, margin: true, modelPresent: true });
+
+		const sales = await db.asUser(INSIDE_SALES, (tx) => readDisclosure(tx, INSIDE_SALES));
+		expect(sales).toEqual({ level: 'customer', cost: false, margin: false, modelPresent: true });
+	});
+
+	it('leaves cost and margin out of the payload, not out of the markup', async () => {
+		const sales = await db.asUser(INSIDE_SALES, (tx) => readDisclosure(tx, INSIDE_SALES));
+		const money = await readMoney(db, INSIDE_SALES, sales);
+
+		// The proof is on the wire: nothing named margin, and no cost figure in
+		// any leak, in the object the browser would receive.
+		const serialised = JSON.stringify(money);
+		expect(serialised).not.toContain('"margin"');
+		expect(serialised).not.toContain('"margin-pct"');
+		expect(money.showsMargin).toBe(false);
+		expect(money.leaks.map((l) => l.id)).toEqual(['freight']);
+
+		// And so is every drill under it.
+		for (const leak of ['price-exceptions', 'cost-passthrough'] as const) {
+			const detail = await readLeak(db, INSIDE_SALES, leak, null, sales);
+			expect(detail.rows).toEqual([]);
+			expect(detail.total).toBe(0);
+		}
+		const revenue = await readRevenue(db, INSIDE_SALES, { month: null, customer: null }, sales);
+		expect(revenue.showsMargin).toBe(false);
+		for (const month of revenue.months) expect(month.costOfGoods).toBeNull();
+
+		// Freight is billed against a published tariff rather than against
+		// cost, so it survives, and the drill under it does too.
+		const freight = await readLeak(db, INSIDE_SALES, 'freight', null, sales);
+		expect(freight.total).toBeGreaterThanOrEqual(0);
+		expect(JSON.stringify(freight)).not.toContain('unit_cost');
+	});
+
+	it('shows everything when the roles model is not in this database', async () => {
+		// The one thing a live database cannot demonstrate, so it is checked
+		// against the constant the reader returns in that case.
+		expect(OPEN).toEqual({ level: null, cost: true, margin: true, modelPresent: false });
+		const money = await readMoney(db, CEO, OPEN);
+		expect(money.showsMargin).toBe(true);
+		expect(money.figures.map((f) => f.id)).toContain('margin');
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Coverage of responsibility
+// ---------------------------------------------------------------------------
+
+describe('coverage of responsibility', () => {
+	it('counts the gaps the view counts, and puts them in the risk section', async () => {
+		const risk = await readRisk(db, CEO);
+		expect(risk.coverage).not.toBeNull();
+		const counts = await db.asUser(CEO, (tx) =>
+			tx.sql<{ kind: string; n: number }>`
+				select kind, count(*)::int as n from nl.responsibility_gaps group by kind`
 		);
-		if (present.ok) {
-			expect(answer.modelPresent).toBe(true);
-		} else {
-			expect(answer).toEqual(OPEN);
+		for (const kind of ['account', 'part_family', 'mailbox']) {
+			const found = counts.find((c) => c.kind === kind);
+			expect(figure(risk.coverage!.figures, `coverage-${kind}`).value).toBe(
+				found ? Number(found.n) : 0
+			);
 		}
 	});
 
-	it('asks nl.may_see when it exists, and takes no for an answer', async () => {
-		const [present] = await db.asUser(ADMIN, (tx) =>
-			tx.sql<{ ok: boolean }>`
-				select pg_catalog.to_regprocedure('nl.may_see(int,text)') is not null as ok`
+	it('does not treat holding a whole dimension as answering for anything', async () => {
+		// The chief executive holds every account. If oversight counted as
+		// accountability, this list would be empty for that reason alone.
+		const [held] = await db.asUser(CEO, (tx) =>
+			tx.sql<{ all: boolean }>`select nl.scope_is_all(${CEO}, 'account') as all`
 		);
-		if (present.ok) {
-			// The roles branch has landed: trust its answer rather than a stub.
-			const answer = await db.asUser(ADMIN, (tx) => readDisclosure(tx, ADMIN));
-			expect(typeof answer.cost).toBe('boolean');
-			return;
-		}
-		// Stand in a function with the roles signature that refuses everything,
-		// and check the reader believes it. Dropped again at the end, so the
-		// rest of this file sees the world it expects.
+		expect(held.all).toBe(true);
+
+		// An account with no owner and nobody named against it is a gap.
 		await db.asSystem((tx) =>
-			tx.query(`create function nl.may_see(int, text) returns boolean
-			          language sql immutable set search_path = '' as $$ select false $$`)
+			tx.sql`insert into nl.customers (customer_no, name, price_group, customer_since, email_domain)
+			       values ('ZG-1', 'Nobody Owns This Supply', 'DEALER', '2021-01-01', 'zg.example')`
 		);
 		try {
-			const answer = await db.asUser(ADMIN, (tx) => readDisclosure(tx, ADMIN));
-			expect(answer).toEqual({ cost: false, margin: false, modelPresent: true });
+			const rows = await db.asUser(CEO, (tx) =>
+				tx.sql<{ ref: string }>`
+					select ref from nl.responsibility_gaps where kind = 'account' and ref = 'ZG-1'`
+			);
+			expect(rows.length).toBe(1);
 
-			const money = await readMoney(db, ADMIN, answer);
-			const serialised = JSON.stringify(money);
-			expect(serialised).not.toContain('"margin"');
-			expect(money.leaks.map((l) => l.id)).toEqual(['freight']);
-
-			// And the leak pages that are cost arithmetic have no figures on them.
-			const leak = await readLeak(db, ADMIN, 'cost-passthrough', null, answer);
-			expect(leak.rows).toEqual([]);
-			expect(leak.total).toBe(0);
+			// Name somebody against it, and it stops being a gap.
+			await db.asSystem((tx) =>
+				tx.sql`insert into nl.user_scope (user_id, dimension, value) values (2, 'account', 'ZG-1')`
+			);
+			const after = await db.asUser(CEO, (tx) =>
+				tx.sql<{ ref: string }>`
+					select ref from nl.responsibility_gaps where kind = 'account' and ref = 'ZG-1'`
+			);
+			expect(after).toEqual([]);
 		} finally {
-			await db.asSystem((tx) => tx.query('drop function nl.may_see(int, text)'));
+			await db.asSystem(async (tx) => {
+				await tx.sql`delete from nl.user_scope where dimension = 'account' and value = 'ZG-1'`;
+				await tx.sql`delete from nl.customers where customer_no = 'ZG-1'`;
+			});
+		}
+	});
+
+	it('reads the highest ceiling anybody active holds, and what waits above it', async () => {
+		const coverage = await readCoverage(db, CEO, null);
+		expect(coverage).not.toBeNull();
+		for (const row of coverage!.beyondAuthority) {
+			const [direct] = await db.asUser(CEO, (tx) =>
+				tx.sql<{ ceiling: number | null }>`select nl.highest_ceiling(${row.authority}) as ceiling`
+			);
+			expect(row.ceiling).toBe(direct.ceiling === null ? null : Number(direct.ceiling));
+			// Nothing can be stuck above a ceiling that does not exist.
+			if (row.ceiling === null) expect(row.waiting).toBe(0);
+		}
+	});
+
+	it('lists one kind of gap, biggest first, each row reaching somewhere', async () => {
+		const coverage = await readCoverage(db, CEO, 'part_family');
+		expect(coverage).not.toBeNull();
+		const [direct] = await db.asUser(CEO, (tx) =>
+			tx.sql<{ n: number }>`
+				select count(*)::int as n from nl.responsibility_gaps where kind = 'part_family'`
+		);
+		expect(coverage!.rows.length).toBe(Math.min(Number(direct.n), 200));
+		for (let i = 1; i < coverage!.rows.length; i++) {
+			expect(coverage!.rows[i - 1].amount).toBeGreaterThanOrEqual(coverage!.rows[i].amount);
+		}
+		// A part family has no page of its own, so the row offers /people,
+		// which is where somebody is assigned.
+		for (const row of coverage!.rows) expect(row.kind).toBe('part_family');
+	});
+});
+
+// ---------------------------------------------------------------------------
+// The two desks, side by side
+// ---------------------------------------------------------------------------
+
+describe('desks', () => {
+	it('keeps the order desk and the procurement desk apart', async () => {
+		const agents = await readAgents(db, ADMIN);
+		const names = agents.desks.map((d) => d.agent);
+		expect(names).toContain('order_desk');
+		expect(names).toContain('procurement_desk');
+		// The two desks lead, because they are the ones talking to somebody
+		// outside the company.
+		expect(names.slice(0, 2)).toEqual(['order_desk', 'procurement_desk']);
+		// And no figure blends their approval or edit rate into one.
+		const ids = agents.figures.map((f) => f.id);
+		expect(ids).not.toContain('agent-approval');
+		expect(ids).not.toContain('agent-edit');
+	});
+
+	it('sums each desk from its own board rows and nobody else', async () => {
+		const agents = await readAgents(db, ADMIN);
+		const board = await readBoard(db, ADMIN);
+		for (const desk of agents.desks) {
+			const mine = board.filter((b) => b.agent === desk.agent);
+			expect(desk.kinds).toBe(mine.length);
+			expect(desk.runs).toBe(mine.reduce((sum, b) => sum + b.runs, 0));
+			expect(desk.reviewed).toBe(mine.reduce((sum, b) => sum + b.reviewed, 0));
+			expect(desk.approved).toBe(mine.reduce((sum, b) => sum + b.approved, 0));
+			expect(desk.edited).toBe(mine.reduce((sum, b) => sum + b.edited, 0));
+			expect(desk.refusals).toBe(mine.reduce((sum, b) => sum + b.refusals, 0));
+			const reviewed = desk.reviewed;
+			expect(desk.approvalRate).toBe(
+				reviewed === 0 ? null : (desk.approved + desk.edited) / reviewed
+			);
+			// Ready means every kind of work it does clears the rule, not one.
+			expect(desk.readyForMore).toBe(mine.every((b) => b.nextLevel === null || b.qualifies));
+		}
+	});
+
+	it('gives every desk card a link into its own runs', async () => {
+		const agents = await readAgents(db, ADMIN);
+		for (const desk of agents.desks) {
+			expect(desk.href).toBe(links.runs({ agent: desk.agent }));
+			expect(desk.refusalsHref).toBe(links.runs({ agent: desk.agent, refused: true }));
+			expect(desk.actedHref).toBe(links.runs({ agent: desk.agent, acted: true }));
 		}
 	});
 });
@@ -627,6 +764,8 @@ async function everyHref(): Promise<string[]> {
 	const late = await readLateSupply(db, ADMIN);
 	const feed = await readRunFeed(db, ADMIN, { agent: null, workKind: null, refused: false, acted: false });
 
+	const coverage = await readCoverage(db, ADMIN, 'account');
+
 	const hrefs = [
 		...money.figures.map((f) => f.href),
 		...money.leaks.map((l) => l.href),
@@ -634,8 +773,14 @@ async function everyHref(): Promise<string[]> {
 		...promises.slipping.flatMap((s) => [s.href, s.accountHref]),
 		...agents.figures.map((f) => f.href),
 		...agents.rows.flatMap((r) => [r.href, r.refusalsHref, r.actedHref]),
+		...agents.desks.flatMap((d) => [d.href, d.refusalsHref, d.actedHref]),
 		...agents.value.map((v) => v.href),
 		...risk.figures.map((f) => f.href),
+		...(risk.coverage?.figures.map((f) => f.href) ?? []),
+		...(coverage?.counts.map((c) => c.href) ?? []),
+		...(coverage?.beyondAuthority.map((b) => b.href) ?? []),
+		...(coverage?.rows.map((r) => r.href) ?? []),
+		...(coverage ? [coverage.peopleHref] : []),
 		...revenue.months.map((m) => m.href),
 		...late.rows.flatMap((r) => [r.partHref, r.forecastHref, r.vendorHref]),
 		...feed.rows.flatMap((r) => [r.href, r.subjectHref]),

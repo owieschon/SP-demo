@@ -137,6 +137,13 @@ export interface ValueLine {
 }
 
 export interface AgentSection {
+	/*
+	  One card per agent, never one number across all of them. The order desk
+	  and the procurement desk do different work for different counterparties
+	  and earn trust separately, and a blended figure hides the only thing
+	  worth knowing: that one of them is ready for more and the other is not.
+	*/
+	desks: DeskRow[];
 	rows: AgentRow[];
 	figures: Figure[];
 	/** What the agents did in the last seven days, each line pointing at the rows behind it. */
@@ -150,6 +157,85 @@ export interface AgentSection {
 export interface RiskSection {
 	today: string;
 	figures: Figure[];
+	/*
+	  Who is answering for what, and what nobody is answering for. Null when
+	  the roles model is not in this database: the section is left out rather
+	  than shown as four zeros that would read as good news.
+	*/
+	coverage: CoverageSection | null;
+}
+
+export interface CoverageSection {
+	figures: Figure[];
+	/** Said on the page, because scope and accountability are easy to confuse. */
+	note: string;
+}
+
+/** One thing nobody is answerable for. */
+export interface GapRow {
+	kind: 'account' | 'part_family' | 'mailbox';
+	ref: string;
+	subject: string;
+	why: string;
+	amount: number;
+	lines: number;
+	/** The record itself, when it has a page. */
+	href: string | null;
+	hrefLabel: string | null;
+}
+
+export interface CoverageDetail {
+	today: string;
+	kind: 'account' | 'part_family' | 'mailbox' | null;
+	rows: GapRow[];
+	counts: { kind: string; label: string; count: number; amount: number; href: string }[];
+	/** Decisions waiting that are above every live ceiling. */
+	beyondAuthority: BeyondAuthorityRow[];
+	note: string;
+	peopleHref: string;
+}
+
+export interface BeyondAuthorityRow {
+	authority: string;
+	label: string;
+	/** Null means somebody holds it with no ceiling at all. */
+	ceiling: number | null;
+	waiting: number;
+	value: number;
+	href: string;
+	what: string;
+}
+
+/** One agent, summed over the kinds of work it does. Never merged with another. */
+export interface DeskRow {
+	agent: string;
+	label: string;
+	/** What it is for, in one line. */
+	responsibility: string;
+	kinds: number;
+	/** The levels its kinds of work sit at, lowest first. */
+	levels: string[];
+	runs: number;
+	waiting: number;
+	reviewed: number;
+	approved: number;
+	edited: number;
+	rejected: number;
+	approvalRate: number | null;
+	editRate: number | null;
+	refusals: number;
+	actedAlone: number;
+	undone: number;
+	paused: boolean;
+	pausedReason: string | null;
+	/** True when every kind of work clears the rule for its next level. */
+	readyForMore: boolean;
+	/** Why not, in the harness's own words, for the kind that is furthest off. */
+	verdict: string;
+	lastRunAt: string | null;
+	href: string;
+	refusalsHref: string;
+	actedHref: string;
 }
 
 /** One row of evidence: the thing that produced a number. */
