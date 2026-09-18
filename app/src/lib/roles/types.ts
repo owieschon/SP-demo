@@ -116,14 +116,29 @@ export const AUTHORITIES: Authority[] = [
 	'agent_autonomy'
 ];
 
-/** True when the grant carries a number. The others are a plain yes. */
+/**
+ * True when the grant carries a number. The others are a plain yes.
+ *
+ * This mirrors nl.authority_is_amount. Keep the two the same: the database
+ * refuses a limit on a yes-or-no authority, so a row that disagrees here draws
+ * a number field for something that cannot take one.
+ */
 export const AUTHORITY_IS_AMOUNT: Record<Authority, boolean> = {
 	approve_quote: true,
 	release_purchase_order: true,
 	accept_price_increase: true,
 	agent_autonomy: true,
+	/*
+	  An amount since migration 0044. It used to be a plain yes, which was
+	  enough while the only way to run an agent's proposal was a person
+	  clicking approve. Once a token can act on its own, the useful question is
+	  not whether but HOW MUCH, so this is now "run what an agent proposed, up
+	  to this value", and it is the ceiling the MCP path is bounded by.
+	  A grant with no number still means no ceiling, so nothing already in
+	  force changed.
+	*/
+	approve_agent_proposal: true,
 	approve_reply: false,
-	approve_agent_proposal: false,
 	answer_commitment: false,
 	resolve_shortage: false,
 	confirm_pick: false,
