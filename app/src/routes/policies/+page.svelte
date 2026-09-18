@@ -9,6 +9,7 @@
 	import TableSkeleton from '$lib/components/policy/TableSkeleton.svelte';
 	import { count } from '$lib/format';
 	import { POLICY_GROUPS } from '$lib/policy/types';
+	import { routes } from '$lib/routes';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -49,7 +50,7 @@
 				floor, who gets stock first. Each one can be set for everyone, for a price group, for one account
 				or for one part, with a date and a reason, and every answer says which policy won and what it
 				beat. Policies are values; the triggers that make something happen are
-				<a href="/automations">automations</a>.
+				<a href={routes.rules()}>automations</a>.
 			</p>
 		</div>
 	</header>
