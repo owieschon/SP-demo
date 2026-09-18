@@ -195,7 +195,7 @@ begin
   -- because nl.users.email is unique and nothing ever sends to it.
   insert into nl.users (id, email, full_name, title, role, active, kind, responsibility)
   values (v_id,
-          'mcp-token-' || v_id || '@northline.invalid',
+          'mcp-token-' || v_id || '@northline.example',
           'Coding agent: ' || v_token.label,
           'Coding agent',
           'agent', true, 'agent',
