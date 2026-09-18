@@ -575,18 +575,19 @@ describe('the record of decisions', () => {
 	});
 });
 
-describe('a database without the purchase table', () => {
+describe('the sources this database has', () => {
 	it('says which sources it has', async () => {
-		// Migrations 0011, 0017 and 0021 are applied here; 0022 is not.
+		// Every source is here now: 0011, 0017, 0021 and the procurement desk
+		// in 0029, which 0030 rebuilt the view to include.
 		expect(await queueSources(db, DANA)).toEqual({
 			rfq: true,
 			assistant: true,
 			mail: true,
-			purchase: false
+			purchase: true
 		});
 	});
 
-	it('does not name a table that is not there', async () => {
+	it('names every table it was built over', async () => {
 		const [row] = await db.asSystem(
 			(tx) => tx.sql<{ definition: string }>`
 				select pg_catalog.pg_get_viewdef('nl.agent_queue'::regclass, true) as definition`
@@ -594,9 +595,7 @@ describe('a database without the purchase table', () => {
 		expect(row.definition).toContain('rfq_drafts');
 		expect(row.definition).toContain('assistant_proposals');
 		expect(row.definition).toContain('mail_drafts');
-		// Not even inside a guard: a view's names are resolved when it is
-		// created, so a missing table cannot appear in it at all.
-		expect(row.definition).not.toContain('purchase_request');
+		expect(row.definition).toContain('purchase_request');
 	});
 
 	it('still reads the queue with nothing waiting at all', async () => {

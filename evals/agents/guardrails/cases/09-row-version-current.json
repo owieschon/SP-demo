@@ -1,0 +1,16 @@
+{
+  "about": "A decision made on a record that has moved since it was loaded is refused.",
+  "check": "row_version_current",
+  "refuses": {
+    "expectedVersion": "2026-09-17T10:00:00.000Z",
+    "storedVersion": "2026-09-17T10:05:00.000Z"
+  },
+  "expect": {
+    "verdict": "refuse",
+    "reason_contains": "changed since it was loaded"
+  },
+  "passes": {
+    "expectedVersion": "2026-09-17T10:00:00.000Z",
+    "storedVersion": "2026-09-17T10:00:00.000Z"
+  }
+}

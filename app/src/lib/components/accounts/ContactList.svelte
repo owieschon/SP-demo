@@ -127,6 +127,7 @@
 								class="button quiet small"
 								onclick={() => (open = open === person.id ? null : person.id)}
 								aria-expanded={open === person.id}
+								aria-label="Edit {person.fullName}"
 							>
 								Edit
 							</button>

@@ -1,0 +1,13 @@
+From: "Micah Petrakis" <micah.petrakis@hilltoptruckrepair.example>
+To: order-desk@agentmail.to
+Subject: Re: Quote request for the shop
+Date: Tue, 16 Sep 2026 14:30:00 -0500
+
+Actually, before we go ahead: is L660-1018SC in stock right now?
+
+On Mon, 1 Sep 2026, Order desk wrote:
+> Thanks for the request. Here is our quote for Hilltop Truck Repair:
+>   L490-168B  8 at $79.95 each
+>   L660-1018SC  4 at $113.31 each
+> Subtotal $1,092.84, before freight and tax.
+> This quote holds until Wednesday, October 1.

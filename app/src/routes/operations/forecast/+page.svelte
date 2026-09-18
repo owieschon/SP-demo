@@ -14,7 +14,7 @@
 
 <main class="page">
 	<header class="head">
-		<h1 class="sr-only">Late-order forecast</h1>
+		<h1>Late-order forecast</h1>
 		<p class="faint">
 			Every open order line, netted against what is on the shelf and what is on order from vendors and the
 			shop floor. A line's projected date is the day the parts for it and for every line promised before it
@@ -26,7 +26,13 @@
 	<!-- The filters come from the URL, so they render with the page, before the
 	     projection arrives. -->
 	{#await data.forecast}
-		<ForecastFilters filters={data.filters} options={{ vendors: [], workCenters: [], customers: [] }} lineCount={0} />
+		<!-- lineCount is null, not 0: the projection has not answered yet, and
+		     the bar says so rather than stating a figure it does not have. -->
+		<ForecastFilters
+			filters={data.filters}
+			options={{ vendors: [], workCenters: [], customers: [] }}
+			lineCount={null}
+		/>
 		<ForecastSkeleton />
 	{:then forecast}
 		<ForecastFilters filters={forecast.filters} options={forecast.options} lineCount={forecast.lineCount} />

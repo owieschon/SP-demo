@@ -102,13 +102,13 @@
 			<table>
 				<thead>
 					<tr>
-						<th>Customer</th>
-						<th>Part</th>
-						<th>Promised</th>
-						<th>Projected</th>
-						<th class="num">Days</th>
-						<th>Why</th>
-						<th class="num">Value</th>
+						<th scope="col">Customer</th>
+						<th scope="col">Part</th>
+						<th scope="col">Promised</th>
+						<th scope="col">Projected</th>
+						<th scope="col" class="num">Days</th>
+						<th scope="col">Why</th>
+						<th scope="col" class="num">Value</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -152,11 +152,11 @@
 				<table>
 					<thead>
 						<tr>
-							<th>Vendor</th>
-							<th>Who to call</th>
-							<th class="num">POs</th>
-							<th class="num">Lines</th>
-							<th class="num">Waiting</th>
+							<th scope="col">Vendor</th>
+							<th scope="col">Who to call</th>
+							<th scope="col" class="num">POs</th>
+							<th scope="col" class="num">Lines</th>
+							<th scope="col" class="num">Waiting</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -204,11 +204,11 @@
 				<table>
 					<thead>
 						<tr>
-							<th>Work center</th>
-							<th class="num">Orders</th>
-							<th class="num">Lines</th>
-							<th>First due</th>
-							<th class="num">Waiting</th>
+							<th scope="col">Work center</th>
+							<th scope="col" class="num">Orders</th>
+							<th scope="col" class="num">Lines</th>
+							<th scope="col">First due</th>
+							<th scope="col" class="num">Waiting</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -246,11 +246,11 @@
 				<table>
 					<thead>
 						<tr>
-							<th>Customer</th>
-							<th>Owner</th>
-							<th class="num">Lines</th>
-							<th class="num">Worst</th>
-							<th class="num">Late value</th>
+							<th scope="col">Customer</th>
+							<th scope="col">Owner</th>
+							<th scope="col" class="num">Lines</th>
+							<th scope="col" class="num">Worst</th>
+							<th scope="col" class="num">Late value</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -288,12 +288,12 @@
 				<table>
 					<thead>
 						<tr>
-							<th>Customer</th>
-							<th>Part</th>
-							<th>First promise</th>
-							<th>Now</th>
-							<th class="num">Moves</th>
-							<th class="num">Days</th>
+							<th scope="col">Customer</th>
+							<th scope="col">Part</th>
+							<th scope="col">First promise</th>
+							<th scope="col">Now</th>
+							<th scope="col" class="num">Moves</th>
+							<th scope="col" class="num">Days</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -328,12 +328,12 @@
 				<table>
 					<thead>
 						<tr>
-							<th>Change</th>
-							<th>Order</th>
-							<th>Part</th>
-							<th>From</th>
-							<th>To</th>
-							<th class="num">Days</th>
+							<th scope="col">Change</th>
+							<th scope="col">Order</th>
+							<th scope="col">Part</th>
+							<th scope="col">From</th>
+							<th scope="col">To</th>
+							<th scope="col" class="num">Days</th>
 						</tr>
 					</thead>
 					<tbody>

@@ -61,11 +61,28 @@
 
 	<div class="actions">
 		{#if card.needsOutcome}
-			<a class="button action" href="/commitments/{card.id}#question">Answer</a>
-		{:else}
-			<a class="button icon action" href="/commitments/{card.id}" aria-label="Open C-{card.id}" tabindex="-1">
-				<ArrowRight size={13} strokeWidth={1.75} aria-hidden="true" />
+			<!--
+				A real action, and a different destination from the row's own
+				link, so it stays focusable. The title goes in the accessible
+				name: a board of forty cards used to offer forty links all
+				called "Answer".
+			-->
+			<a class="button action" href="/commitments/{card.id}#question" aria-label="Answer: {card.title}">
+				Answer
 			</a>
+		{:else}
+			<!--
+				Decoration, not a control. The whole row is already a link to
+				this commitment (see .title::after), so this chevron used to be
+				a second link to the same place that was announced twice and
+				carried tabindex="-1" to keep it out of the tab order, which
+				left a visible control no keyboard could reach. A span says
+				what it is, and pointer-events: none lets the click through to
+				the row.
+			-->
+			<span class="button icon action" aria-hidden="true">
+				<ArrowRight size={13} strokeWidth={1.75} />
+			</span>
 		{/if}
 	</div>
 </article>
@@ -191,6 +208,11 @@
 		transition:
 			opacity var(--speed) var(--ease),
 			transform var(--speed) var(--ease);
+	}
+
+	/* The decorative chevron must not swallow the row's own click. */
+	span.action {
+		pointer-events: none;
 	}
 
 	.action {

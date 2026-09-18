@@ -2,25 +2,37 @@
 	// Health: one line per check, green or red, with what to do when it is red.
 	// Nothing in here is secret, which is why this is the one section a person
 	// without the passcode can still read.
+	//
+	// The checks on the page are the bounded ones. The two exact drift checks
+	// read every row by design, so they sit behind a link and stream in on
+	// their own (see diagnostics.ts and migration 0027).
 	import { count, moment } from '$lib/format';
-	import type { DiagnosticsView } from './types';
+	import type { DiagnosticsView, ExactChecksView, HealthCheckView } from './types';
 
-	let { diagnostics }: { diagnostics: DiagnosticsView } = $props();
+	let {
+		health,
+		exact
+	}: {
+		health: DiagnosticsView;
+		/** A promise while the exact checks run, or null when nobody asked. */
+		exact: Promise<ExactChecksView> | null;
+	} = $props();
 
-	const bad = $derived(diagnostics.checks.filter((check) => check.state === 'bad').length);
+	const shown = $derived<HealthCheckView[]>(health.checks);
+	const bad = $derived(shown.filter((check) => check.state === 'bad').length);
 </script>
 
-<section class="panel">
+<section class="panel" id="health">
 	<header class="panel-head">
 		<h2>Health</h2>
 		<span class="faint">
 			{bad === 0 ? 'Nothing needs attention' : `${bad} ${bad === 1 ? 'thing needs' : 'things need'} attention`}
-			· version {diagnostics.version} · checked {moment(diagnostics.ranAt)}
+			· version {health.version} · checked {moment(health.ranAt)} in {health.ms} ms
 		</span>
 	</header>
 
 	<ul class="checks">
-		{#each diagnostics.checks as check (check.id)}
+		{#each shown as check (check.id)}
 			<li class={check.state}>
 				<span class="dot" aria-hidden="true"></span>
 				<span class="what">
@@ -37,12 +49,51 @@
 		{/each}
 	</ul>
 
+	<!-- The exact checks. Off the page until asked for, because they read the
+	     whole ledger, every commitment and every stock movement. -->
+	<div class="exact">
+		{#if exact}
+			{#await exact}
+				<p class="faint" role="status">Reading every commitment, every stock movement and every ledger line.</p>
+			{:then result}
+				<ul class="checks">
+					{#each result.checks as check (check.id)}
+						<li class={check.state}>
+							<span class="dot" aria-hidden="true"></span>
+							<span class="what">
+								<span class="label">{check.label}</span>
+								<span class="detail">{check.detail}</span>
+								{#if check.advice}
+									<span class="advice">{check.advice}</span>
+								{/if}
+							</span>
+						</li>
+					{/each}
+				</ul>
+				<p class="faint note">
+					Exact, and it took the database {result.ms} ms.
+					<a href="/settings#health">Hide them</a>
+				</p>
+			{:catch}
+				<p class="notice error" role="alert">The exact checks did not finish.</p>
+			{/await}
+		{:else}
+			<a class="button" href="/settings?checks=exact#health">Run the exact checks</a>
+			<p class="faint note">
+				The delivered figures and stock on hand are exact by design: they recount every commitment and every
+				stock movement, which takes several seconds on the full world. The line above samples the ledger
+				instead, so the page does not wait. The database gives up on a run after thirty seconds, and the
+				hosting platform may cut the request off sooner, in which case this says so rather than hanging.
+			</p>
+		{/if}
+	</div>
+
 	<div class="grids">
 		<div class="block">
-			<h3 class="eyebrow">Rows</h3>
+			<h3 class="eyebrow">Rows, {health.countsMeasured ? 'counted' : 'estimated'}</h3>
 			<table>
 				<tbody>
-					{#each diagnostics.counts as row (row.table)}
+					{#each health.counts as row (row.table)}
 						<tr>
 							<td>{row.table.replace(/_/g, ' ')}</td>
 							<td class="num mono">{count(row.rows)}</td>
@@ -50,13 +101,22 @@
 					{/each}
 				</tbody>
 			</table>
+			<p class="faint note">
+				{#if health.countsMeasured}
+					Postgres had no statistics for at least one of these yet, which happens on a server that has just
+					come up, so those were counted properly instead of shown as zero.
+				{:else}
+					From the statistics Postgres keeps for the planner, so no table is read to draw this. They are
+					estimates and can be a little out after a rebuild.
+				{/if}
+			</p>
 		</div>
 
 		<div class="block">
 			<h3 class="eyebrow">Environment</h3>
 			<table>
 				<tbody>
-					{#each diagnostics.environment as row (row.name)}
+					{#each health.environment as row (row.name)}
 						<tr>
 							<td class="mono">{row.name}</td>
 							<td class="num">
@@ -134,6 +194,19 @@
 		font-size: 0.88rem;
 	}
 
+	.exact {
+		border-top: 1px solid var(--hairline);
+		padding: var(--space-3);
+	}
+
+	.exact .checks {
+		margin: 0 calc(-1 * var(--space-3)) var(--space-2);
+	}
+
+	.exact p {
+		margin: 0;
+	}
+
 	.grids {
 		display: flex;
 		flex-wrap: wrap;
@@ -170,6 +243,7 @@
 
 	.note {
 		margin: var(--space-2) 0 0;
+		max-width: 80ch;
 		font-size: 0.82rem;
 	}
 

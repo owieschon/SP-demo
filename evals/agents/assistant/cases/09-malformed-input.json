@@ -1,0 +1,28 @@
+{
+  "about": "A tool that exists, called with input that does not fit its schema.",
+  "question": "Tell me about an account.",
+  "script": [
+    {
+      "tools": [
+        {
+          "name": "get_account",
+          "input": {
+            "name": "Yates"
+          }
+        }
+      ]
+    },
+    {
+      "say": "I need the account number."
+    }
+  ],
+  "expected": {
+    "tools": [
+      {
+        "name": "get_account",
+        "ran": false
+      }
+    ],
+    "proposal": null
+  }
+}

@@ -29,7 +29,7 @@
 
 <main class="page">
 	<header class="head">
-		<h1 class="sr-only">Warehouse</h1>
+		<h1>Warehouse</h1>
 		<p class="faint">
 			Every part has a bin, and every change to it leaves a row in the stock ledger. The item master's
 			on-hand figure, the sum of the bins and the ledger all say the same number, and a check in the

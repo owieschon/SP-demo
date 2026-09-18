@@ -1,0 +1,16 @@
+{
+  "about": "A day has a fixed number of model calls, counted in the database.",
+  "check": "daily_cap",
+  "refuses": {
+    "used": 25,
+    "limit": 25
+  },
+  "expect": {
+    "verdict": "refuse",
+    "reason_contains": "for today"
+  },
+  "passes": {
+    "used": 3,
+    "limit": 25
+  }
+}

@@ -28,9 +28,20 @@ export interface HealthCheckView {
 export interface DiagnosticsView {
 	version: string;
 	ranAt: string;
+	/** How long the checks took, so the page can be honest about it. */
+	ms: number;
 	checks: HealthCheckView[];
+	/** From the planner's own statistics, or counted when it had none. */
 	counts: { table: string; rows: number }[];
+	countsMeasured: boolean;
 	environment: { name: string; set: boolean; shown: string }[];
+}
+
+/** The exact drift checks, which only run when somebody asks for them. */
+export interface ExactChecksView {
+	ranAt: string;
+	ms: number;
+	checks: HealthCheckView[];
 }
 
 /** Which section each setting belongs to on the page. */

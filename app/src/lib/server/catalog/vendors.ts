@@ -18,6 +18,12 @@ import {
 import { cleanQuery, containsPattern, prefixPattern } from './search.ts';
 
 export const VENDOR_LIST_LIMIT = 100;
+/*
+  How many of a vendor's parts the page shows. This query used to have no
+  limit at all, which made the vendor page the only unbounded table in the
+  app: one row per part supplied, no cap, no pagination.
+*/
+export const VENDOR_PART_LIMIT = 100;
 
 interface VendorRowDb {
 	vendor_no: string;
@@ -143,7 +149,11 @@ export async function getVendor(db: Db, userId: number, vendorNo: string): Promi
 }
 
 /** The parts a vendor supplies, best sellers first, with the flags purchasing acts on. */
-export async function getVendorParts(db: Db, userId: number, vendorNo: string): Promise<VendorPart[]> {
+export async function getVendorParts(
+	db: Db,
+	userId: number,
+	vendorNo: string
+): Promise<{ parts: VendorPart[]; total: number }> {
 	const rows = await db.asUser(userId, (tx) =>
 		tx.sql<{
 			item_no: string;
@@ -161,31 +171,42 @@ export async function getVendorParts(db: Db, userId: number, vendorNo: string): 
 			blocked: boolean;
 			below_reorder_point: boolean;
 			short_qty: number;
+			total_parts: number;
 		}>`
 			select item_no, description, family, lead_time, unit_cost, on_hand, on_purchase_order,
 			       reorder_point, units_12m, revenue_12m, made_to_order, proprietary, blocked,
-			       below_reorder_point, short_qty
+			       below_reorder_point, short_qty,
+			       -- Counted over every part this vendor supplies, before the
+			       -- limit, so the page can say how many it is not showing.
+			       count(*) over ()::int as total_parts
 			from nl.part_summary
 			where vendor_no = ${vendorNo}
-			order by blocked, short_qty > 0 desc, below_reorder_point desc, revenue_12m desc, item_no`
+			order by blocked, short_qty > 0 desc, below_reorder_point desc, revenue_12m desc, item_no
+			-- This query had no limit, so a vendor supplying a thousand parts
+			-- rendered a thousand rows with no pagination and no scroll cap.
+			limit ${VENDOR_PART_LIMIT}`
 	);
-	return rows.map((r) => ({
-		itemNo: r.item_no,
-		description: r.description,
-		family: r.family,
-		leadTime: r.lead_time,
-		unitCost: r.unit_cost,
-		onHand: r.on_hand,
-		onPurchaseOrder: r.on_purchase_order,
-		reorderPoint: r.reorder_point,
-		units12m: r.units_12m,
-		revenue12m: r.revenue_12m,
-		madeToOrder: r.made_to_order,
-		proprietary: r.proprietary,
-		blocked: r.blocked,
-		belowReorderPoint: r.below_reorder_point,
-		shortQty: r.short_qty
-	}));
+	return {
+		// Every row carries the same window count; no rows means no parts.
+		total: rows[0]?.total_parts ?? 0,
+		parts: rows.map((r) => ({
+			itemNo: r.item_no,
+			description: r.description,
+			family: r.family,
+			leadTime: r.lead_time,
+			unitCost: r.unit_cost,
+			onHand: r.on_hand,
+			onPurchaseOrder: r.on_purchase_order,
+			reorderPoint: r.reorder_point,
+			units12m: r.units_12m,
+			revenue12m: r.revenue_12m,
+			madeToOrder: r.made_to_order,
+			proprietary: r.proprietary,
+			blocked: r.blocked,
+			belowReorderPoint: r.below_reorder_point,
+			shortQty: r.short_qty
+		}))
+	};
 }
 
 // ---------------------------------------------------------------------------

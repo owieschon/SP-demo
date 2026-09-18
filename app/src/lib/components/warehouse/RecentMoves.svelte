@@ -23,13 +23,13 @@
 			<table>
 				<thead>
 					<tr>
-						<th>When</th>
-						<th>What</th>
-						<th>Item</th>
-						<th>Where</th>
-						<th class="num">Qty</th>
-						<th>Against</th>
-						<th>Who</th>
+						<th scope="col">When</th>
+						<th scope="col">What</th>
+						<th scope="col">Item</th>
+						<th scope="col">Where</th>
+						<th scope="col" class="num">Qty</th>
+						<th scope="col">Against</th>
+						<th scope="col">Who</th>
 					</tr>
 				</thead>
 				<tbody>

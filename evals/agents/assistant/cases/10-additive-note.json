@@ -1,0 +1,30 @@
+{
+  "about": "A note only ever adds a row, so it runs. That is the deliberate cost of not making every write a decision.",
+  "question": "Note on the Kennebec account that I called them.",
+  "script": [
+    {
+      "tools": [
+        {
+          "name": "add_note",
+          "input": {
+            "customer_no": "1214",
+            "body": "Called about the stack order.",
+            "commitment_id": null
+          }
+        }
+      ]
+    },
+    {
+      "say": "Noted."
+    }
+  ],
+  "expected": {
+    "tools": [
+      {
+        "name": "add_note",
+        "ran": true
+      }
+    ],
+    "proposal": null
+  }
+}
