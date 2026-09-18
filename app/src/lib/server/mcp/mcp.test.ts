@@ -24,7 +24,10 @@ import type { Db } from '../db/types.ts';
 const TODAY = '2026-09-17';
 const ADMIN = 1; // Elena Brooks
 const DANA = 2; // owns the fixtures
-const SAM = 3; // a second person, given a low ceiling on purpose
+// Sam Ortiz, a second account manager, given a low ceiling on purpose. He does
+// not own the fixtures, which is the point: the ceiling has to refuse before
+// nl.set_confidence ever gets as far as noticing he is not the owner.
+const SAM = 4;
 const CUSTOMER = 'MC-HQ';
 const ITEM = 'MC-100';
 
