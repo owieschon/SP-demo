@@ -9,6 +9,11 @@ Branch state when this was read: `main` at `16fbd58`, `mcp-server` at
 `04a8fdd` (four commits). Both feature branches changed during the audit,
 so check the tip before acting on the tool lists.
 
+Updated since: the MCP section and the write coverage below it were rewritten
+on branch `mcp-autonomy`, where a token's permission became one autonomy level
+instead of a pair of scopes (migration 0044, [`mcp.md`](mcp.md)). Nothing else
+in this file has been re-read against the code since the date above.
+
 ## How to get in
 
 There are no passwords. `GET /signin` lists the people you may be; a form
@@ -129,7 +134,7 @@ advisory.
 timeout, no grant on any table naming a person, a forbidden-keyword list, a
 six-function allowlist and a 1000-row wrapper.
 
-### MCP, branch `mcp-server`
+### MCP, branch `mcp-autonomy`
 
 Tools built from the assistant registry rather than rewritten:
 `...TOOLS.filter(t => t.risk === 'read').map(readTool)`, plus
@@ -151,8 +156,10 @@ for real, bounded by the person's `approve_agent_proposal` ceiling, the
 truth about what it can do right now. See [`mcp.md`](mcp.md).
 
 It carries `annotations: { title, readOnlyHint, destructiveHint,
-idempotentHint }`. `openWorldHint` is missing. There is no `outputSchema`
-and no `structuredContent`: results are `JSON.stringify` in a text block.
+idempotentHint, openWorldHint }`, a published `outputSchema` per tool, and
+`structuredContent` beside the text block whenever the payload matches that
+schema and was not truncated. (This paragraph used to say the opposite; it was
+written before those landed.)
 
 ## Writes, and who can reach them
 
@@ -160,8 +167,11 @@ Twenty-three business writes a person can perform. Six are covered by a
 tool. Seventeen are not.
 
 Covered: `log_activity`, `add_next_step`, `record_outcome`, `set_confidence`,
-`decide_export`, `save_automation_rule`. The MCP branch adds no new write
-coverage, only a better approval path for the same four gated ones.
+`decide_export`, `save_automation_rule`. An outside coding agent reaches all
+six from `auto_review` up, which IS new coverage: the four gated ones go
+through the same `decideProposal` a person's approve button calls, and
+`add_note` and `add_next_step` were withheld at every level before there was
+a dial to withhold them with.
 
 Not covered: `add_contact`, `update_contact`, `complete_next_step`,
 `set_commitment_buyer`, `add_vendor_contact`, `stage_export`,
