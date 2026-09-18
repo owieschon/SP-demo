@@ -248,11 +248,12 @@ describe('the autonomy ladder, which the code honours', () => {
 
 		// Anybody may pause; only an admin may start it again.
 		await expect(
-			setPause(db, DANA, { agent: 'order_desk', paused: false, requestId: `start-${randomUUID()}` })
+			setPause(db, DANA, { agent: 'order_desk', paused: false, reason: '', requestId: `start-${randomUUID()}` })
 		).rejects.toMatchObject({ status: 403 });
 		await setPause(db, ADMIN, {
 			agent: 'order_desk',
 			paused: false,
+			reason: '',
 			requestId: `start-${randomUUID()}`
 		});
 		const autonomy = await db.asUser(ORDER_DESK_USER, (tx) =>
@@ -276,7 +277,7 @@ describe('the autonomy ladder, which the code honours', () => {
 			expect(row.result.paused).toBe(true);
 			expect(row.result.scope).toBe('all');
 		}
-		await setPause(db, ADMIN, { agent: 'all', paused: false, requestId: `start-all-${randomUUID()}` });
+		await setPause(db, ADMIN, { agent: 'all', paused: false, reason: '', requestId: `start-all-${randomUUID()}` });
 	});
 
 	it('plans the same way in the pure function, with nothing else in the way', () => {
