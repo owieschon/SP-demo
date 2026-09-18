@@ -249,7 +249,16 @@ function acceptedAt(schema: Record<string, unknown>, path: readonly PropertyKey[
  * tool does accept turns a silently dropped filter into a fixable error.
  */
 export function inputProblem(error: z.ZodError, schema: Record<string, unknown>): string {
-	const first = error.issues[0];
+	/*
+	  An unknown field is reported ahead of any other problem, even though zod
+	  lists the field problems first. It is usually the cause rather than a
+	  second fault: an input of { account_no: "1214" } has two issues, a
+	  missing customer_no and an unrecognized account_no, and only the second
+	  one tells the caller what it actually did wrong. Fixing the name fixes
+	  both, and anything still wrong is reported on the next attempt.
+	*/
+	const unknownKey = error.issues.find((issue) => issue.code === 'unrecognized_keys');
+	const first = unknownKey ?? error.issues[0];
 	if (first.code === 'unrecognized_keys') {
 		const keys = (first as unknown as { keys: string[] }).keys;
 		const at = first.path.join('.');
