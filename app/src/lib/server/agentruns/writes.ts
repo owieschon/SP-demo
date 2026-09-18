@@ -1,6 +1,6 @@
 // The one write the run trail makes.
 //
-// It calls nl.record_agent_trail (migration 0039), which claims the request
+// It calls nl.record_agent_trail (migration 0042), which claims the request
 // id, checks who is asking, checks every step, drops the detail of a withheld
 // one itself and writes the audit row. Nothing here decides anything; it
 // exists so nothing above it writes SQL by hand or forgets a request id.

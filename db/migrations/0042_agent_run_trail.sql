@@ -1,4 +1,4 @@
--- 0039 The run trail: the steps behind a run, and a desk item a person typed.
+-- 0042 The run trail: the steps behind a run, and a desk item a person typed.
 --
 -- Migration 0028 gave every agent a run record: nl.agent_runs is one row per
 -- run, assembled from the tables the features already write, and
@@ -81,7 +81,7 @@ alter table nl.mail_messages
   add column entered_by int references nl.users (id);
 
 comment on column nl.mail_messages.source is
-  'How this desk item arrived: mail from a provider, or a person who typed it (migration 0039).';
+  'How this desk item arrived: mail from a provider, or a person who typed it (migration 0042).';
 
 -- A hand-entered quote request. It writes exactly the row a delivered message
 -- writes, plus the two columns above, so everything downstream (the run, the
@@ -201,7 +201,7 @@ create table nl.agent_run_trails (
 );
 
 comment on table nl.agent_run_trails is
-  'How a run reached its decision, keyed to the run_key of nl.agent_runs (migration 0039).';
+  'How a run reached its decision, keyed to the run_key of nl.agent_runs (migration 0042).';
 
 create index agent_run_trails_agent_idx on nl.agent_run_trails (agent, recorded_at desc);
 create index agent_run_trails_entity_idx on nl.agent_run_trails (entity, entity_id);
@@ -251,7 +251,7 @@ create table nl.agent_run_steps (
 );
 
 comment on table nl.agent_run_steps is
-  'The steps of one run, in order, with each tool call''s arguments. A step the disclosure policy would not let its reader see is stored withheld, with the reason (migration 0039).';
+  'The steps of one run, in order, with each tool call''s arguments. A step the disclosure policy would not let its reader see is stored withheld, with the reason (migration 0042).';
 
 create index agent_run_steps_run_idx on nl.agent_run_steps (run_key, seq);
 
@@ -440,7 +440,7 @@ from nl.agent_run_log l
 left join nl.agent_run_trails t on t.run_key = l.run_key;
 
 comment on view nl.agent_run_trail_log is
-  'nl.agent_run_log with the trail that says how the run reached its decision (migration 0039).';
+  'nl.agent_run_log with the trail that says how the run reached its decision (migration 0042).';
 
 -- ---------------------------------------------------------------------------
 -- Access
