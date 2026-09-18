@@ -153,7 +153,9 @@ export const AUTHORITY_IS_AMOUNT: Record<Authority, boolean> = {
 export const AUTHORITY_LABEL: Record<Authority, string> = {
 	approve_quote: 'Approve a quote',
 	approve_reply: 'Send a drafted reply',
-	approve_agent_proposal: 'Decide an assistant proposal',
+	// An amount since 0044, so the label says what the number buys: deciding a
+	// proposal, and letting an agent act for you up to that value.
+	approve_agent_proposal: 'Let an agent act, or decide its proposal',
 	answer_commitment: 'Answer a window that closed short',
 	release_purchase_order: 'Release a purchase order',
 	accept_price_increase: 'Accept a new cost',
