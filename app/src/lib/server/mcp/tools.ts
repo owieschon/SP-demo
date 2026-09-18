@@ -20,7 +20,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { runTool } from '../assistant/gate.ts';
-import { TOOLS, type Tool, type ToolContext } from '../assistant/tools.ts';
+import { outputProblem, TOOLS, type Tool, type ToolContext } from '../assistant/tools.ts';
 import { proposeFromMcp } from './propose.ts';
 import type { McpScope } from './tokens.ts';
 import type { Db, Row } from '../db/types.ts';
@@ -56,6 +56,18 @@ export interface McpTool {
 	/** For the readOnlyHint an MCP client shows. */
 	readOnly: boolean;
 	/**
+	 * JSON Schema of what this tool answers with, sent in tools/list, so a
+	 * client can validate a result instead of reading prose out of it.
+	 */
+	outputSchema: Record<string, unknown>;
+	/**
+	 * Does a payload match that schema? The endpoint calls it before it sends
+	 * structuredContent: a payload that does not match is still returned as
+	 * text, because an answer is better than none, but it is not presented as
+	 * conforming to a contract it breaks.
+	 */
+	checkOutput(payload: unknown): InputCheck;
+	/**
 	 * Check the input without running anything. The endpoint calls this first
 	 * so a bad input answers with JSON-RPC -32602 (invalid params) instead of
 	 * a tool result the agent has to read prose out of. The authoritative
@@ -64,6 +76,28 @@ export interface McpTool {
 	check(input: unknown): InputCheck;
 	run(ctx: McpToolContext, input: Record<string, unknown>): Promise<McpToolAnswer>;
 }
+
+/** A zod shape, as the JSON Schema to publish and the check to run. */
+function outputOf(shape: z.ZodType): {
+	outputSchema: Record<string, unknown>;
+	checkOutput(payload: unknown): InputCheck;
+} {
+	return {
+		outputSchema: z.toJSONSchema(shape, { target: 'draft-2020-12', io: 'output' }) as Record<string, unknown>,
+		checkOutput(payload) {
+			const parsed = shape.safeParse(payload);
+			if (parsed.success) return { ok: true };
+			return { ok: false, message: outputProblem(parsed.error) };
+		}
+	};
+}
+
+/*
+  A refusal is a normal answer from any of these tools: the account is not
+  there, the query was refused, the proposal could not be made. It is part of
+  every declared output rather than a separate channel.
+*/
+const mcpRefusal = z.looseObject({ error: z.string(), code: z.string().optional() });
 
 /** "search_accounts" -> "Search accounts", for the title an MCP client shows. */
 function titleFor(name: string): string {
@@ -120,6 +154,13 @@ function readTool(tool: Tool): McpTool {
 		inputSchema: tool.jsonSchema,
 		scope: 'read',
 		readOnly: true,
+		/*
+		  The same schema the assistant declares, not a second copy of it. If
+		  a read tool has none yet, say so honestly with an open object rather
+		  than publish a shape nobody checks.
+		*/
+		outputSchema: tool.outputSchema ?? { type: 'object' },
+		checkOutput: (payload) => tool.checkOutput?.(payload) ?? { ok: true },
 		check: checkWith(tool),
 		run: async (ctx, input) => {
 			const run = await runTool(
@@ -156,6 +197,25 @@ const listPendingApprovals: McpTool = {
 	inputSchema: z.toJSONSchema(pendingSchema, { target: 'draft-2020-12', io: 'input' }) as Record<string, unknown>,
 	scope: 'read',
 	readOnly: true,
+	...outputOf(
+		z.union([
+			z.looseObject({
+				rows: z.array(
+					z.looseObject({
+						proposal_id: z.number(),
+						conversation_id: z.number(),
+						summary: z.string(),
+						status: z.string(),
+						/** The page a person decides it on. */
+						approve_at: z.string()
+					})
+				),
+				row_count: z.number().int().nonnegative(),
+				status: z.enum(['draft', 'approved', 'rejected', 'executed'])
+			}),
+			mcpRefusal
+		])
+	),
 	check: (input) => {
 		const parsed = pendingSchema.safeParse(input ?? {});
 		if (parsed.success) return { ok: true };
@@ -236,6 +296,21 @@ function proposeTool(gated: Tool): McpTool {
 		inputSchema: schemaWithSummary(gated),
 		scope: 'propose',
 		readOnly: false,
+		...outputOf(
+			z.union([
+				z.looseObject({
+					proposed: z.literal(true),
+					proposal_id: z.number(),
+					conversation_id: z.number(),
+					/** The page a person approves or rejects it on. */
+					approve_at: z.string(),
+					tool: z.string(),
+					label: z.string(),
+					status: z.literal('draft')
+				}),
+				z.looseObject({ proposed: z.literal(false), error: z.string() })
+			])
+		),
 		check: (input) => {
 			const shape = (input ?? {}) as Record<string, unknown>;
 			const summary = summarySchema.safeParse(shape.summary);

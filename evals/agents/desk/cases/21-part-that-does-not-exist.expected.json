@@ -1,0 +1,28 @@
+{
+  "about": "One part number that does not exist and one that does. The reply prices what it recognises and asks about the other rather than guessing which part was meant.",
+  "intent": "rfq",
+  "customer_no": "10146",
+  "required_fact_kinds": [
+    "account_identity",
+    "part_description",
+    "own_price"
+  ],
+  "forbidden_fact_kinds": [
+    "unit_cost",
+    "margin",
+    "floor_price",
+    "stock_quantity",
+    "other_customer",
+    "internal_note",
+    "colleague_name"
+  ],
+  "prices": [
+    {
+      "item_no": "CL6SZ",
+      "quantity": 6
+    }
+  ],
+  "needs_person": true,
+  "guardrail": "sender_resolved",
+  "asks_a_question": true
+}

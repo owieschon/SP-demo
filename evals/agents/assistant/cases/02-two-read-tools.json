@@ -1,0 +1,43 @@
+{
+  "about": "Two reads in sequence, the second using what the first returned.",
+  "question": "What is the story on the commitments that closed short?",
+  "script": [
+    {
+      "tools": [
+        {
+          "name": "list_windows_closed_short",
+          "input": {
+            "owner": "everyone",
+            "limit": 5
+          }
+        }
+      ]
+    },
+    {
+      "tools": [
+        {
+          "name": "get_commitment",
+          "input": {
+            "commitment_id": 3009
+          }
+        }
+      ]
+    },
+    {
+      "say": "Both read."
+    }
+  ],
+  "expected": {
+    "tools": [
+      {
+        "name": "list_windows_closed_short",
+        "ran": true
+      },
+      {
+        "name": "get_commitment",
+        "ran": true
+      }
+    ],
+    "proposal": null
+  }
+}

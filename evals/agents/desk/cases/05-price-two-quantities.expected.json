@@ -1,0 +1,33 @@
+{
+  "about": "A price question at two quantities, from the one account with an agreement on this part. A break never cuts under an agreed price, so the agreement is what both quantities have to come back at.",
+  "intent": "price_question",
+  "customer_no": "10072",
+  "required_fact_kinds": [
+    "account_identity",
+    "part_description",
+    "own_price",
+    "own_agreement"
+  ],
+  "forbidden_fact_kinds": [
+    "unit_cost",
+    "margin",
+    "floor_price",
+    "stock_quantity",
+    "other_customer",
+    "internal_note",
+    "colleague_name"
+  ],
+  "prices": [
+    {
+      "item_no": "L490-168B",
+      "quantity": 6
+    },
+    {
+      "item_no": "L490-168B",
+      "quantity": 12
+    }
+  ],
+  "needs_person": false,
+  "guardrail": null,
+  "asks_a_question": false
+}
