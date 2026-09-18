@@ -238,8 +238,10 @@ describe('the seam with the old model', () => {
 		*/
 		const rows = await db.asSystem((tx) =>
 			tx.query<{ id: number; role: string }>(
+				// A Postgres array literal as one text parameter: the driver's Param
+				// type takes scalars, not a nested array.
 				`select id, role from nl.users where id = any($1::int[]) order by id`,
-				[[PRIYA, 6, 12, 13, 14, RAE]]
+				[`{${[PRIYA, 6, 12, 13, 14, RAE].join(',')}}`]
 			)
 		);
 		expect(rows).toHaveLength(6);
@@ -253,7 +255,7 @@ describe('the seam with the old model', () => {
 			tx.query<{ n: number }>(
 				`select count(*)::int as n from nl.authority_grants
 				  where authority = 'run_import' and user_id = any($1::int[])`,
-				[[PRIYA, 6, 12, 13, 14]]
+				[`{${[PRIYA, 6, 12, 13, 14].join(',')}}`]
 			)
 		);
 		expect(held.n).toBe(5);

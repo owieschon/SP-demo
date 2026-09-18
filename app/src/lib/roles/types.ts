@@ -53,10 +53,19 @@ export const PRESET_LABEL: Record<Preset, string> = {
 	agent: 'Agent'
 };
 
-export type ScopeDimension = 'account' | 'warehouse' | 'vendor' | 'part_family' | 'mailbox';
+export type ScopeDimension =
+	| 'account'
+	| 'agency'
+	| 'warehouse'
+	| 'vendor'
+	| 'part_family'
+	| 'mailbox';
 
 export const SCOPE_DIMENSIONS: ScopeDimension[] = [
 	'account',
+	// A rep group, from nl.agencies. Added by migration 0041 so somebody can
+	// be scoped to an agency's book rather than to a list of its accounts.
+	'agency',
 	'warehouse',
 	'vendor',
 	'part_family',
@@ -65,6 +74,7 @@ export const SCOPE_DIMENSIONS: ScopeDimension[] = [
 
 export const SCOPE_LABEL: Record<ScopeDimension, { one: string; many: string }> = {
 	account: { one: 'account', many: 'Accounts' },
+	agency: { one: 'rep group', many: 'Rep groups' },
 	warehouse: { one: 'warehouse', many: 'Warehouses' },
 	vendor: { one: 'supplier', many: 'Suppliers' },
 	part_family: { one: 'part family', many: 'Part families' },
