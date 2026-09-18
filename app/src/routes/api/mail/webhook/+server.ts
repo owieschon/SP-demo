@@ -12,6 +12,7 @@
 import { json } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { getDb } from '$lib/server/db';
+import { recordPollTrails } from '$lib/server/agentruns/desk';
 import { chooseClient, listMailboxes, pollAll } from '$lib/server/desk/poll';
 import { accessStatus, checkWebhookAccess } from '$lib/server/desk/webhook';
 import type { RequestHandler } from './$types';
@@ -47,6 +48,8 @@ export const POST: RequestHandler = async ({ request }) => {
 	}
 	const client = await chooseClient(db, env, mailboxes, mailboxes[0].reviewerId);
 	const summaries = await pollAll(db, { client, mode: 'mock' });
+	// The run trail, from the record each run kept of itself.
+	await recordPollTrails(db, mailboxes, summaries, (address) => `The provider said mail had arrived at ${address}`);
 
 	return json({
 		note: 'The payload was ignored; the provider was polled instead.',

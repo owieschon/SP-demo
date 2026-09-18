@@ -4,6 +4,7 @@
 	import ProgressBar from '$lib/components/ProgressBar.svelte';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import { day, money, percent } from '$lib/format';
+	import { routes } from '$lib/routes';
 	import type { Deals } from './types';
 
 	let {
@@ -106,7 +107,7 @@
 		<ul class="list drafts">
 			{#each deals.rfqDrafts as draft (draft.id)}
 				<li class="draft">
-					<a class="link" href="/rfq/{draft.id}">R-{draft.id}</a>
+					<a class="link" href={routes.quoteRequest(draft.id)}>R-{draft.id}</a>
 					<span class="muted">{REQUEST_STATUS[draft.status] ?? draft.status}</span>
 					{#if draft.needsReview > 0}
 						<span class="chip warn">{draft.needsReview} to check</span>
