@@ -36,7 +36,8 @@ const user = (id: number): SessionUser => ({
 	id,
 	fullName: `Test ${id}`,
 	title: '',
-	role: id === ADMIN ? 'admin' : 'account_manager'
+	role: id === ADMIN ? 'admin' : 'account_manager',
+	responsibility: ''
 });
 
 const CLEAN_EMAIL = `From: Micah Crowley <micah.crowley@driftlessmachinefab.example>
