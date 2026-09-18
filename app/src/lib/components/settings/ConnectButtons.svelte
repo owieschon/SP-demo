@@ -2,13 +2,16 @@
 	/*
 	  The one-click connect row: one button per coding agent.
 
-	  Three submit buttons in one form, each posting its own provider. They are
-	  the same size, the same tone and in one row, because none of them is the
-	  recommended one: a person already knows which agent they use.
+	  One small form each, rather than one form with three submit buttons, so
+	  every button carries its own request id. Two different buttons are then
+	  two different writes even from a page that has been open a while, and
+	  pressing one button twice is one token rather than two live secrets.
 
-	  They are real <button> elements, so Tab reaches them, Enter and Space
-	  press them, and the form still posts with JavaScript off. `use:enhance`
-	  only adds a fresh request id and a working state on top of that.
+	  They are the same size, the same tone and in one row, because none of
+	  them is the recommended one: a person already knows which agent they
+	  use. They are real <button> elements, so Tab reaches them and Enter and
+	  Space press them, and the forms still post with JavaScript off.
+	  `use:enhance` only adds a fresh request id and a working state on top.
 
 	  What the click does and does not do is in $lib/mcp/providers.ts: it mints
 	  a token and assembles that provider's config. There is no hosted consent
@@ -18,24 +21,19 @@
 	import { enhance } from '$app/forms';
 	import ProviderMark from './ProviderMark.svelte';
 	import { freshRequestId } from './types';
-	import { isMcpProviderId } from '$lib/mcp/providers';
 	import type { McpProvider, McpProviderId } from '$lib/mcp/providers';
 
 	let {
 		providers,
-		/**
-		 * One request id for this page render, so the form posts one even with
-		 * JavaScript off. A successful post re-renders the page and brings a new
-		 * one, so two connects in a row are two different writes.
-		 */
-		requestId,
+		/** A request id per provider, for a page posting without JavaScript. */
+		requestIds,
 		/** False for anybody who is not an admin: the buttons say why instead. */
 		canConnect,
 		/** Why the buttons are off, shown when canConnect is false. */
 		reason
 	}: {
 		providers: McpProvider[];
-		requestId: string;
+		requestIds: Record<string, string>;
 		canConnect: boolean;
 		reason: string;
 	} = $props();
@@ -44,28 +42,28 @@
 	let working = $state<McpProviderId | ''>('');
 </script>
 
-<form
-	method="POST"
-	action="?/connect"
-	use:enhance={({ formData }) => {
-		// A fresh id per attempt: a double click writes one token, and a second
-		// try after a refusal is a real second try rather than a replayed answer.
-		formData.set('requestId', freshRequestId());
-		const pressed = String(formData.get('provider') ?? '');
-		working = isMcpProviderId(pressed) ? pressed : '';
-		return async ({ update }) => {
-			await update();
-			working = '';
-		};
-	}}
->
-	<div class="row">
-		{#each providers as provider (provider.id)}
+<div class="row">
+	{#each providers as provider (provider.id)}
+		<form
+			class="one"
+			method="POST"
+			action="?/connect"
+			use:enhance={({ formData }) => {
+				// A fresh id per attempt: a second try after a refusal is a real
+				// second try rather than a replayed answer to the first.
+				formData.set('requestId', freshRequestId());
+				working = provider.id;
+				return async ({ update }) => {
+					await update();
+					working = '';
+				};
+			}}
+		>
+			<input type="hidden" name="provider" value={provider.id} />
+			<input type="hidden" name="requestId" value={requestIds[provider.id] ?? ''} />
 			<button
 				class="button provider"
 				type="submit"
-				name="provider"
-				value={provider.id}
 				disabled={!canConnect || working !== ''}
 				aria-busy={working === provider.id || undefined}
 				aria-describedby={canConnect ? undefined : 'connect-off'}
@@ -77,11 +75,9 @@
 					<span class="sr-only">Connecting</span>
 				{/if}
 			</button>
-		{/each}
-	</div>
-
-	<input type="hidden" name="requestId" value={requestId} />
-</form>
+		</form>
+	{/each}
+</div>
 
 {#if !canConnect}
 	<p class="notice" id="connect-off" role="status">{reason}</p>
@@ -97,12 +93,18 @@
 	}
 
 	/*
-	  Equal weight: every button gets the same minimum width and grows the
-	  same, so no provider is visually the default. Taller than a normal
-	  control because it carries a mark.
+	  Equal weight: every form gets the same minimum width and grows the
+	  same, so no provider is visually the default.
 	*/
-	.provider {
+	.one {
+		display: flex;
 		flex: 1 1 180px;
+		min-width: 0;
+	}
+
+	/* Taller than a normal control, because it carries a mark. */
+	.provider {
+		flex: 1 1 auto;
 		justify-content: flex-start;
 		gap: var(--space-2);
 		height: auto;

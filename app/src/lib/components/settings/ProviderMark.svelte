@@ -44,7 +44,7 @@
 		<!-- A cube seen corner on: the outline and the three edges that meet. -->
 		<path d="M12 3l8 4.6v8.8L12 21l-8-4.6V7.6z" />
 		<path d="M12 12l8-4.4M12 12l-8-4.4M12 12v9" />
-	{:else}
+	{:else if provider === 'codex'}
 		<!-- Codex: a ring with six nodes, the knot pattern reduced to its bones. -->
 		<circle cx="12" cy="12" r="7.5" />
 		<path d="M12 4.5v3M12 16.5v3M5.5 8.2l2.6 1.5M15.9 14.3l2.6 1.5M5.5 15.8l2.6-1.5M15.9 9.7l2.6-1.5" />
