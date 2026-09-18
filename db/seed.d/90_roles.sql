@@ -91,13 +91,17 @@ begin
   -- They have an email address because their mailbox does, and no password,
   -- no session and no way in: the sign-in picker and the session lookup both
   -- say kind = 'person'.
-  insert into nl.users (id, email, full_name, title, role, active, kind, responsibility)
+  -- agent_key ties each of them to the harness (migration 0028), which is
+  -- where its autonomy lives. Nothing about the ladder is copied here: the
+  -- resolver reads nl.agent_autonomy through nl.authority_limit_override, so
+  -- a promotion made on the trust board is visible on the next read.
+  insert into nl.users (id, email, full_name, title, role, active, kind, agent_key, responsibility)
   values
     (101, 'order-desk-agent@northline.example', 'Order desk agent', 'Agent',
-     'agent', true, 'agent',
+     'agent', true, 'agent', 'order_desk',
      'Reads the order desk mailbox and drafts customer replies for a person to send.'),
     (102, 'procurement-desk-agent@northline.example', 'Procurement desk agent', 'Agent',
-     'agent', true, 'agent',
+     'agent', true, 'agent', 'procurement_desk',
      'Reads the procurement mailbox and drafts supplier messages for a person to send.')
   on conflict (id) do nothing;
 
@@ -265,14 +269,12 @@ begin
   where u.id in (5, 6, 12, 13, 14)
   on conflict do nothing;
 
-  -- The agents. Autonomy 1 is "draft for a person": the desk writes and
-  -- queues, and a person sends. Raising either of these to 2 is the same
-  -- write as raising the buyer's fifty thousand, which is the point.
-  insert into nl.authority_grants (user_id, authority, limit_amount, starts_on, note, granted_by)
-  values
-    (101, 'agent_autonomy', 1, v_today, 'Drafts, and a person sends.', v_by),
-    (102, 'agent_autonomy', 1, v_today, 'Drafts, and a person sends.', v_by)
-  on conflict do nothing;
+  -- The agents get no authority rows at all. Their one authority,
+  -- act_unreviewed, is answered out of the harness ladder by the same
+  -- resolver that answers for a person (nl.authority_limit_override), so
+  -- writing a grant here would be a second copy of a number somebody else
+  -- owns. Ask nl.authority_ceiling(101, 'act_unreviewed') and it says which
+  -- rung the order desk is on, without this file knowing anything about it.
 
   -- -------------------------------------------------------------------------
   -- Disclosure: what each of them may be shown at all

@@ -56,8 +56,10 @@
 
 	/** What a grant's number means on screen. */
 	function limitWords(authority: Authority, limit: number | null): string {
-		if (authority === 'agent_autonomy') {
-			return limit === null ? 'no level set' : `level ${limit}: ${AUTONOMY_LABEL[limit] ?? ''}`;
+		// An agent's only limit is where it sits on the harness ladder, and the
+		// resolver hands that back as the rung's ordinal (migration 0028).
+		if (authority === 'act_unreviewed') {
+			return limit === null ? 'no rung set' : (AUTONOMY_LABEL[limit] ?? `rung ${limit}`);
 		}
 		if (!AUTHORITY_IS_AMOUNT[authority]) return 'yes';
 		return limit === null ? 'no ceiling' : `up to ${money(limit)}`;
@@ -66,7 +68,7 @@
 	/** Which authorities make sense to offer for this principal. */
 	function offered(person: PrincipalPolicy): Authority[] {
 		return AUTHORITIES.filter((a) =>
-			person.kind === 'agent' ? a === 'agent_autonomy' : a !== 'agent_autonomy'
+			person.kind === 'agent' ? a === 'act_unreviewed' : a !== 'act_unreviewed'
 		);
 	}
 

@@ -42,7 +42,8 @@ const user = (id: number, role: SessionUser['role'] = 'account_manager'): Sessio
 	id,
 	fullName: `Test ${id}`,
 	title: '',
-	role
+	role,
+	responsibility: ''
 });
 
 beforeAll(async () => {

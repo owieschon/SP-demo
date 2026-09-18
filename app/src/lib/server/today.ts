@@ -7,15 +7,25 @@
   of decision, and it counts what the agents got through on their own so the
   empty case can say so.
 
-  Nothing here is invented. Every group is a count of rows the database
-  already holds, and each one links to the screen where the decision is made.
-  When a group is zero it is left out entirely: zero is not news.
+  Every group is a count of rows the database already holds, and each one
+  links to the screen where the decision is made. When a group is zero it is
+  left out entirely: zero is not news.
 
-  Every count runs as the signed-in person, so row-level security decides
-  what is in it. The three groups that have an owner are narrowed to that
-  person's own work as well, because "needs me" means me.
+  WHOSE EXCEPTIONS. The first version of this file narrowed three of its
+  groups with `owner_id = userId` and showed the other three to everybody, so
+  a salesperson was told about stock counts and a buyer was told about
+  commitment windows on somebody else's book. It now asks
+  nl.work_waiting_for (migration 0031), which answers the question properly:
+  an item is here when it sits inside this person's scope AND is waiting on an
+  authority they actually hold. A quote above somebody's ceiling is not their
+  decision, so it is not on their page.
+
+  The shape of what this returns has not changed, so the page above it did not
+  have to.
 */
 import type { Db } from './db/types.ts';
+import { workWaitingFor } from './roles/work.ts';
+import type { WorkItem, WorkKind } from '$lib/roles/types';
 
 /** What kind of decision a group asks for. The page groups by this. */
 export type DecisionKind = 'answer' | 'approve' | 'release' | 'schedule' | 'count';
@@ -48,69 +58,102 @@ export interface TodayData {
 	agentActions: number;
 }
 
-interface CountRow {
-	count: number;
-	oldest: string | null;
-}
-
-/** The label and the link for each of the four queue sources. */
-const QUEUE_GROUPS: Record<string, { title: string; decision: string }> = {
-	mail: {
+/**
+ * One entry per kind of work nl.work_waiting_for can return: what to call it,
+ * what the decision is in a person's words, and which of the five shapes of
+ * decision it is. The order of this map is the order of the page, so it does
+ * not rearrange itself between loads.
+ */
+const GROUPS: Record<WorkKind, { kind: DecisionKind; title: string; decision: string }> = {
+	commitment_answer: {
+		kind: 'answer',
+		title: 'Commitment windows that closed short',
+		decision: 'Say whether it is still coming, close enough, or lost'
+	},
+	mail_draft: {
+		kind: 'approve',
 		title: 'Replies the order desk drafted',
 		decision: 'Send it, correct it first, or reject it'
 	},
-	rfq: {
+	mail_exception: {
+		kind: 'approve',
+		title: 'Replies the desk would not send on its own',
+		decision: 'Read why it stopped, then write it or let it go'
+	},
+	mail_unanswered: {
+		kind: 'answer',
+		title: 'Messages the desk could not read',
+		decision: 'Answer it, or tell the desk what it was'
+	},
+	quote_request: {
+		kind: 'approve',
 		title: 'Quotes drafted from an emailed request',
 		decision: 'Approve the quote, or fix a line and approve'
 	},
-	assistant: {
+	quote_expiring: {
+		kind: 'answer',
+		title: 'Quotes about to run out',
+		decision: 'Chase it, extend it, or let it lapse'
+	},
+	agent_proposal: {
+		kind: 'approve',
 		title: 'Changes the assistant proposed',
 		decision: 'Approve the change, or reject it'
 	},
-	purchase: {
+	purchase_request: {
+		kind: 'release',
 		title: 'Purchases the procurement desk proposed',
-		decision: 'Approve the order, or reject it'
+		decision: 'Release the order, or reject it'
+	},
+	coverage_purchase: {
+		kind: 'release',
+		title: 'Lines with nothing on order',
+		decision: 'Raise the purchase order, or give the customer a real date'
+	},
+	coverage_production: {
+		kind: 'schedule',
+		title: 'Lines with nothing planned',
+		decision: 'Schedule the work, or give the customer a real date'
+	},
+	price_increase: {
+		kind: 'approve',
+		title: 'Costs a supplier has put up',
+		decision: 'Accept the new cost, or go back to them'
+	},
+	pick: {
+		kind: 'count',
+		title: 'Shipments still being picked',
+		decision: 'Pick it, pack it and confirm'
+	},
+	receipt: {
+		kind: 'count',
+		title: 'Transfers due in',
+		decision: 'Receive it, or say what did not arrive'
+	},
+	count: {
+		kind: 'count',
+		title: 'Stock counts due',
+		decision: 'Count the zone and post the sheet'
+	},
+	import_decision: {
+		kind: 'release',
+		title: "This morning's export is waiting",
+		decision: 'Apply it, or hold it and say why'
 	}
 };
 
+const ORDER = Object.keys(GROUPS) as WorkKind[];
+
+/** The date part of whatever the database handed back for `waiting_since`. */
+function dayOf(value: string): string {
+	return value.slice(0, 10);
+}
+
 export async function getToday(db: Db, userId: number): Promise<TodayData> {
-	return db.asUser(userId, async (tx) => {
+	const items = await workWaitingFor(db, userId);
+
+	const { today, agentActions } = await db.asUser(userId, async (tx) => {
 		const [{ today }] = await tx.sql<{ today: string }>`select nl.today() as today`;
-
-		/*
-		  One trip per group. They are all counts over views this app already
-		  reads elsewhere, and none of them is the sort of query that needs a
-		  plan explained: the row counts here are the number of things waiting
-		  for a person, which is a small number or the product is not working.
-		*/
-		const [closedShort] = await tx.sql<CountRow>`
-			select count(*)::int as count, min(p.ends_on)::text as oldest
-			from nl.commitment_progress p
-			where p.needs_outcome and p.owner_id = ${userId}`;
-
-		// The one queue every agent proposal lands in (migration 0023).
-		const queue = await tx.sql<{ source: string; count: number; oldest: string | null }>`
-			select q.source, count(*)::int as count, min(q.created_at)::date::text as oldest
-			from nl.agent_queue q
-			group by q.source`;
-
-		const [heldExport] = await tx.sql<CountRow>`
-			select count(*)::int as count, min(s.staged_at)::date::text as oldest
-			from nl.export_snapshots s
-			where s.status in ('staged', 'held')`;
-
-		// A line whose parts will not be there in time, on an account this
-		// person owns. The projection view works out the date and the reason.
-		const [lateLines] = await tx.sql<CountRow>`
-			select count(*)::int as count, min(l.ship_date)::text as oldest
-			from nl.open_line_projection l
-			where l.days_late > 0 and l.customer_owner_id = ${userId}`;
-
-		const [countsDue] = await tx.sql<CountRow>`
-			select count(*)::int as count, min(c.due_on)::text as oldest
-			from nl.count_sessions c
-			where c.status = 'open' and c.due_on <= (select nl.today())`;
-
 		const [agent] = await tx.sql<{ count: number }>`
 			select (
 				(select count(*) from nl.mail_runs r
@@ -121,79 +164,41 @@ export async function getToday(db: Db, userId: number): Promise<TodayData> {
 				+ (select count(*) from nl.assistant_tool_calls c
 				    where c.created_at > now() - interval '1 day' and c.outcome = 'ran')
 			)::int as count`;
-
-		const groups: TodayGroup[] = [];
-
-		if (closedShort.count > 0) {
-			groups.push({
-				id: 'closed-short',
-				kind: 'answer',
-				title: 'Commitment windows that closed short',
-				decision: 'Say whether it is still coming, close enough, or lost',
-				count: closedShort.count,
-				href: '/commitments/answer',
-				oldest: closedShort.oldest
-			});
-		}
-
-		// Newest source order is not useful here; the fixed order is, so the
-		// page does not rearrange itself between loads.
-		for (const source of ['mail', 'rfq', 'assistant', 'purchase']) {
-			const row = queue.find((item) => item.source === source);
-			const label = QUEUE_GROUPS[source];
-			if (!row || row.count === 0 || !label) continue;
-			groups.push({
-				id: `queue-${source}`,
-				kind: 'approve',
-				title: label.title,
-				decision: label.decision,
-				count: row.count,
-				href: `/workspace?source=${source}`,
-				oldest: row.oldest
-			});
-		}
-
-		if (heldExport.count > 0) {
-			groups.push({
-				id: 'export-held',
-				kind: 'release',
-				title: "This morning's export is waiting",
-				decision: 'Apply it, or hold it and say why',
-				count: heldExport.count,
-				href: '/operations',
-				oldest: heldExport.oldest
-			});
-		}
-
-		if (lateLines.count > 0) {
-			groups.push({
-				id: 'late-lines',
-				kind: 'schedule',
-				title: 'Order lines that will not ship on time',
-				decision: 'Call the customer with the real date, or expedite the supply',
-				count: lateLines.count,
-				href: '/operations/forecast',
-				oldest: lateLines.oldest
-			});
-		}
-
-		if (countsDue.count > 0) {
-			groups.push({
-				id: 'counts-due',
-				kind: 'count',
-				title: 'Stock counts due',
-				decision: 'Count the zone and post the sheet',
-				count: countsDue.count,
-				href: '/warehouse',
-				oldest: countsDue.oldest
-			});
-		}
-
-		return {
-			today,
-			groups,
-			waiting: groups.reduce((sum, group) => sum + group.count, 0),
-			agentActions: agent.count
-		};
+		return { today, agentActions: agent.count };
 	});
+
+	const byKind = new Map<WorkKind, WorkItem[]>();
+	for (const item of items) {
+		const list = byKind.get(item.kind);
+		if (list) list.push(item);
+		else byKind.set(item.kind, [item]);
+	}
+
+	const groups: TodayGroup[] = [];
+	for (const kind of ORDER) {
+		const list = byKind.get(kind);
+		if (!list || list.length === 0) continue;
+		const label = GROUPS[kind];
+		// Every item in a group links to the same screen, so the group takes
+		// the first one's link rather than keeping a second copy of the map.
+		groups.push({
+			id: `work-${kind}`,
+			kind: label.kind,
+			title: label.title,
+			decision: label.decision,
+			count: list.length,
+			href: list[0].href,
+			oldest: list.reduce(
+				(oldest, item) => (oldest === null || dayOf(item.waitingSince) < oldest ? dayOf(item.waitingSince) : oldest),
+				null as string | null
+			)
+		});
+	}
+
+	return {
+		today,
+		groups,
+		waiting: items.length,
+		agentActions
+	};
 }
