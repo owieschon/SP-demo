@@ -53,6 +53,8 @@
 	const agents = $derived(data.agents);
 	const anyPaused = $derived(agents.some((a) => a.paused));
 	const everythingStopped = $derived(agents.length > 0 && agents.every((a) => a.paused));
+	/** The global brake specifically, which is not the same as every agent looking stopped. */
+	const globallyStopped = $derived(data.globalPause?.paused === true);
 
 	/*
 	  There is deliberately NO row of page-wide totals here.
@@ -122,14 +124,26 @@
 	subtitle="What each agent handled, what a person did with it, what it refused to do, and how far it may go on its own."
 >
 	{#snippet actions()}
+		<!--
+			The brake, first thing on the page and available to everybody.
+
+			A screen about trust that cannot stop anything is a brochure. It
+			reads the 'all' pause row itself rather than inferring it from every
+			agent looking stopped, because five separate pauses and one global
+			pause are different facts and the button lifts the global one.
+		-->
 		<form method="POST" action="?/pause" use:enhance>
 			<input type="hidden" name="agent" value="all" />
-			<input type="hidden" name="paused" value={everythingStopped ? 'false' : 'true'} />
+			<input type="hidden" name="paused" value={globallyStopped ? 'false' : 'true'} />
 			<input type="hidden" name="requestId" value={reqId('pause', 'all')} />
+			{#if !globallyStopped}
+				<input type="hidden" name="reason" value="Stopped from the agents page" />
+			{/if}
 			<SubmitButton
-				label={everythingStopped ? 'Let them all go' : 'Stop every agent'}
-				workingLabel={everythingStopped ? 'Letting go' : 'Stopping'}
-				tone={everythingStopped ? 'plain' : 'danger'}
+				label={globallyStopped ? 'Let them all go' : 'Stop every agent'}
+				workingLabel={globallyStopped ? 'Letting go' : 'Stopping'}
+				tone={globallyStopped ? 'plain' : 'danger'}
+				disabled={globallyStopped && !data.mayRelease}
 			/>
 		</form>
 	{/snippet}
@@ -146,9 +160,13 @@
 
 	{#if anyPaused}
 		<p class="stopped">
-			{everythingStopped ? 'Every agent is stopped.' : 'Some agents are stopped.'}
+			{globallyStopped
+				? `Every agent is stopped${data.globalPause?.byName ? `, by ${data.globalPause.byName}` : ''}${data.globalPause?.reason ? `: ${data.globalPause.reason}` : ''}.`
+				: everythingStopped
+					? 'Every agent is stopped, one at a time rather than by the global brake.'
+					: 'Some agents are stopped.'}
 			A stopped agent still reads its work and still drafts. It does not act, whatever level it is
-			set to.
+			set to. Starting one again is an administrator's.
 		</p>
 	{/if}
 
@@ -460,39 +478,19 @@
 												{/if}
 											</form>
 
-											<div class="side-by-side">
-												<form method="POST" action="?/revokeAutonomy" use:enhance>
-													<input type="hidden" name="agent" value={agent.agent} />
-													<input
-														type="hidden"
-														name="requestId"
-														value={reqId('revoke', agent.agent)}
-													/>
-													<SubmitButton
-														label="Take the grant away, from today"
-														workingLabel="Taking it away"
-														tone="danger"
-													/>
-												</form>
-
-												<form method="POST" action="?/pause" use:enhance>
-													<input type="hidden" name="agent" value={agent.agent} />
-													<input
-														type="hidden"
-														name="paused"
-														value={agent.paused ? 'false' : 'true'}
-													/>
-													<input
-														type="hidden"
-														name="requestId"
-														value={reqId('pause', agent.agent)}
-													/>
-													<SubmitButton
-														label={agent.paused ? `Let ${agent.name} go` : `Stop ${agent.name}`}
-														workingLabel={agent.paused ? 'Letting go' : 'Stopping'}
-													/>
-												</form>
-											</div>
+											<form method="POST" action="?/revokeAutonomy" use:enhance>
+												<input type="hidden" name="agent" value={agent.agent} />
+												<input
+													type="hidden"
+													name="requestId"
+													value={reqId('revoke', agent.agent)}
+												/>
+												<SubmitButton
+													label="Take the grant away, from today"
+													workingLabel="Taking it away"
+													tone="danger"
+												/>
+											</form>
 										{:else if data.mayPromote}
 											<p class="t-meta muted">
 												{agent.name} has no row in <span class="mono">nl.users</span> yet, so its
@@ -500,6 +498,57 @@
 												desk agents are principals. Its per-work-kind level is on the board above.
 											</p>
 										{/if}
+
+										<!--
+											The brake, OUTSIDE the promotion gate on purpose.
+
+											nl.set_agent_pause lets anybody active pull it and only
+											an admin let it go, because hitting the brake should
+											never need a permission. Drawing this button only for
+											somebody who may change a policy would put a permission
+											in front of the one control that must not have one, and
+											it would make the page disagree with the database.
+										-->
+										<form class="brake" method="POST" action="?/pause" use:enhance>
+											<input type="hidden" name="agent" value={agent.agent} />
+											<input
+												type="hidden"
+												name="paused"
+												value={agent.paused ? 'false' : 'true'}
+											/>
+											<input
+												type="hidden"
+												name="requestId"
+												value={reqId('pause', agent.agent)}
+											/>
+											{#if agent.paused}
+												<p class="t-meta muted">
+													Stopped. It still reads its work and still drafts; it acts on nothing.
+													Starting it again is an administrator's.
+												</p>
+												<SubmitButton
+													label="Let {agent.name} go"
+													workingLabel="Letting go"
+													tone="plain"
+													disabled={!data.mayRelease}
+												/>
+											{:else}
+												<label class="why">
+													<span class="t-meta muted">Reason</span>
+													<input
+														type="text"
+														name="reason"
+														maxlength="500"
+														placeholder="Checking a reply that read badly"
+													/>
+												</label>
+												<SubmitButton
+													label="Stop {agent.name}"
+													workingLabel="Stopping"
+													tone="danger"
+												/>
+											{/if}
+										</form>
 									</div>
 								</td>
 							</tr>
@@ -831,10 +880,29 @@
 		min-width: 0;
 	}
 
-	.side-by-side {
+	/*
+	  The brake. Flexbox rather than grid, like the rest of this app: auto-fit
+	  grid tracks behave differently on Safari iOS and this project has been
+	  bitten by that.
+	*/
+	.brake {
 		display: flex;
 		flex-wrap: wrap;
+		align-items: flex-end;
 		gap: var(--space-2);
+	}
+
+	.brake .why {
+		flex: 1 1 220px;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.brake p {
+		flex-basis: 100%;
+		margin: 0;
 	}
 
 	.fields {
