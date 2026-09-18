@@ -68,6 +68,17 @@
 	class={placement}
 	aria-label={bare ? title : undefined}
 	onclose={closed}
+	onkeydown={(event) => {
+		/*
+		  Escape, said out loud rather than left to the platform. A modal
+		  <dialog> is supposed to close itself on Escape, and measured here it
+		  does not always: no `cancel` event arrives and the panel stays up,
+		  which leaves a person with a box they cannot put down. Closing it
+		  ourselves costs one line and is the same close path as the button.
+		  Where the platform does fire it, both paths agree on closed.
+		*/
+		if (event.key === 'Escape') open = false;
+	}}
 	onclick={(event) => {
 		if (isBackdropClick(event.target, el)) open = false;
 	}}
@@ -143,10 +154,21 @@
 		inset: 0;
 		width: 100vw;
 		height: 100dvh;
-		display: grid;
 		align-items: start;
 		justify-items: center;
 		padding-top: min(12vh, 96px);
+	}
+
+	/*
+	  Only say `display` while it is open. The browser's own stylesheet hides
+	  a closed dialog with `display: none`, and any display here overrides it:
+	  an unscoped `display: grid` left the palette drawn over every screen,
+	  all the time, with no backdrop and nothing that would take it away,
+	  because closing a dialog that was never hidden changes nothing you can
+	  see. The side panel above never hit this, as it sets no display at all.
+	*/
+	dialog.center[open] {
+		display: grid;
 	}
 
 	dialog.center .panel-box {
